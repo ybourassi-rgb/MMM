@@ -3,38 +3,44 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MMM — Money Motor Muslim (V10.2)</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#0E1211">
-  <link rel="icon" href="icons/favicon.ico">
-  <style>
-    :root{--bg:#0E1211;--card:#121717;--fg:#F4F5F6;--acc:#C6A144;}
-    @media (prefers-color-scheme: light){:root{--bg:#f7f7f7;--card:#ffffff;--fg:#0b0c0e;--acc:#8a6a0f;}}
-    html,body{height:100%}body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center}
-    .card{width:min(720px,92%);background:var(--card);border:1px solid #1d2a28;border-radius:14px;padding:22px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
-    h1{margin:0 0 8px 0;font-size:24px}
-    .grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
-    a.button{display:block;text-align:center;padding:14px 16px;border-radius:10px;border:1px solid #2a3836;text-decoration:none;color:var(--fg);font-weight:600}
-    a.button.primary{background:#1b2624}
-    a.button:hover{border-color:#3a4b48}
-    .kicker{color:#9aa6a5;font-size:12px;margin-bottom:2px}
-    .brand{display:flex;gap:10px;align-items:center}
-    .logo{width:36px;height:36px;border-radius:8px;background:#C6A144;color:#0E1211;font-weight:900;display:flex;align-items:center;justify-content:center}
-    footer{margin-top:14px;font-size:12px;color:#98a5a4}
-  </style>
+  <title>MMM • Tableau de bord V10.3</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/mmm.css">
+  <meta name="theme-color" content="#0b0b0b">
 </head>
 <body>
-  <div class="card">
-    <div class="brand"><div class="logo">MMM</div><div><div class="kicker">Money Motor Muslim</div><h1>Tableau de bord (V10.2)</h1></div></div>
-    <div class="grid">
-      <a class="button primary" href="market_live.html">📊 Marché en direct</a>
-      <a class="button" href="publish_wizard.html">🧩 Assistant de publication</a>
-      <a class="button" href="auto_publisher.html">🤖 Smart Auto‑Publisher</a>
+  <div class="header">Money Motor Muslim — Tableau de bord (V10.3)</div>
+  <div class="grid">
+    <div class="card">
+      <div><b>Etat IA :</b> <span id="ia-status">Vérification…</span></div>
+      <div class="small">Serveur API côté Vercel • PWA installable • 100% licite</div>
+      <div style="margin-top:10px">
+        <a class="btn" href="/market_live.html">📈 Marché en direct</a>
+        <a class="btn" href="/publish_wizard.html">🧩 Assistant de publication</a>
+        <a class="btn" href="/auto_publisher.html">🤖 Smart Auto‑Publisher</a>
+      </div>
     </div>
-    <footer>Conseils 100% licites • Multilingue • Multi‑devises • PWA installable</footer>
+
+    <div class="card">
+      <div style="margin-bottom:8px"><b>Conseil instantané</b></div>
+      <input id="topic" placeholder="Ex: enchères voitures Maroc" style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f0f;color:#f2f2f2">
+      <button class="btn" id="btn-ask" style="margin-top:10px">Obtenir un conseil</button>
+      <pre id="advice" class="small"></pre>
+    </div>
   </div>
-  <script>
-    if ('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(console.error));}
+  <script type="module">
+    import { ping, quickAdvice } from '/money_motor_y.js';
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js');
+    const ia = document.getElementById('ia-status');
+    try { 
+      const r = await ping(); 
+      ia.textContent = r.ok ? 'Money Motor Y connecté ✅' : 'Hors ligne ❌';
+    } catch(e) { ia.textContent = 'Hors ligne ❌'; }
+    document.getElementById('btn-ask').addEventListener('click', async () => {
+      const t = document.getElementById('topic').value || 'marché';
+      const res = await quickAdvice(t);
+      document.getElementById('advice').textContent = JSON.stringify(res, null, 2);
+    });
   </script>
 </body>
 </html>
