@@ -14,31 +14,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: 'Tu es un conseiller financier intelligent et bienveillant.' },
-          { role: 'user', content: prompt },
-        ],
-      }),
-    });
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "Tu es Money Motor Muslim, un conseiller stratégique et financier." },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
 
-    const data = await response.json();
+  const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error?.message || 'Erreur API OpenAI');
-    }
-
-    const reply = data.choices?.[0]?.message?.content?.trim() || 'Pas de réponse reçue.';
-    return res.status(200).json({ reply });
-  } catch (error) {
-    console.error('Erreur advisor:', error);
-    return res.status(500).json({ error: error.message });
+  if (data.choices && data.choices.length > 0) {
+    return res.status(200).json({ reply: data.choices[0].message.content });
+  } else {
+    return res.status(500).json({ reply: "Erreur : aucune réponse générée." });
   }
+} catch (error) {
+  return res.status(500).json({ reply: "Erreur serveur : " + error.message });
 }
