@@ -5,9 +5,7 @@ export default async function handler(req, res) {
 
   const { prompt } = req.body;
 
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'Clé API OpenAI manquante' });
-  }
+if (!process.env.MMM_Vercel_Key) {
 
   if (!prompt || prompt.trim() === '') {
     return res.status(400).json({ error: 'Prompt vide' });
