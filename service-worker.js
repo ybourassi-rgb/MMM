@@ -1,0 +1,3 @@
+self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open('mmm-v10-2').then(c=>c.addAll(['/','/index.html','/market_live.html','/publish_wizard.html','/auto_publisher.html','/manifest.webmanifest'])))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>!k.includes('mmm-v10-2')).map(k=>caches.delete(k)))))});
+self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))});
