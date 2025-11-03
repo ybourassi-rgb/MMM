@@ -39,16 +39,21 @@
   (async function () {
     const badge = document.getElementById('ia-badge');
     try {
-      // 👇 IMPORTANT : c’est le domaine de TON API (le déploiement qui répond déjà ok:true)
-      const res = await fetch('https://mmm-xs9j.vercel.app/api/status', { cache: 'no-store' });
+      // 👇 Ton API (celle qui doit répondre {"ok":true})
+      const res = await fetch('https://mmm-xs9j.vercel.app/api/status', {
+        cache: 'no-store',
+        mode: 'cors'
+      });
       const data = await res.json();
+      console.log('Réponse API:', data); // Debug
       badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
-    } catch {
+    } catch (err) {
+      console.error('Erreur API:', err);
       badge.textContent = 'Hors ligne ❌';
     }
   })();
 
-  // (optionnel) câblage du bouton “Obtenir un conseil”
+  // Assistant de conseil instantané
   (function () {
     const input = document.getElementById('topic');
     const btn   = document.getElementById('btn-ask');
@@ -62,6 +67,7 @@
         const r = await fetch('https://mmm-xs9j.vercel.app/api/advisor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          mode: 'cors',
           body: JSON.stringify({ prompt })
         });
         const data = await r.json();
