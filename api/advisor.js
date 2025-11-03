@@ -1,48 +1,63 @@
+// /api/advisor.js
 export default async function handler(req, res) {
+  // 1) Méthode requise
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Méthode non autorisée (POST requis)" });
   }
 
+  // 2) Corps JSON
   const { prompt } = req.body || {};
-
-  // Vérifier la clé API
-  if (!process.env.MMM_Vercel_Key) {
-    return res.status(500).json({ error: "Clé MMM_Vercel_Key manquante sur Vercel" });
-  }
-
-  // Vérifier le prompt
-  if (!prompt || prompt.trim() === "") {
+  if (!prompt || !String(prompt).trim()) {
     return res.status(400).json({ error: "Prompt vide" });
   }
 
+  // 3) Clé API
+  const key = process.env.MMM_Vercel_Key;
+  if (!key) {
+    return res.status(500).json({ error: "Clé MMM_Vercel_Key manquante sur Vercel" });
+  }
+
   try {
+    // 4) Appel OpenAI (Chat Completions classique)
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.MMM_Vercel_Key}`,
+        "Authorization": `Bearer ${key}`,
       },
       body: JSON.stringify({
+        // Choisis un modèle disponible sur ton compte.
+        // "gpt-3.5-turbo" est sûr pour commencer.
         model: "gpt-3.5-turbo",
         messages: [
-          { role: "system", content: "Tu es Money Motor Muslim, un conseiller stratégique et financier éthique." },
-          { role: "user", content: prompt },
+          {
+            role: "system",
+            content:
+              "Tu es Money Motor Y, un conseiller stratégique et financier, éthique et pragmatique. " +
+              "Tu réponds de façon concise, actionnable, avec étapes et chiffres réalistes quand c’est pertinent."
+          },
+          { role: "user", content: String(prompt) }
         ],
         temperature: 0.5,
-        max_tokens: 300,
+        max_tokens: 500
       }),
     });
 
+    // 5) Lecture de la réponse
     const data = await response.json();
 
-    if (data.choices && data.choices.length > 0) {
-      return res.status(200).json({ reply: data.choices[0].message.content });
-    } else {
-      return res.status(502).json({ reply: "Aucune réponse reçue." });
+    // Erreur côté OpenAI → on renvoie le détail
+    if (!response.ok) {
+      const message = data?.error?.message || `Erreur OpenAI (${response.status})`;
+      return res.status(502).json({ error: message, detail: data });
     }
 
-  } catch (error) {
-    console.error("Erreur advisor:", error);
-    return res.status(500).json({ error: "Erreur serveur", message: String(error) });
+    // Réponse OK
+    const reply = data?.choices?.[0]?.message?.content?.trim();
+    return res.status(200).json({ reply: reply || "(réponse vide)" });
+  } catch (err) {
+    // 6) Sécurité
+    console.error("Erreur /api/advisor:", err);
+    return res.status(500).json({ error: "Erreur serveur", message: String(err) });
   }
 }
