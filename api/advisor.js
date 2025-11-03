@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     // 🧩 On récupère la clé API depuis les variables d'environnement
     const OPENAI_KEY =
       process.env.OPENAI_API_KEY ||
+      process.env.MoneyMotorY || // ✅ Ta nouvelle clé ici
       process.env.MMM_Vercel_Key ||
       process.env.MMM_Vercel_KEY;
 
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_KEY}`,
+        Authorization: `Bearer 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,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
