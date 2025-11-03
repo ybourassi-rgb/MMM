@@ -34,12 +34,11 @@
     </div>
   </div>
 
-  <!-- Script relié à l’API -->
   <script>
   (async function () {
     const badge = document.getElementById('ia-badge');
     try {
-      // ✅ Domaine API actuel : MMM OMEGA FIVE (serveur IA)
+      // 🌍 Lien API (serveur actuel)
       const res = await fetch('https://mmm-omega-five.vercel.app/api/status', { cache: 'no-store' });
       const data = await res.json();
       badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
@@ -48,7 +47,7 @@
     }
   })();
 
-  // (optionnel) câblage du bouton “Obtenir un conseil”
+  // 🔁 Interaction utilisateur
   (function () {
     const input = document.getElementById('topic');
     const btn   = document.getElementById('btn-ask');
@@ -59,7 +58,6 @@
       if (!prompt) { out.textContent = '💬 Écris une question.'; return; }
       out.textContent = '⏳ Je réfléchis…';
       try {
-        // 🧠 Appel au conseiller via ton API
         const r = await fetch('https://mmm-omega-five.vercel.app/api/advisor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -74,10 +72,10 @@
   })();
   </script>
 
-  <!-- ℹ️ Clés d’environnement utilisées côté serveur (Vercel) :
-       - MoneyMotorY          → ta clé principale OpenAI active
-       - OPENAI_API_KEY       → clé OpenAI alternative (backup)
-       - MMM_Vercel_Key       → clé secondaire Vercel interne
+  <!-- 🧠 Variables d’environnement côté serveur :
+       - MoneyMotorY → ta clé OpenAI principale
+       - MMM_Vercel_Key → clé secondaire (fallback)
+       - OPENAI_API_KEY → clé OpenAI par défaut (optionnelle)
   -->
 </body>
 </html>
