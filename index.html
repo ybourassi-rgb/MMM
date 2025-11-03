@@ -1,175 +1,175 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Muslim — Tableau de bord (V10.3)</title>
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #111;
-      color: #eee;
-      margin: 0;
-      padding: 0;
-    }
-    header {
-      background: #0f0f0f;
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #222;
-    }
-    h1 {
-      font-size: 1.2rem;
-      margin: 0;
-      color: #0ff;
-    }
-    .container {
-      max-width: 800px;
-      margin: 2rem auto;
-      padding: 1.5rem;
-      background: #1a1a1a;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.4);
-    }
-    textarea {
-      width: 100%;
-      background: #000;
-      color: #0f0;
-      border: 1px solid #333;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 0.95rem;
-      resize: vertical;
-    }
-    button {
-      background: #0ff;
-      border: none;
-      color: #000;
-      padding: 10px 16px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-    button:hover {
-      background: #00ffaa;
-    }
-    pre {
-      background: #0c0c0c;
-      color: #eee;
-      padding: 1rem;
-      border-radius: 8px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .status {
-      margin-top: 1rem;
-      font-size: 0.9rem;
-      color: #999;
-    }
-    .ok {
-      color: #0f0;
-    }
-    .error {
-      color: #f55;
-    }
-  </style>
+
+  <!-- PWA / styles -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="/mmm.css" />
+  <meta name="theme-color" content="#0b0b0b" />
 </head>
 
 <body>
-  <header>
-    <h1>Money Motor Muslim — Tableau de bord (V10.3)</h1>
-    <div>🟢 IA : En ligne</div>
+  <!-- En-tête -->
+  <header class="header">
+    <div class="container header-row">
+      <div class="brand">Money Motor Muslim — Tableau de bord (V10.3)</div>
+      <div class="health">
+        <span class="muted">État IA :</span>
+        <span id="ia-badge" class="chip">Vérification…</span>
+      </div>
+    </div>
   </header>
 
-  <main class="container">
-    <h2>💬 Conseil instantané</h2>
-    <p>Collez une ou plusieurs annonces (Leboncoin, LaCentrale…) puis posez une question, ex :</p>
-    <blockquote>
-      “Compare ces 3 annonces et dis-moi laquelle est la meilleure affaire :  
-      https://www.leboncoin.fr/ad/voitures/3084707716  
-      https://www.lacentrale.fr/auto-occasion-peugeot-308.html”
-    </blockquote>
+  <main class="container" style="margin-top:18px">
+    <!-- Raccourcis -->
+    <section class="card" style="margin-bottom:16px">
+      <div class="actions" style="gap:8px; flex-wrap:wrap">
+        <a class="btn" href="/market_live.html">📈 Marché en direct</a>
+        <a class="btn" href="/publish_wizard.html">🧩 Assistant de publication</a>
+        <a class="btn" href="/auto_publisher.html">🤖 Smart Auto-Publisher</a>
+      </div>
+      <div class="small muted" style="margin-top:8px">
+        Serveur API côté Vercel • PWA installable • 100&nbsp;% licite
+      </div>
+    </section>
 
-    <textarea id="prompt" rows="5" placeholder="Écrivez ici votre question ou collez des liens..."></textarea>
-    <div style="margin-top:1rem; display:flex; gap:10px;">
-      <button id="sendBtn">🔎 Obtenir un conseil</button>
-      <button id="clearBtn">🧹 Effacer</button>
-    </div>
+    <!-- Conseil instantané -->
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title">💬 Conseil instantané</div>
+        <div class="chip chip-ok" id="chip-ok" hidden>Réponse générée</div>
+        <div class="chip chip-err" id="chip-err" hidden>Erreur</div>
+      </div>
 
-    <div class="status" id="status"></div>
+      <label class="field-label" for="topic">
+        Collez une ou plusieurs annonces (Leboncoin, LaCentrale, Avito…) <span class="muted">(ou posez une question)</span>
+      </label>
 
-    <h3>🧭 Réponse condensée</h3>
-    <pre id="advice">–</pre>
+      <textarea id="topic" rows="4" class="input"
+        placeholder="Ex : Voici une annonce : https://www.leboncoin.fr/ad/voitures/3084707716 — Est-ce une bonne affaire ?"></textarea>
+
+      <div class="actions" style="gap:10px; margin-top:10px">
+        <button class="btn btn-primary" id="btn-ask" type="button">
+          <span id="ask-spin" class="spinner" hidden></span>
+          Obtenir un conseil
+        </button>
+        <button class="btn" id="btn-clear" type="button">Effacer</button>
+      </div>
+
+      <div id="advice" class="output" aria-live="polite" style="margin-top:12px"></div>
+    </section>
   </main>
 
+  <!-- Script app -->
   <script>
-    const apiUrl = "/api/advisor";
+  // --- IA Status (badge) ---
+  (async function checkStatus() {
+    const badge = document.getElementById('ia-badge');
+    try {
+      const r = await fetch('/api/status', { cache: 'no-store' });
+      const j = await r.json().catch(() => ({}));
+      if (j && (j.ok || j.status === 'online')) {
+        badge.textContent = 'En ligne ✅';
+        badge.classList.add('chip-ok');
+      } else {
+        badge.textContent = 'Hors ligne ❌';
+        badge.classList.add('chip-err');
+      }
+    } catch {
+      badge.textContent = 'Hors ligne ❌';
+      badge.classList.add('chip-err');
+    }
+  })();
 
-    const promptField = document.getElementById("prompt");
-    const sendBtn = document.getElementById("sendBtn");
-    const clearBtn = document.getElementById("clearBtn");
-    const statusDiv = document.getElementById("status");
-    const advicePre = document.getElementById("advice");
+  // --- Conseil instantané ---
+  (function wireUI() {
+    const apiUrl   = '/api/advisor';
+    const $topic   = document.getElementById('topic');
+    const $ask     = document.getElementById('btn-ask');
+    const $clear   = document.getElementById('btn-clear');
+    const $out     = document.getElementById('advice');
+    const $ok      = document.getElementById('chip-ok');
+    const $err     = document.getElementById('chip-err');
+    const $spin    = document.getElementById('ask-spin');
 
-    // --- Fonction principale ---
-    async function getAdvice() {
-      const prompt = promptField.value.trim();
+    function resetChips() {
+      $ok.hidden = true;
+      $err.hidden = true;
+    }
+
+    function toHtml(text) {
+      // Affichage simple : on préserve les sauts de ligne et on met en forme les titres '##'
+      const esc = (s) => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      const lines = esc(text).split('\n').map(l => {
+        if (l.startsWith('### ')) return '<h4>' + l.slice(4) + '</h4>';
+        if (l.startsWith('## '))  return '<h3>' + l.slice(3) + '</h3>';
+        if (l.startsWith('**') && l.endsWith('**')) return '<strong>' + l.slice(2,-2) + '</strong>';
+        return l;
+      });
+      return '<pre class="mono">'+ lines.join('\n') +'</pre>';
+    }
+
+    async function ask() {
+      resetChips();
+      const prompt = ($topic.value || '').trim();
       if (!prompt) {
-        alert("⚠️ Merci d’entrer une question ou un lien avant de continuer.");
+        $out.innerHTML = '<div class="callout err">💬 Écris une question ou colle un lien d’annonce.</div>';
         return;
       }
 
-      advicePre.textContent = "⏳ Analyse en cours...";
-      statusDiv.textContent = "Envoi à MoneyMotorY...";
-      statusDiv.className = "status";
-
       try {
+        $ask.disabled = true;
+        $spin.hidden  = false;
+        $out.innerHTML = '<div class="muted">⏳ Analyse en cours…</div>';
+
         const r = await fetch(apiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
         });
 
-        const data = await r.json();
+        const text = await r.text();  // tolérant: parfois l’API renvoie du texte
+        let data;
+        try { data = JSON.parse(text); } catch { data = { ok:false, error:text }; }
 
-        if (!data.ok) {
-          advicePre.textContent = "❌ Erreur : " + (data.error || "Réponse invalide");
-          statusDiv.textContent = "Erreur API.";
-          statusDiv.className = "status error";
+        if (!r.ok || !data.ok) {
+          $err.hidden = false;
+          const msg = (data && data.error) ? data.error : ('Erreur HTTP '+ r.status);
+          $out.innerHTML = '<div class="callout err">❌ '+ msg +'</div>';
           return;
         }
 
-        // Si le modèle renvoie du markdown, on l’affiche brut
-        advicePre.textContent = data.reply || "Aucune réponse reçue.";
-        statusDiv.textContent = "✅ Réponse générée avec succès";
-        statusDiv.className = "status ok";
-      } catch (err) {
-        advicePre.textContent = "❌ Erreur : " + err.message;
-        statusDiv.textContent = "Erreur réseau ou serveur.";
-        statusDiv.className = "status error";
+        $ok.hidden = false;
+        const reply = data.reply || data.answer || '';
+        $out.innerHTML = toHtml(reply);
+      } catch (e) {
+        $err.hidden = false;
+        $out.innerHTML = '<div class="callout err">❌ ' + (e.message || 'Erreur réseau') + '</div>';
+      } finally {
+        $ask.disabled = false;
+        $spin.hidden  = true;
       }
     }
 
-    // --- Effacer ---
-    clearBtn.addEventListener("click", () => {
-      promptField.value = "";
-      advicePre.textContent = "–";
-      statusDiv.textContent = "";
+    $ask.addEventListener('click', ask);
+    $clear.addEventListener('click', () => {
+      resetChips();
+      $topic.value = '';
+      $out.innerHTML = '';
+      $topic.focus();
     });
 
-    // --- Envoyer ---
-    sendBtn.addEventListener("click", getAdvice);
-
-    // --- Enter + Ctrl ---
-    promptField.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        getAdvice();
+    // Ctrl/Cmd+Enter pour envoyer
+    $topic.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        ask();
       }
     });
+  })();
   </script>
 </body>
 </html>
