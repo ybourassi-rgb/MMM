@@ -1,33 +1,39 @@
-// /api/advisor.js
+// api/advisor.js
 export default async function handler(req, res) {
-  // --- CORS de base ---
+  // CORS minimal
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Méthode non autorisée" });
+  }
 
   try {
-    // --- Clé API via variables d'env ---
+    // 1) Clé API (aucune clé en dur)
     const OPENAI_KEY =
       process.env.OPENAI_API_KEY ||
-      process.env.MMM_Vercel_Key ||
-      process.env.MMM_Vercel_KEY ||
-      process.env.MoneyMotorY;
+      process.env.MoneyMotorY ||
+      process.env.MMM_Vercel_Key;
 
     if (!OPENAI_KEY) {
-      return res.status(500).json({ ok: false, error: "Clé API OpenAI manquante." });
+      return res.status(500).json({
+        ok: false,
+        error:
+          "Clé API OpenAI manquante. Définis OPENAI_API_KEY (ou MoneyMotorY / MMM_Vercel_Key) dans Vercel → Settings → Environment Variables.",
+      });
     }
 
-    // --- Récupération du prompt (GET ou POST) ---
-    const promptFromGet  = (req.query?.prompt ?? "").toString();
-    const promptFromPost = (req.body?.prompt ?? "").toString();
-    const text = (promptFromPost || promptFromGet).trim();
-
+    // 2) Lecture du prompt
+    const { prompt } = (req.body || {});
+    const text = (prompt || "").trim();
     if (!text) {
-      return res.status(400).json({ ok: false, error: "Prompt vide (aucun texte fourni)." });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Prompt vide (aucun texte fourni)." });
     }
 
-    // --- Appel OpenAI ---
+    // 3) Appel OpenAI
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -41,23 +47,31 @@ export default async function handler(req, res) {
           {
             role: "system",
             content:
-              "Tu es Money Motor Muslim (Money Motor Y), conseiller stratégique et financier. " +
-              "Réponds de façon concrète, actionnable, halal-friendly (investissement, enchères, revente, patrimoine).",
+              "Tu es Money Motor Muslim (alias Money Motor Y), conseiller stratégique & financier halal-friendly. " +
+              "Réponds en français, de façon concrète, actionnable, structurée (titres courts, puces), sans jargon inutile.",
           },
           { role: "user", content: text },
         ],
       }),
     });
 
+    // 4) Gestion des erreurs OpenAI
     if (!r.ok) {
       const err = await r.text();
-      return res.status(502).json({ ok: false, error: `Erreur API OpenAI: ${err}` });
+      return res.status(r.status).json({
+        ok: false,
+        error: `Erreur API OpenAI: ${err}`,
+      });
     }
 
     const data = await r.json();
-    const reply = data?.choices?.[0]?.message?.content?.trim() || "Pas de réponse.";
-    return res.status(200).json({ ok: true, reply });
+    const reply =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      "⚠️ Pas de contenu renvoyé par l'IA.";
+
+    // 5) Réponse JSON (le front fera le rendu propre)
+    res.status(200).json({ ok: true, reply });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message || "Erreur interne" });
+    res.status(500).json({ ok: false, error: e.message || "Erreur serveur" });
   }
 }
