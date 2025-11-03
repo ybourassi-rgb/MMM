@@ -1,46 +1,43 @@
-// /api/advisor.js
 export default async function handler(req, res) {
-  // --- 🔐 Sécurité CORS ---
+  // Autorisations de base (CORS)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method Not Allowed" });
-  }
-
-  res.setHeader("Cache-Control", "no-store, max-age=0");
-
   try {
-    // --- 🧠 Récupération du prompt envoyé par le client ---
-    const { prompt } = req.body || {};
-    const text = String(prompt || "").trim();
-    if (!text) {
-      return res.status(400).json({ ok: false, error: "Prompt vide" });
-    }
-
-    // 🔴 --- PLACE TA LIGNE ICI ---
-    const OPENAI_KEY = process.env.MMM_VERCEL_KEY || process.env.MMM_Vercel_Key;
-    // 🔴 ---------------------------
+    // 🧩 On récupère la clé API depuis les variables d'environnement
+    const OPENAI_KEY =
+      process.env.OPENAI_API_KEY ||
+      process.env.MMM_Vercel_Key ||
+      process.env.MMM_Vercel_KEY;
 
     if (!OPENAI_KEY) {
       return res.status(500).json({
         ok: false,
-        error:
-          "Clé API manquante. Définis la variable d’environnement MMM_VERCEL_KEY dans Vercel.",
+        error: "Clé API OpenAI manquante sur le serveur.",
       });
     }
 
-    // --- 🌐 Appel à l’API OpenAI ---
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    // 🧠 Lecture du prompt utilisateur
+    const { prompt } = req.body || {};
+    const text = (prompt || "").trim();
+
+    if (!text) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "Prompt vide (aucun texte fourni)." });
+    }
+
+    // ✉️ Appel à l'API OpenAI
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer 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`,
+        Authorization: `Bearer ${OPENAI_KEY}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
@@ -48,40 +45,35 @@ export default async function handler(req, res) {
           {
             role: "system",
             content:
-              "Tu es Money Motor Muslim (Money Motor Y), un conseiller stratégique et financier. Tu donnes des réponses concrètes, licites et actionnables.",
+              "Tu es Money Motor Muslim (alias Money Motor Y), un conseiller stratégique et financier. " +
+              "Tu donnes des réponses précises, concrètes et directement exploitables, notamment pour l’investissement, " +
+              "les enchères, la revente et la gestion de patrimoine halal.",
           },
-          { role: "user", content: text },
+          {
+            role: "user",
+            content: text,
+          },
         ],
         temperature: 0.6,
       }),
     });
 
-    if (!r.ok) {
-      const errBody = await r.text().catch(() => "");
-      return res
-        .status(502)
-        .json({ ok: false, error: "Erreur OpenAI", details: errBody });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Erreur API OpenAI: ${errText}`);
     }
 
-    const data = await r.json();
-    const reply =
+    const data = await response.json();
+    const answer =
       data?.choices?.[0]?.message?.content?.trim() ||
-      data?.choices?.[0]?.text?.trim() ||
-      "";
+      "⚠️ Aucune réponse reçue de l’IA.";
 
-    if (!reply) {
-      return res.status(200).json({
-        ok: true,
-        reply: "(Pas de réponse générée)",
-      });
-    }
-
-    return res.status(200).json({ ok: true, reply });
-  } catch (e) {
-    return res.status(500).json({
+    res.status(200).json({ ok: true, reply: answer });
+  } catch (error) {
+    console.error("Erreur advisor.js:", error);
+    res.status(500).json({
       ok: false,
-      error: "Erreur serveur",
-      details: String(e?.message || e),
+      error: error.message || "Erreur interne du serveur",
     });
   }
 }
