@@ -1,6 +1,6 @@
 // MMM V10.3 — Version simplifiée et 100% compatible Vercel
 
-const API_BASE = "https://mmm-omega-five.vercel.app"; // ✅ Ton domaine fixe
+const API_BASE = "https://mmm-omega-five.vercel.app"✅ Ton domaine fixe
 
 // --- Vérifie le statut IA ---
 async function ping() {
