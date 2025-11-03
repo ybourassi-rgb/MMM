@@ -1,45 +1,42 @@
+// ✅ Fichier : /api/advisor.js
+// Reçoit les requêtes du tableau de bord et renvoie une réponse de ton IA
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Méthode non autorisée' });
+  // --- CORS ---
+  res.setHeader("Access-Control-Allow-Origin", "*"); // tu peux remplacer * par "https://mmm-omega-five.vercel.app"
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  const { prompt } = req.body;
-
-  // Vérifier la clé API
-  if (!process.env.MMM_Vercel_Key) {
-    return res.status(500).json({ error: 'Clé MMM_Vercel_Key manquante sur Vercel' });
-  }
-
-  // Vérifier le prompt
-  if (!prompt || prompt.trim() === '') {
-    return res.status(400).json({ error: 'Prompt vide' });
+  // --- Vérifie la méthode ---
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Méthode non autorisée" });
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.MMM_Vercel_Key}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: "Tu es Money Motor Muslim, un conseiller stratégique et financier." },
-          { role: "user", content: prompt },
-        ],
-      }),
-    });
+    const { prompt } = req.body;
 
-    const data = await response.json();
-
-    if (data.choices && data.choices.length > 0) {
-      return res.status(200).json({ reply: data.choices[0].message.content });
-    } else {
-      return res.status(500).json({ reply: "Erreur : aucune réponse générée." });
+    // --- Vérifie que le prompt n'est pas vide ---
+    if (!prompt || prompt.trim() === "") {
+      return res.status(400).json({ error: "Prompt vide" });
     }
 
-  } catch (error) {
-    return res.status(500).json({ reply: "Erreur serveur : " + error.message });
+    // --- Simulation de l’IA Money Motor Y ---
+    // (tu pourras connecter OpenAI ou une autre API ici plus tard)
+    const fakeReply = `🧠 Conseil Money Motor Y : Pour le sujet "${prompt}", je te recommande d'analyser la rentabilité et la liquidité avant toute décision.`;
+
+    // --- Réponse ---
+    return res.status(200).json({
+      ok: true,
+      reply: fakeReply
+    });
+  } catch (err) {
+    // --- Gestion des erreurs ---
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur : " + err.message
+    });
   }
 }
