@@ -14,7 +14,7 @@
 
   <div class="grid">
 
-    <!-- État de l'IA -->
+    <!-- État IA -->
     <div class="card">
       <div><b>État IA :</b> <span id="ia-badge">Vérification…</span></div>
       <div id="last-check" class="small" style="margin-top:4px;color:#888;">Dernier check : ...</div>
@@ -37,13 +37,15 @@
 
   </div>
 
-  <!-- Script relié à l'API -->
+  <!-- Script dynamique relié à l’API -->
   <script>
+  const API_URL = 'https://mmm-xs9j.vercel.app'; // domaine maître de l’API
+  const badge = document.getElementById('ia-badge');
+  const last = document.getElementById('last-check');
+
   async function checkIA() {
-    const badge = document.getElementById('ia-badge');
-    const last = document.getElementById('last-check');
     try {
-      const res = await fetch('https://mmm-xs9j.vercel.app/api/status?force=' + Date.now(), { cache: 'no-store' });
+      const res = await fetch(`${API_URL}/api/status?force=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data && data.ok) {
         badge.textContent = 'En ligne ✅';
