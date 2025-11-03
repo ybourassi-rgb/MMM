@@ -1,38 +1,34 @@
+// /api/advisor.js
 export default async function handler(req, res) {
-  // Autorisations CORS
+  // --- CORS de base ---
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    // 🔑 Clés d’environnement disponibles
+    // --- Clé API via variables d'env ---
     const OPENAI_KEY =
-      process.env.MoneyMotorY ||
+      process.env.OPENAI_API_KEY ||
       process.env.MMM_Vercel_Key ||
-      process.env.OPENAI_API_KEY;
+      process.env.MMM_Vercel_KEY ||
+      process.env.MoneyMotorY;
 
     if (!OPENAI_KEY) {
-      return res.status(500).json({
-        ok: false,
-        error: "Clé API OpenAI manquante sur le serveur.",
-      });
+      return res.status(500).json({ ok: false, error: "Clé API OpenAI manquante." });
     }
 
-    // 🧠 Lecture du texte envoyé par l’utilisateur
-    const { prompt } = req.body || {};
-    const text = (prompt || "").trim();
+    // --- Récupération du prompt (GET ou POST) ---
+    const promptFromGet  = (req.query?.prompt ?? "").toString();
+    const promptFromPost = (req.body?.prompt ?? "").toString();
+    const text = (promptFromPost || promptFromGet).trim();
+
     if (!text) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Prompt vide (aucun texte fourni)." });
+      return res.status(400).json({ ok: false, error: "Prompt vide (aucun texte fourni)." });
     }
 
-    // ⚙️ Appel à l’API OpenAI
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    // --- Appel OpenAI ---
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -40,35 +36,28 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
+        temperature: 0.6,
         messages: [
           {
             role: "system",
             content:
-              "Tu es Money Motor Muslim (alias Money Motor Y), un conseiller stratégique et financier. " +
-              "Tu aides à optimiser les investissements, les enchères, les reventes et la gestion de patrimoine halal.",
+              "Tu es Money Motor Muslim (Money Motor Y), conseiller stratégique et financier. " +
+              "Réponds de façon concrète, actionnable, halal-friendly (investissement, enchères, revente, patrimoine).",
           },
           { role: "user", content: text },
         ],
-        temperature: 0.6,
       }),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Erreur API OpenAI: ${errText}`);
+    if (!r.ok) {
+      const err = await r.text();
+      return res.status(502).json({ ok: false, error: `Erreur API OpenAI: ${err}` });
     }
 
-    const data = await response.json();
-    const answer =
-      data?.choices?.[0]?.message?.content?.trim() ||
-      "⚠️ Aucune réponse reçue de l’IA.";
-
-    res.status(200).json({ ok: true, reply: answer });
-  } catch (error) {
-    console.error("Erreur advisor.js:", error);
-    res.status(500).json({
-      ok: false,
-      error: error.message || "Erreur interne du serveur",
-    });
+    const data = await r.json();
+    const reply = data?.choices?.[0]?.message?.content?.trim() || "Pas de réponse.";
+    return res.status(200).json({ ok: true, reply });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message || "Erreur interne" });
   }
 }
