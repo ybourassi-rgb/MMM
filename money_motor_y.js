@@ -1,6 +1,6 @@
-// MMM V10.3 — Client web connecté à l’API Vercel
+// MMM V10.3 — Client web connecté à l’API Vercel (Money Motor Y)
 
-const API_BASE = location.origin;
+const API_BASE = "https://mmm-omega-five.vercel.app"; // 🔥 URL fixe de ton site Vercel
 
 // --- Vérifier le statut IA ---
 async function ping() {
@@ -10,7 +10,6 @@ async function ping() {
     const data = await res.json();
     const badge = document.querySelector("#ia-badge");
     if (badge) badge.textContent = (data.ok ?? true) ? "En ligne ✅" : "Hors ligne ❌";
-    console.log("Ping réussi :", data);
     return data;
   } catch (err) {
     const badge = document.querySelector("#ia-badge");
@@ -31,14 +30,11 @@ async function quickAdvice(topic = "") {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || "Erreur API");
-  console.log("Réponse IA :", data);
   return data.reply || data.answer || "(réponse vide)";
 }
 
 // --- Lancer automatiquement au chargement ---
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("MMM DOM prêt ✅");
-
   const badge = document.querySelector("#ia-badge");
   if (badge) {
     ping();
