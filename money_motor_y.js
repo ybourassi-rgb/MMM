@@ -1,6 +1,6 @@
 // MMM V10.3 — Client web connecté à l’API Vercel (Money Motor Y)
 
-const API_BASE = "https://mmm-omega-five.vercel.app"; // 🔥 URL fixe de ton site Vercel
+const API_BASE = "https://mmm-omega-five.vercel.app";🔥 URL fixe de ton site Vercel
 
 // --- Vérifier le statut IA ---
 async function ping() {
