@@ -13,7 +13,8 @@
   <div class="header">Money Motor Muslim — Tableau de bord (V10.3)</div>
 
   <div class="grid">
-    <!-- État IA -->
+
+    <!-- État de l'IA -->
     <div class="card">
       <div><b>État IA :</b> <span id="ia-badge">Vérification…</span></div>
       <div id="last-check" class="small" style="margin-top:4px;color:#888;">Dernier check : ...</div>
@@ -33,21 +34,17 @@
       <button class="btn" id="btn-ask" style="margin-top:10px;">Obtenir un conseil</button>
       <pre id="advice" class="small"></pre>
     </div>
+
   </div>
 
-  <!-- Script relié à l’API -->
+  <!-- Script relié à l'API -->
   <script>
-  (async function () {
+  async function checkIA() {
     const badge = document.getElementById('ia-badge');
-    const lastCheck = document.getElementById('last-check');
-
+    const last = document.getElementById('last-check');
     try {
-      // Petite pause pour que tout soit bien chargé
-      await new Promise(r => setTimeout(r, 500));
-
-      const res = await fetch('https://mmm-xs9j.vercel.app/api/status', { cache: 'no-store' });
+      const res = await fetch('https://mmm-xs9j.vercel.app/api/status?force=' + Date.now(), { cache: 'no-store' });
       const data = await res.json();
-
       if (data && data.ok) {
         badge.textContent = 'En ligne ✅';
         badge.style.color = '#00ff88';
@@ -55,15 +52,17 @@
         badge.textContent = 'Hors ligne ❌';
         badge.style.color = '#ff5555';
       }
-
-      lastCheck.textContent = 'Dernier check : ' + new Date().toLocaleTimeString('fr-FR');
-    } catch (e) {
+      last.textContent = 'Dernier check : ' + new Date().toLocaleTimeString('fr-FR');
+    } catch (err) {
       badge.textContent = 'Hors ligne ❌';
       badge.style.color = '#ff5555';
-      lastCheck.textContent = 'Erreur de vérification (' + new Date().toLocaleTimeString('fr-FR') + ')';
-      console.error('Erreur ping:', e);
+      last.textContent = 'Erreur : ' + err.message;
     }
-  })();
+  }
+
+  // Lancer immédiatement et répéter toutes les 10 secondes
+  checkIA();
+  setInterval(checkIA, 10000);
   </script>
 </body>
 </html>
