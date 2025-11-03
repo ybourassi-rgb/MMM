@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Money Motor Muslim — Tableau de bord (V10.3)</title>
+  <title>MMM • Tableau de bord V10.3</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/mmm.css">
   <meta name="theme-color" content="#0b0b0b">
@@ -13,7 +13,6 @@
   <div class="header">Money Motor Muslim — Tableau de bord (V10.3)</div>
 
   <div class="grid">
-
     <!-- État IA -->
     <div class="card">
       <div><b>État IA :</b> <span id="ia-badge">Vérification…</span></div>
@@ -28,25 +27,19 @@
     <!-- Conseil instantané -->
     <div class="card">
       <div style="margin-bottom:8px;"><b>Conseil instantané</b></div>
-      <input 
-        id="topic" 
-        placeholder="Ex: enchères voitures Maroc"
+      <input id="topic" placeholder="Ex: enchères voitures Maroc"
         style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f0f;color:#f2f2f2">
       <button class="btn" id="btn-ask" style="margin-top:10px;">Obtenir un conseil</button>
       <pre id="advice" class="small"></pre>
     </div>
-
   </div>
 
-  <!-- ============================= -->
-  <!-- 🧠 Script relié à l’API Money Motor Y -->
-  <!-- ============================= -->
-
+  <!-- Script relié à l’API -->
   <script>
-  // --- Vérifie l’état de l’IA ---
   (async function () {
     const badge = document.getElementById('ia-badge');
     try {
+      // 👇 Mets ici ton domaine API actif
       const res = await fetch('https://mmm-xs9j.vercel.app/api/status', { cache: 'no-store' });
       const data = await res.json();
       badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
@@ -54,37 +47,6 @@
       badge.textContent = 'Hors ligne ❌';
     }
   })();
-
-  // --- Gère le bouton “Obtenir un conseil” ---
-  document.getElementById('btn-ask').addEventListener('click', async () => {
-    const topic = document.getElementById('topic').value.trim();
-    const adviceBox = document.getElementById('advice');
-    
-    if (!topic) {
-      adviceBox.textContent = "⚠️ Merci de saisir un sujet avant de demander un conseil.";
-      return;
-    }
-
-    adviceBox.textContent = "⏳ Consultation de Money Motor Y...";
-
-    try {
-      const res = await fetch('https://mmm-xs9j.vercel.app/api/advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: topic })
-      });
-
-      const data = await res.json();
-
-      if (data.ok && data.reply) {
-        adviceBox.textContent = data.reply;
-      } else {
-        adviceBox.textContent = "❌ Pas de réponse de l’IA.";
-      }
-    } catch (err) {
-      adviceBox.textContent = "⚠️ Erreur de connexion à Money Motor Y.";
-    }
-  });
   </script>
 </body>
 </html>
