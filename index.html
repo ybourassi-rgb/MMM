@@ -16,6 +16,7 @@
     <!-- État IA -->
     <div class="card">
       <div><b>État IA :</b> <span id="ia-badge">Vérification…</span></div>
+      <div id="last-check" class="small" style="margin-top:4px;color:#888;">Dernier check : ...</div>
       <div class="small">Serveur API côté Vercel • PWA installable • 100 % licite</div>
       <div style="margin-top:10px">
         <a class="btn" href="/market_live.html">📈 Marché en direct</a>
@@ -35,16 +36,32 @@
   </div>
 
   <!-- Script relié à l’API -->
-  <!-- Test direct du statut IA (sans fichier externe) -->
   <script>
   (async function () {
     const badge = document.getElementById('ia-badge');
+    const lastCheck = document.getElementById('last-check');
+
     try {
+      // Petite pause pour que tout soit bien chargé
+      await new Promise(r => setTimeout(r, 500));
+
       const res = await fetch('https://mmm-xs9j.vercel.app/api/status', { cache: 'no-store' });
       const data = await res.json();
-      badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
+
+      if (data && data.ok) {
+        badge.textContent = 'En ligne ✅';
+        badge.style.color = '#00ff88';
+      } else {
+        badge.textContent = 'Hors ligne ❌';
+        badge.style.color = '#ff5555';
+      }
+
+      lastCheck.textContent = 'Dernier check : ' + new Date().toLocaleTimeString('fr-FR');
     } catch (e) {
       badge.textContent = 'Hors ligne ❌';
+      badge.style.color = '#ff5555';
+      lastCheck.textContent = 'Erreur de vérification (' + new Date().toLocaleTimeString('fr-FR') + ')';
+      console.error('Erreur ping:', e);
     }
   })();
   </script>
