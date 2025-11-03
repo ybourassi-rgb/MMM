@@ -9,13 +9,17 @@
   <meta name="theme-color" content="#0b0b0b" />
   <style>
     .muted{opacity:.75}
+    .ok{color:#38c172} .bad{color:#ff4d4f}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .loader{display:inline-block; width:1em; height:1em; border:.18em solid #666; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; vertical-align:-.2em}
     @keyframes spin{to{transform:rotate(360deg)}}
-    #advice { white-space: normal; }
-    #advice h3 { margin: .6rem 0 .2rem }
-    #advice ul { margin:.25rem 0 .75rem .9rem }
-    #advice li { margin:.15rem 0 }
-    .ok{color:#38c172} .bad{color:#ff4d4f}
+    #advice { white-space: normal; margin-top:8px }
+    #advice ul{margin:.2rem 0 .6rem 1.1rem}
+    #advice li{margin:.18rem 0}
+    .pill{font-size:.85rem;border:1px solid #333;border-radius:999px;padding:.4rem .7rem;background:#101010}
+    .btn-ghost{border:1px solid #333;background:#0f0f0f;color:#eee;border-radius:8px;padding:.55rem .8rem;cursor:pointer}
+    .btn-ghost[disabled]{opacity:.55;cursor:not-allowed}
+    .cap{font-variant:all-small-caps; letter-spacing:.04em; opacity:.8}
   </style>
 </head>
 <body>
@@ -24,9 +28,10 @@
   <div class="grid">
     <!-- État IA -->
     <div class="card">
-      <div>
+      <div class="row">
         <b>État IA :</b>
         <span id="ia-badge" class="muted">Vérification…</span>
+        <span id="using-key" class="pill cap muted" title="Nom de la variable d’environnement détectée" style="display:none"></span>
       </div>
       <div class="small muted">Serveur API côté Vercel • PWA installable • 100 % licite</div>
       <div style="margin-top:10px">
@@ -41,13 +46,17 @@
       <div style="margin-bottom:8px;"><b>Conseil instantané</b></div>
       <input id="topic" placeholder="Ex: enchères voitures Maroc"
              style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f0f;color:#f2f2f2">
-      <button class="btn" id="btn-ask" style="margin-top:10px;">Obtenir un conseil</button>
-      <div id="advice" class="small muted" style="margin-top:8px;"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="btn-ask">Obtenir un conseil</button>
+        <button class="btn-ghost" id="btn-copy" title="Copier la réponse" style="display:none">📋 Copier</button>
+        <span class="muted cap" id="bullets-note" style="display:none">réponse condensée</span>
+      </div>
+      <div id="advice" class="small muted"></div>
     </div>
   </div>
 
   <script>
-    // --- 1) Badge de statut (domaine actuel) ---
+    // --- 1) Badge de statut ---
     (async () => {
       const badge = document.getElementById('ia-badge');
       try {
@@ -59,41 +68,61 @@
         } else {
           badge.innerHTML = '<span class="bad">Hors ligne ❌</span>';
         }
+        // si ton /api/status expose whichKey (optionnel), on l'affiche
+        if (data && data.whichKey) {
+          const chip = document.getElementById('using-key');
+          chip.textContent = data.whichKey;
+          chip.style.display = 'inline-block';
+        }
       } catch {
         badge.innerHTML = '<span class="bad">Hors ligne ❌</span>';
       }
     })();
 
-    // --- 2) Mini-formatteur Markdown -> HTML safe ---
-    function mdToHtml(md) {
-      let html = md
-        .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); // échappement
-      html = html.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");               // **gras**
-      html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");                // ### titre
-      // listes simples
-      html = html
-        .split(/\n\n+/).map(block=>{
-          if (/^[-*] /.test(block.trim())) {
-            return "<ul>" + block.trim().split(/\n/)
-              .map(li => "<li>" + li.replace(/^[-*] /,'') + "</li>").join("") + "</ul>";
-          }
-          return "<p>" + block.replace(/\n/g,"<br>") + "</p>";
-        }).join("");
-      return html;
+    // --- 2) Condenseur en puces (strict & court) ---
+    function toBullets(text, maxBullets = 8, maxChars = 1100) {
+      // a) coupe le gros texte
+      const t = text.replace(/\s+/g,' ').trim().slice(0, maxChars);
+
+      // b) découpe en phrases
+      const sentences = t
+        .split(/(?<=[\.\!\?])\s+(?=[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ0-9])/)
+        .map(s => s.replace(/^[-•\*]\s*/,'').trim())
+        .filter(Boolean);
+
+      // c) garde les plus “utiles” (évite les phrases trop courtes)
+      const picked = [];
+      for (const s of sentences) {
+        if (picked.length >= maxBullets) break;
+        if (s.length < 30) continue;
+        picked.push(s);
+      }
+      // fallback si rien de long
+      if (!picked.length) picked.push(t);
+
+      // d) renvoie HTML <ul><li>…</li></ul>
+      return "<ul>" + picked.map(x => "<li>"+escapeHtml(x)+"</li>").join("") + "</ul>";
     }
 
-    // --- 3) Câblage du bouton (loader + rendu propre) ---
+    // échappement minimal
+    function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+
+    // --- 3) Bouton & copier ---
     (function attachAdvisor(){
       const input = document.getElementById('topic');
       const btn   = document.getElementById('btn-ask');
       const out   = document.getElementById('advice');
+      const copy  = document.getElementById('btn-copy');
+      const tag   = document.getElementById('bullets-note');
       if (!btn || !out) return;
+
+      let lastRaw = ""; // pour copier le texte brut
 
       btn.addEventListener('click', async () => {
         const prompt = (input.value || '').trim();
         if (!prompt) { out.innerHTML = '💬 Écris une question.'; return; }
 
-        btn.disabled = true;
+        btn.disabled = true; copy.style.display = 'none'; tag.style.display = 'none';
         out.classList.remove('muted');
         out.innerHTML = '<span class="loader"></span> Réflexion en cours…';
 
@@ -105,11 +134,27 @@
           });
           const data = await r.json();
           if (!data.ok) throw new Error(data.error || 'Erreur inconnue');
-          out.innerHTML = mdToHtml(data.reply);
+
+          lastRaw = (data.reply || "").trim();
+          // rendu en puces strict
+          out.innerHTML = toBullets(lastRaw, 8, 1100);
+          copy.style.display = 'inline-block';
+          tag.style.display  = 'inline-block';
         } catch (e) {
           out.innerHTML = '❌ ' + (e.message || 'Erreur');
         } finally {
           btn.disabled = false;
+        }
+      });
+
+      copy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(lastRaw || out.innerText || "");
+          copy.textContent = "✅ Copié";
+          setTimeout(()=> copy.textContent = "📋 Copier", 1400);
+        } catch {
+          copy.textContent = "❌ Erreur copie";
+          setTimeout(()=> copy.textContent = "📋 Copier", 1400);
         }
       });
     })();
