@@ -8,39 +8,36 @@
   <link rel="stylesheet" href="/mmm.css">
   <meta name="theme-color" content="#0b0b0b">
 </head>
+
 <body>
   <div class="header">Money Motor Muslim — Tableau de bord (V10.3)</div>
+
   <div class="grid">
+
+    <!-- État de l'IA -->
     <div class="card">
-      <div><b>Etat IA :</b> <span id="ia-status">Vérification…</span></div>
-      <div class="small">Serveur API côté Vercel • PWA installable • 100% licite</div>
+      <div><b>État IA :</b> <span id="ia-badge">Vérification…</span></div>
+      <div class="small">Serveur API côté Vercel • PWA installable • 100 % licite</div>
       <div style="margin-top:10px">
         <a class="btn" href="/market_live.html">📈 Marché en direct</a>
         <a class="btn" href="/publish_wizard.html">🧩 Assistant de publication</a>
-        <a class="btn" href="/auto_publisher.html">🤖 Smart Auto‑Publisher</a>
+        <a class="btn" href="/auto_publisher.html">🤖 Smart Auto-Publisher</a>
       </div>
     </div>
 
+    <!-- Conseil instantané -->
     <div class="card">
-      <div style="margin-bottom:8px"><b>Conseil instantané</b></div>
-      <input id="topic" placeholder="Ex: enchères voitures Maroc" style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f0f;color:#f2f2f2">
-      <button class="btn" id="btn-ask" style="margin-top:10px">Obtenir un conseil</button>
+      <div style="margin-bottom:8px;"><b>Conseil instantané</b></div>
+      <input id="topic" placeholder="Ex: enchères voitures Maroc"
+        style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f0f;color:#f2f2f2">
+      <button class="btn" id="btn-ask" style="margin-top:10px;">Obtenir un conseil</button>
       <pre id="advice" class="small"></pre>
     </div>
+
   </div>
-  <script type="module">
-    import { ping, quickAdvice } from '/money_motor_y.js';
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js');
-    const ia = document.getElementById('ia-status');
-    try { 
-      const r = await ping(); 
-      ia.textContent = r.ok ? 'Money Motor Y connecté ✅' : 'Hors ligne ❌';
-    } catch(e) { ia.textContent = 'Hors ligne ❌'; }
-    document.getElementById('btn-ask').addEventListener('click', async () => {
-      const t = document.getElementById('topic').value || 'marché';
-      const res = await quickAdvice(t);
-      document.getElementById('advice').textContent = JSON.stringify(res, null, 2);
-    });
-  </script>
+
+  <!-- Nouveau script relié à l'API -->
+  <script src="/money_motor_y.js"></script>
+
 </body>
 </html>
