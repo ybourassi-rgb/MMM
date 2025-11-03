@@ -39,7 +39,7 @@
   (async function () {
     const badge = document.getElementById('ia-badge');
     try {
-      // 👇 Mets ici ton domaine API actif
+      // 👇 Ton domaine API Vercel
       const res = await fetch('https://mmm-xs9j.vercel.app/api/status', { cache: 'no-store' });
       const data = await res.json();
       badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
