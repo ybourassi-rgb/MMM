@@ -1,8 +1,8 @@
 // /api/advisor.js
 export default async function handler(req, res) {
-  // --- CORS basique ---
+  // CORS basique
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") {
@@ -10,213 +10,217 @@ export default async function handler(req, res) {
   }
 
   try {
-    // --- Clés d'env (toutes prises en charge) ---
+    // 🔐 Clés côté serveur
     const OPENAI_KEY =
       process.env.OPENAI_API_KEY ||
       process.env.MoneyMotorY ||
       process.env.MMM_Vercel_Key ||
       process.env.MMM_Vercel_KEY;
 
+    const SCRAPER_KEY = process.env.SCRAPER_API_KEY;
+
     if (!OPENAI_KEY) {
       return res.status(500).json({
         ok: false,
         error:
-          "Clé API OpenAI manquante. Définis OPENAI_API_KEY (ou MoneyMotorY / MMM_Vercel_Key) dans Vercel → Settings → Environment Variables.",
+          "Clé API OpenAI manquante. Définis OPENAI_API_KEY (ou MoneyMotorY / MMM_Vercel_Key) dans Vercel.",
       });
     }
 
-    // --- Lecture prompt ---
-    const { prompt } = req.body || {};
-    const text = (prompt || "").trim();
-    if (!text) {
+    const body = req.body || {};
+    const raw = (body.prompt || body.text || "").trim();
+    if (!raw) {
       return res
         .status(400)
         .json({ ok: false, error: "Prompt vide (aucun texte fourni)." });
     }
 
-    // --- Détection de plusieurs URLs ---
+    // 🧵 1) On détecte des URLs dans le prompt
     const urlRegex =
-      /\bhttps?:\/\/[^\s)'"<>]+/gi; // simple mais robuste pour notre cas
-    const urls = (text.match(urlRegex) || []).slice(0, 5); // jusqu’à 5 annonces
+      /(https?:\/\/[^\s)]+(?:leboncoin\.fr|lacentrale\.fr|autoscout24\.|avito\.|facebook\.com\/marketplace)[^\s)]*)/gi;
+    const urls = Array.from(new Set((raw.match(urlRegex) || []).map(u => u.trim())));
 
-    // Helpers --------------------------------------------------------------
-    const controllerWithTimeout = (ms) => {
-      const ctrl = new AbortController();
-      const id = setTimeout(() => ctrl.abort(), ms);
-      return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
-    };
-
-    const clamp = (s, max = 120_000) =>
-      s.length > max ? s.slice(0, max) : s;
-
-    function stripHtml(html) {
-      // 1) remplace <script/style> par vide
-      html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-      html = html.replace(/<style[\s\S]*?<\/style>/gi, "");
-      // 2) récupère <title> et metas utiles
-      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const title = titleMatch ? titleMatch[1].trim() : "";
-      const ogTitle =
-        (html.match(/property=["']og:title["'][^>]*content=["']([^"']+)/i) ||
-          [])[1] || "";
-      const ogDesc =
-        (html.match(/property=["']og:description["'][^>]*content=["']([^"']+)/i) ||
-          [])[1] || "";
-      const metaDesc =
-        (html.match(/<meta[^>]+name=["']description["'][^>]*content=["']([^"']+)/i) ||
-          [])[1] || "";
-
-      // 3) texte brut
-      const body =
-        html
-          .replace(/<\/?[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim() || "";
-
-      const head = [ogTitle, title, ogDesc || metaDesc].filter(Boolean).join(" • ");
-
-      return `${head}\n\n${body}`;
-    }
-
-    function extractQuickFacts(raw) {
-      // heuristiques rapides prix / km / année
-      const facts = {};
-
-      const priceMatch =
-        raw.match(/(?:price|prix)[^0-9]{0,10}([\d\s.,]+)\s?(?:€|eur|dhs|mad)/i) ||
-        raw.match(/([\d\s.,]+)\s?(?:€|eur|dhs|mad)\b/i);
-      if (priceMatch) {
-        facts.price = priceMatch[1].replace(/\s/g, "");
+    // 👁️ 2) On tente de scraper les pages (si SCRAPER_API_KEY est configurée)
+    const scraped = [];
+    if (urls.length && SCRAPER_KEY) {
+      for (const url of urls) {
+        try {
+          const html = await fetchViaScraper(url, SCRAPER_KEY);
+          scraped.push({ url, ok: true, html });
+        } catch (e) {
+          scraped.push({ url, ok: false, error: e.message || "Erreur scraper" });
+        }
       }
-
-      const kmMatch =
-        raw.match(/([\d\s.,]+)\s?km\b/i) ||
-        raw.match(/kilom(è|e)tres?[:\s]*([\d\s.,]+)/i);
-      if (kmMatch) {
-        const val = kmMatch[2] || kmMatch[1];
-        facts.kilometers = val.replace(/\s/g, "");
-      }
-
-      const yearMatch = raw.match(/\b(20[0-4]\d|19[8-9]\d)\b/); // 1980–2049
-      if (yearMatch) facts.year = yearMatch[1];
-
-      return facts;
-    }
-
-    async function fetchPage(url) {
-      try {
-        const { signal, cancel } = controllerWithTimeout(10_000);
-        const r = await fetch(url, {
-          method: "GET",
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (compatible; MMM-Advisor/1.0; +https://mmm)",
-            Accept:
-              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          },
-          signal,
+    } else if (urls.length && !SCRAPER_KEY) {
+      // Pas de scraper configuré
+      for (const url of urls) {
+        scraped.push({
+          url,
+          ok: false,
+          error:
+            "SCRAPER_API_KEY manquante (active-la dans Vercel pour lire la page).",
         });
-        cancel();
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const html = await r.text();
-        const text = clamp(stripHtml(html), 120_000);
-        const quick = extractQuickFacts(text.toLowerCase());
-        return { ok: true, url, text, quick };
-      } catch (e) {
-        return { ok: false, url, error: e.message || "fetch failed" };
       }
     }
 
-    // ----------------------------------------------------------------------
+    // 📝 3) On fabrique un contexte "compact" pour l'IA (extrait titre/prix/kilométrage si possible)
+    const items = scraped.map(s => ({
+      url: s.url,
+      meta: s.ok ? quickExtract(s.html) : { error: s.error || "inconnu" },
+      status: s.ok ? "ok" : "fail",
+    }));
 
-    let pages = [];
-    if (urls.length) {
-      pages = await Promise.all(urls.map(fetchPage));
-    }
+    // 🧠 4) Appel OpenAI — on envoie le prompt utilisateur + items scrapés
+    const userQuestion = raw.replace(urlRegex, "").trim(); // on retire les liens de la question
+    const systemPrompt =
+      "Tu es Money Motor Muslim (Money Motor Y), conseiller stratégique et financier. " +
+      "Tu donnes des réponses opérationnelles, structurées, concises et exploitables, en respectant l’éthique halal.";
 
-    // Construction du “contexte source” pour l’IA
-    const sourcesForAi = pages.map((p, i) => {
-      if (!p.ok) {
-        return `# Source ${i + 1}\nURL: ${p.url}\nSTATUS: ERROR ${p.error}\n`;
-      }
-      const { price, kilometers, year } = p.quick || {};
-      const header =
-        `URL: ${p.url}\nExtracted: ` +
-        `${price ? "price=" + price + " " : ""}` +
-        `${kilometers ? "km=" + kilometers + " " : ""}` +
-        `${year ? "year=" + year : ""}`;
-      // garder un extrait lisible
-      const snippet = p.text.slice(0, 4000);
-      return `# Source ${i + 1}\n${header}\n\n${snippet}\n`;
+    const contextForAI = buildContextForAI(items);
+
+    const openaiResp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.5,
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content:
+              (urls.length
+                ? `Analyse ces annonces (métadonnées extraites + statut d’accès) puis réponds à ma question.\n` +
+                  contextForAI +
+                  `\n\nQuestion : ${userQuestion || "Donne ton évaluation"}`
+                : raw),
+          },
+        ],
+      }),
     });
 
-    // Demande envoyée au modèle
-    const userGoal = urls.length
-      ? `Analyse ces ${urls.length} annonces et dis-moi si ce sont de bonnes affaires.`
-      : text;
-
-    const systemPrompt =
-      "Tu es Money Motor Muslim (Money Motor Y), un conseiller stratégique & financier.\n" +
-      "Tu évalues des annonces auto (prix, km, année, état, modèle) et rends un verdict clair.\n" +
-      "Quand plusieurs liens sont fournis, fais un tableau clair et un résumé opérationnel et halal-friendly.\n" +
-      "Si une source est en erreur, ignore-la dans le verdict mais signale-la brièvement.";
-
-    // Appel OpenAI
-    async function callOpenAI(messages) {
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENAI_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          temperature: 0.4,
-          messages,
-        }),
-      });
-      if (!r.ok) {
-        const t = await r.text();
-        throw new Error(`Erreur API OpenAI: ${t}`);
-      }
-      const j = await r.json();
-      return j?.choices?.[0]?.message?.content?.trim() || "";
+    if (!openaiResp.ok) {
+      const txt = await openaiResp.text();
+      return res
+        .status(openaiResp.status)
+        .json({ ok: false, error: `Erreur API OpenAI: ${txt}` });
     }
 
-    let finalReply;
-    if (urls.length) {
-      const messages = [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content:
-            `CONTEXTE SOURCES:\n\n${sourcesForAi.join(
-              "\n\n"
-            )}\n\nOBJECTIF:\n${userGoal}\n\n` +
-            "FORMAT SOUHAITÉ:\n" +
-            "1) Un tableau Markdown avec colonnes: URL | Modèle (si visible) | Année | Km | Prix | Estimation marché | Verdict (Bonne affaire / Trop chère) | Commentaire court\n" +
-            "2) En dessous, un résumé en 5–7 points actionnables (quoi vérifier, négociation, pièges, budget, revente).\n" +
-            "3) Si données manquantes, reste explicite (« n/d »).",
-        },
-      ];
-      finalReply = await callOpenAI(messages);
-    } else {
-      // Pas de lien : mode conseil simple
-      const messages = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: text },
-      ];
-      finalReply = await callOpenAI(messages);
-    }
+    const data = await openaiResp.json();
+    const answer =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      "⚠️ Aucune réponse reçue de l’IA.";
 
+    // 🧾 5) On renvoie la réponse + un petit récap technique
     return res.status(200).json({
       ok: true,
-      reply: finalReply,
-      urlsDetected: urls,
-      pages: pages.map(({ ok, url, quick, error }) => ({ ok, url, quick, error })),
+      reply: answer,
+      debug: {
+        urls,
+        parsed: items,
+        note:
+          urls.length && !SCRAPER_KEY
+            ? "Les liens ont été détectés mais non lus (SCRAPER_API_KEY absente)."
+            : undefined,
+      },
     });
-  } catch (error) {
-    console.error("advisor.js error:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Erreur interne" });
+  } catch (err) {
+    console.error("advisor.js error:", err);
+    return res.status(500).json({ ok: false, error: err.message || "Erreur serveur" });
+  }
+}
+
+/* ---------- Helpers ---------- */
+
+// Appelle ScraperAPI (ou équivalent) pour récupérer le HTML de façon “navigateur”
+async function fetchViaScraper(url, key) {
+  const target =
+    "https://api.scraperapi.com/?" +
+    new URLSearchParams({
+      api_key: key,
+      url,
+      country_code: "fr", // utile pour sites FR
+      render: "true", // rendu JS (headless browser)
+      keep_headers: "true",
+    }).toString();
+
+  const r = await fetch(target, { method: "GET", cache: "no-store" });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`Scraper ${r.status}: ${t?.slice(0, 200) || "?"}`);
+  }
+  return await r.text();
+}
+
+// Extraction très simple depuis le HTML (heuristiques)
+function quickExtract(html = "") {
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  const find = (re) => {
+    const m = text.match(re);
+    return m ? m[1] || m[0] : null;
+  };
+
+  // heuristiques FR
+  const price =
+    find(/(\d[\d\s]{2,}(?:€| eur))/i) ||
+    find(/prix[:\s]*([\d\s]+(?:€| eur))/i);
+  const km =
+    find(/(\d[\d\s]{2,})\s?km/i) ||
+    find(/kilom(é|e)trage[:\s]*([\d\s]{2,})/i);
+  const year = find(/\b(20[01]\d|202[0-9]|201[0-9])\b/);
+  const title =
+    find(/titre[:\s]*([a-z0-9\- ]{10,80})/i) ||
+    find(/(?:peugeot|renault|dacia|mercedes|audi|bmw|toyota|volkswagen)[^\n]{0,40}/i);
+
+  return {
+    title: title ? safeCapitalize(title) : null,
+    price: price ? price.replace(/\s+/g, " ") : null,
+    km: km ? km.replace(/\s+/g, " ") : null,
+    year: year || null,
+  };
+}
+
+function buildContextForAI(items = []) {
+  if (!items.length) return "";
+  let out = "### Tableau d'évaluation des annonces\n";
+  out += "| URL | Titre | Année | Km | Prix | Statut |\n";
+  out += "|---|---|---:|---:|---:|---|\n";
+  for (const it of items) {
+    const { url, status, meta } = it;
+    const row = [
+      url,
+      meta?.title || "n/d",
+      meta?.year || "n/d",
+      meta?.km || "n/d",
+      meta?.price || "n/d",
+      status === "ok" ? "✅ lu" : `❌ ${meta?.error || "inaccessible"}`,
+    ];
+    out += `| ${row.join(" | ")} |\n`;
+  }
+  out +=
+    "\nDonne ensuite un **verdict** (bonne affaire / neutre / trop chère), " +
+    "les **risques**, la **fourchette de prix conseillée**, et **les prochaines actions** concrètes.\n";
+  return out;
+}
+
+function safeCapitalize(s) {
+  try {
+    return s
+      .split(" ")
+      .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(" ")
+      .trim();
+  } catch {
+    return s;
   }
 }
