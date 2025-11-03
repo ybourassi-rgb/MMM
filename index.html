@@ -39,21 +39,16 @@
   (async function () {
     const badge = document.getElementById('ia-badge');
     try {
-      // 👇 Ton API (celle qui doit répondre {"ok":true})
-      const res = await fetch('https://mmm-xs9j.vercel.app/api/status', {
-        cache: 'no-store',
-        mode: 'cors'
-      });
+      // ✅ Domaine API actuel : MMM OMEGA FIVE (serveur IA)
+      const res = await fetch('https://mmm-omega-five.vercel.app/api/status', { cache: 'no-store' });
       const data = await res.json();
-      console.log('Réponse API:', data); // Debug
       badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
-    } catch (err) {
-      console.error('Erreur API:', err);
+    } catch (e) {
       badge.textContent = 'Hors ligne ❌';
     }
   })();
 
-  // Assistant de conseil instantané
+  // (optionnel) câblage du bouton “Obtenir un conseil”
   (function () {
     const input = document.getElementById('topic');
     const btn   = document.getElementById('btn-ask');
@@ -64,10 +59,10 @@
       if (!prompt) { out.textContent = '💬 Écris une question.'; return; }
       out.textContent = '⏳ Je réfléchis…';
       try {
-        const r = await fetch('https://mmm-xs9j.vercel.app/api/advisor', {
+        // 🧠 Appel au conseiller via ton API
+        const r = await fetch('https://mmm-omega-five.vercel.app/api/advisor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          mode: 'cors',
           body: JSON.stringify({ prompt })
         });
         const data = await r.json();
@@ -78,52 +73,11 @@
     });
   })();
   </script>
-  <script>
-(async function () {
-  // Vérifie l'état du serveur IA
-  const badge = document.getElementById('ia-badge');
-  try {
-    const res = await fetch('https://mmm-omega-five.vercel.app/api/status', { cache: 'no-store' });
-    const data = await res.json();
-    badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
-  } catch {
-    badge.textContent = 'Hors ligne ❌';
-  }
 
-  // Gère le bouton "Obtenir un conseil"
-  const input = document.getElementById('topic');
-  const btn = document.getElementById('btn-ask');
-  const out = document.getElementById('advice');
-
-  if (!btn || !out) return;
-
-  btn.addEventListener('click', async () => {
-    const prompt = (input?.value || '').trim();
-    if (!prompt) {
-      out.textContent = '💬 Écris une question.';
-      return;
-    }
-
-    out.textContent = '⏳ Je réfléchis...';
-
-    try {
-      const r = await fetch('https://mmm-omega-five.vercel.app/api/advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
-      const data = await r.json();
-
-      if (data.ok) {
-        out.textContent = '💡 ' + data.reply;
-      } else {
-        out.textContent = '❌ ' + (data.error || 'Erreur');
-      }
-    } catch (e) {
-      out.textContent = '⚠️ Erreur de connexion : ' + e.message;
-    }
-  });
-})();
-</script>
+  <!-- ℹ️ Clés d’environnement utilisées côté serveur (Vercel) :
+       - MoneyMotorY          → ta clé principale OpenAI active
+       - OPENAI_API_KEY       → clé OpenAI alternative (backup)
+       - MMM_Vercel_Key       → clé secondaire Vercel interne
+  -->
 </body>
 </html>
