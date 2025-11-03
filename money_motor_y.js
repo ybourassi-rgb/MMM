@@ -35,15 +35,12 @@ async function quickAdvice(topic = "") {
 
 // --- Lancer automatiquement au chargement ---
 document.addEventListener("DOMContentLoaded", () => {
-
-  // 1️⃣ Vérifier l’état IA
   const badge = document.querySelector("#ia-badge");
   if (badge) {
     ping();
     setInterval(() => ping(), 10000);
   }
 
-  // 2️⃣ Bouton “Obtenir un conseil”
   const input = document.querySelector("#topic");
   const btn = document.querySelector("#btn-ask");
   const out = document.querySelector("#advice");
