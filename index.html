@@ -35,6 +35,16 @@
   </div>
 
   <!-- Script relié à l’API -->
-  <script type="module" src="./money_motor_y.js?v=1042"></script>
-</body>
-</html>
+ <!-- Test direct du statut IA (sans fichier externe) -->
+<script>
+(async function () {
+  const badge = document.getElementById('ia-badge');
+  try {
+    const res = await fetch('https://mmm-omega-five.vercel.app/api/status', { cache: 'no-store' });
+    const data = await res.json();
+    badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
+  } catch (e) {
+    badge.textContent = 'Hors ligne ❌';
+  }
+})();
+</script>
