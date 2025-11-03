@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MMM • Tableau de bord V10.3</title>
+  <title>Money Motor Muslim — Tableau de bord (V10.3)</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/mmm.css">
   <meta name="theme-color" content="#0b0b0b">
@@ -39,13 +39,37 @@
   (async function () {
     const badge = document.getElementById('ia-badge');
     try {
-      // 👇 Ton domaine API Vercel
+      // 👇 IMPORTANT : c’est le domaine de TON API (le déploiement qui répond déjà ok:true)
       const res = await fetch('https://mmm-xs9j.vercel.app/api/status', { cache: 'no-store' });
       const data = await res.json();
       badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
-    } catch (e) {
+    } catch {
       badge.textContent = 'Hors ligne ❌';
     }
+  })();
+
+  // (optionnel) câblage du bouton “Obtenir un conseil”
+  (function () {
+    const input = document.getElementById('topic');
+    const btn   = document.getElementById('btn-ask');
+    const out   = document.getElementById('advice');
+    if (!btn || !out) return;
+    btn.addEventListener('click', async () => {
+      const prompt = (input?.value || '').trim();
+      if (!prompt) { out.textContent = '💬 Écris une question.'; return; }
+      out.textContent = '⏳ Je réfléchis…';
+      try {
+        const r = await fetch('https://mmm-xs9j.vercel.app/api/advisor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        const data = await r.json();
+        out.textContent = data.reply || data.answer || JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = '❌ ' + (e.message || 'Erreur');
+      }
+    });
   })();
   </script>
 </body>
