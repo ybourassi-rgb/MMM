@@ -13,8 +13,7 @@
   <div class="header">Money Motor Muslim — Tableau de bord (V10.3)</div>
 
   <div class="grid">
-
-    <!-- État de l'IA -->
+    <!-- État IA -->
     <div class="card">
       <div><b>État IA :</b> <span id="ia-badge">Vérification…</span></div>
       <div class="small">Serveur API côté Vercel • PWA installable • 100 % licite</div>
@@ -28,15 +27,14 @@
     <!-- Conseil instantané -->
     <div class="card">
       <div style="margin-bottom:8px;"><b>Conseil instantané</b></div>
-      <input id="topic" placeholder="Ex : enchères voitures Maroc"
+      <input id="topic" placeholder="Ex: enchères voitures Maroc"
         style="width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#0f0f0f;color:#f2f2f2">
       <button class="btn" id="btn-ask" style="margin-top:10px;">Obtenir un conseil</button>
       <pre id="advice" class="small"></pre>
     </div>
-
   </div>
 
-  <!-- Script principal connecté à l’API -->
-<script src="/money_motor_y.js?v=1035"></script>
+  <!-- Script relié à l’API -->
+  <script type="module" src="./money_motor_y.js?v=1042"></script>
 </body>
 </html>
