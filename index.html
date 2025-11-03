@@ -35,16 +35,18 @@
   </div>
 
   <!-- Script relié à l’API -->
- <!-- Test direct du statut IA (sans fichier externe) -->
-<script>
-(async function () {
-  const badge = document.getElementById('ia-badge');
-  try {
-    const res = await fetch('https://mmm-omega-five.vercel.app/api/status', { cache: 'no-store' });
-    const data = await res.json();
-    badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
-  } catch (e) {
-    badge.textContent = 'Hors ligne ❌';
-  }
-})();
-</script>
+  <!-- Test direct du statut IA (sans fichier externe) -->
+  <script>
+  (async function () {
+    const badge = document.getElementById('ia-badge');
+    try {
+      const res = await fetch('https://mmm-xs9j.vercel.app/api/status', { cache: 'no-store' });
+      const data = await res.json();
+      badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
+    } catch (e) {
+      badge.textContent = 'Hors ligne ❌';
+    }
+  })();
+  </script>
+</body>
+</html>
