@@ -1,25 +1,27 @@
-// /api/status.js
 export default function handler(req, res) {
-  // CORS (autorise tous les domaines — mets ton domaine si tu veux restreindre)
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  try {
+    // 🔍 On vérifie la présence d'une clé API dans les variables d'environnement
+    const hasKey =
+      process.env.OPENAI_API_KEY ||
+      process.env.MMM_Vercel_Key ||
+      process.env.MMM_Vercel_KEY;
 
-  // Préflight
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    if (hasKey) {
+      res.status(200).json({
+        ok: true,
+        version: "v10.3",
+        message: "IA en ligne 🚀",
+      });
+    } else {
+      res.status(500).json({
+        ok: false,
+        message: "❌ Aucune clé API détectée côté serveur",
+      });
+    }
+  } catch (e) {
+    res.status(500).json({
+      ok: false,
+      message: "Erreur interne : " + e.message,
+    });
   }
-
-  if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Method Not Allowed" });
-  }
-
-  // Anti-cache
-  res.setHeader("Cache-Control", "no-store, max-age=0");
-
-  return res.status(200).json({
-    ok: true,
-    version: "v10.3",
-    message: "IA en ligne",
-  });
 }
