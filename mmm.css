@@ -1,11 +1,39 @@
+/* === VARIABLES GLOBALES === */
+:root {
+  /* Thème clair */
+  --bg: #f9f9f9;
+  --bg-card: #ffffff;
+  --text: #111;
+  --text-muted: #555;
+  --border: #ddd;
+  --accent: #00b16a;
+  --error: #d64541;
+  --shadow: rgba(0, 0, 0, 0.1);
+}
+
+/* Thème sombre automatique */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0b0b;
+    --bg-card: #151515;
+    --text: #f3f3f3;
+    --text-muted: #aaa;
+    --border: #222;
+    --accent: #00ff9c;
+    --error: #ff4f4f;
+    --shadow: rgba(0, 0, 0, 0.3);
+  }
+}
+
 /* === STYLES GÉNÉRAUX === */
 body {
   font-family: "Inter", system-ui, sans-serif;
-  background: #0b0b0b;
-  color: #f3f3f3;
+  background: var(--bg);
+  color: var(--text);
   margin: 0;
   padding: 0;
   line-height: 1.6;
+  transition: background 0.3s, color 0.3s;
 }
 
 .container {
@@ -16,9 +44,13 @@ body {
 
 /* === HEADER === */
 .header {
-  background: #111;
-  border-bottom: 1px solid #222;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 4px var(--shadow);
   padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .header-row {
@@ -30,22 +62,23 @@ body {
 .brand {
   font-weight: 600;
   font-size: 1.05rem;
-  color: #00ff9c;
+  color: var(--accent);
 }
 
 .muted {
-  opacity: 0.7;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
 /* === CARTES === */
 .card {
-  background: #151515;
-  border: 1px solid #222;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 18px;
   margin-bottom: 18px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+  box-shadow: 0 2px 8px var(--shadow);
+  transition: background 0.3s, border 0.3s;
 }
 
 .card-head {
@@ -60,7 +93,7 @@ body {
   font-size: 1.05rem;
 }
 
-/* === CHIPS (ÉTATS) === */
+/* === CHIPS === */
 .chip {
   border-radius: 20px;
   padding: 3px 10px;
@@ -71,18 +104,18 @@ body {
 }
 
 .chip-ok {
-  background: #00b16a;
+  background: var(--accent);
 }
 
 .chip-err {
-  background: #d64541;
+  background: var(--error);
 }
 
 /* === BOUTONS === */
 .btn {
-  background: #222;
-  color: #fff;
-  border: 1px solid #333;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 14px;
   cursor: pointer;
@@ -91,47 +124,55 @@ body {
 }
 
 .btn:hover {
-  background: #333;
+  filter: brightness(1.1);
 }
 
 .btn-primary {
-  background: #00b16a;
+  background: var(--accent);
   color: #fff;
-  border-color: #00b16a;
+  border-color: var(--accent);
 }
 
 .btn-primary:hover {
-  background: #00c97f;
+  filter: brightness(1.15);
 }
 
 /* === INPUT / TEXTAREA === */
 .input {
   width: 100%;
-  background: #111;
-  border: 1px solid #333;
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #f3f3f3;
+  color: var(--text);
   padding: 10px;
   font-size: 0.95rem;
   resize: vertical;
+  transition: border 0.3s;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 4px var(--accent);
 }
 
 .field-label {
   display: block;
   margin-bottom: 8px;
   font-size: 0.9rem;
-  color: #ccc;
+  color: var(--text-muted);
 }
 
 /* === ZONE DE RÉPONSE === */
 .output {
-  background: #101010;
-  border: 1px solid #222;
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
   margin-top: 12px;
   white-space: pre-wrap;
   word-break: break-word;
+  box-shadow: 0 1px 3px var(--shadow);
 }
 
 .mono {
@@ -140,7 +181,7 @@ body {
   line-height: 1.45;
 }
 
-/* === MESSAGE D'ERREUR / AVERTISSEMENT === */
+/* === MESSAGE D'ERREUR === */
 .callout {
   border-radius: 8px;
   padding: 10px 12px;
@@ -150,15 +191,15 @@ body {
 
 .callout.err {
   background: rgba(255, 0, 0, 0.08);
-  border: 1px solid #ff3333;
-  color: #ff7676;
+  border: 1px solid var(--error);
+  color: var(--error);
 }
 
-/* === SPINNER (chargement) === */
+/* === SPINNER === */
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255,255,255,0.2);
+  border: 2px solid rgba(255,255,255,0.3);
   border-top-color: #fff;
   border-radius: 50%;
   display: inline-block;
@@ -174,8 +215,20 @@ body {
 .actions {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .small {
   font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* === LIENS === */
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
 }
