@@ -78,5 +78,52 @@
     });
   })();
   </script>
+  <script>
+(async function () {
+  // Vérifie l'état du serveur IA
+  const badge = document.getElementById('ia-badge');
+  try {
+    const res = await fetch('https://mmm-omega-five.vercel.app/api/status', { cache: 'no-store' });
+    const data = await res.json();
+    badge.textContent = (data && data.ok) ? 'En ligne ✅' : 'Hors ligne ❌';
+  } catch {
+    badge.textContent = 'Hors ligne ❌';
+  }
+
+  // Gère le bouton "Obtenir un conseil"
+  const input = document.getElementById('topic');
+  const btn = document.getElementById('btn-ask');
+  const out = document.getElementById('advice');
+
+  if (!btn || !out) return;
+
+  btn.addEventListener('click', async () => {
+    const prompt = (input?.value || '').trim();
+    if (!prompt) {
+      out.textContent = '💬 Écris une question.';
+      return;
+    }
+
+    out.textContent = '⏳ Je réfléchis...';
+
+    try {
+      const r = await fetch('https://mmm-omega-five.vercel.app/api/advisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await r.json();
+
+      if (data.ok) {
+        out.textContent = '💡 ' + data.reply;
+      } else {
+        out.textContent = '❌ ' + (data.error || 'Erreur');
+      }
+    } catch (e) {
+      out.textContent = '⚠️ Erreur de connexion : ' + e.message;
+    }
+  });
+})();
+</script>
 </body>
 </html>
