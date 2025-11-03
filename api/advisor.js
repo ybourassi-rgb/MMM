@@ -1,6 +1,5 @@
-// api/advisor.js
 export default async function handler(req, res) {
-  // ✅ Autorisations CORS de base
+  // Autorisations CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -10,12 +9,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 🧩 On récupère la clé API depuis les variables d'environnement
+    // 🔑 Clés d’environnement disponibles
     const OPENAI_KEY =
-      process.env.MoneyMotorY || // 🔑 Ta clé principale
-      process.env.OPENAI_API_KEY ||
+      process.env.MoneyMotorY ||
       process.env.MMM_Vercel_Key ||
-      process.env.MMM_Vercel_KEY;
+      process.env.OPENAI_API_KEY;
 
     if (!OPENAI_KEY) {
       return res.status(500).json({
@@ -24,22 +22,21 @@ export default async function handler(req, res) {
       });
     }
 
-    // 🧠 Lecture du prompt utilisateur
+    // 🧠 Lecture du texte envoyé par l’utilisateur
     const { prompt } = req.body || {};
     const text = (prompt || "").trim();
-
     if (!text) {
       return res
         .status(400)
         .json({ ok: false, error: "Prompt vide (aucun texte fourni)." });
     }
 
-    // ✉️ Appel à l'API OpenAI
+    // ⚙️ Appel à l’API OpenAI
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_KEY}`, // ✅ Récupérée depuis Vercel
+        Authorization: `Bearer ${OPENAI_KEY}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
@@ -48,13 +45,9 @@ export default async function handler(req, res) {
             role: "system",
             content:
               "Tu es Money Motor Muslim (alias Money Motor Y), un conseiller stratégique et financier. " +
-              "Tu donnes des réponses précises, concrètes et directement exploitables, notamment pour l’investissement, " +
-              "les enchères, la revente et la gestion de patrimoine halal.",
+              "Tu aides à optimiser les investissements, les enchères, les reventes et la gestion de patrimoine halal.",
           },
-          {
-            role: "user",
-            content: text,
-          },
+          { role: "user", content: text },
         ],
         temperature: 0.6,
       }),
