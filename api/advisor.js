@@ -1,37 +1,27 @@
-// ✅ Money Motor Y — API Conseiller
 export default async function handler(req, res) {
-  // --- Autorisations CORS (pour ton domaine principal MMM) ---
-  res.setHeader("Access-Control-Allow-Origin", "https://mmm-omega-five.vercel.app");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Méthode non autorisée' });
   }
 
-  // --- Gestion des requêtes POST (conseil instantané) ---
-  if (req.method === "POST") {
-    try {
-      const { prompt } = req.body;
-
-      if (!prompt || prompt.trim() === "") {
-        return res.status(400).json({ ok: false, error: "Prompt vide" });
-      }
-
-      // 🧠 Simule la réponse IA (version locale avant OpenAI)
-      const conseil = `🧠 Conseil Money Motor Y : Pour le sujet "${prompt}", je te recommande d'analyser la rentabilité et la liquidité avant toute décision.`;
-
-      return res.status(200).json({
-        ok: true,
-        reply: conseil,
-      });
-
-    } catch (err) {
-      console.error("Erreur Advisor:", err);
-      return res.status(500).json({ ok: false, error: "Erreur interne Advisor" });
+  try {
+    const { prompt } = req.body || {};
+    if (!prompt || !String(prompt).trim()) {
+      return res.status(400).json({ error: 'Prompt vide' });
     }
-  }
 
-  // --- Pour toute autre méthode HTTP ---
-  return res.status(405).json({ ok: false, error: "Méthode non autorisée" });
+    // 🔧 Version de test : renvoie une réponse “mockée” pour valider le flux.
+    // (Tu pourras brancher OpenAI ensuite.)
+    return res.status(200).json({
+      ok: true,
+      reply: `Réponse test pour: "${prompt}". (La connexion front→API fonctionne ✅)`
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'Erreur serveur' });
+  }
 }
