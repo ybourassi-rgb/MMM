@@ -3,17 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Money Motor Muslim — Tableau de bord (V10.3)</title>
+  <title>Money Motor Muslim — Tableau de bord (V10.4)</title>
 
   <!-- PWA + Styles -->
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="preload" href="/mmm.css?v=1039" as="style">
-  <link rel="stylesheet" href="/mmm.css?v=1039" />
+  <link rel="preload" href="/mmm.css?v=1040" as="style">
+  <link rel="stylesheet" href="/mmm.css?v=1040" />
   <meta name="theme-color" content="#0b0b0b" />
   <meta name="color-scheme" content="dark light">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <!-- (Optionnel) Pré-connexion : neutre si call OpenAI côté serveur -->
   <link rel="preconnect" href="https://api.openai.com" crossorigin>
 </head>
 
@@ -22,7 +21,7 @@
     <div class="brand" aria-label="Identité de l’application">
       <span class="dot" aria-hidden="true"></span>
       <span class="brand-title">Money Motor Muslim — Tableau de bord</span>
-      <span class="brand-pill" aria-label="Version">V10.3</span>
+      <span class="brand-pill" aria-label="Version">V10.4</span>
     </div>
 
     <div class="status-wrap" aria-live="polite">
@@ -75,19 +74,40 @@
       <h3 class="subhead">🪄 Réponse condensée</h3>
       <pre id="advice" class="answer"><span class="muted">En attente de votre demande…</span></pre>
     </section>
+
+    <!-- 🔽 Nouvelle section : Analyse rapide Y-Score -->
+    <section id="mmy-analyse" style="margin:16px 0;padding:12px;border:1px solid #333;border-radius:12px;background:#0b0b0b">
+      <h3 style="margin:0 0 8px">Analyse rapide Y-Score</h3>
+
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+        <input id="mmy-price" type="number" placeholder="Prix (€)" />
+        <input id="mmy-mv" type="number" placeholder="Valeur marché (€)" />
+        <input id="mmy-risk" type="number" placeholder="Risque (0–100)" />
+        <input id="mmy-days" type="number" placeholder="Jours avant revente" />
+        <input id="mmy-strat" type="number" placeholder="Stratégique (0–100)" />
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="mmy-run">Analyser</button>
+        <button id="mmy-clear" style="opacity:.8">Effacer</button>
+      </div>
+
+      <div id="mmy-result" style="margin-top:10px;padding:10px;border:1px dashed #444;border-radius:10px"></div>
+      <div id="mmy-history" style="margin-top:10px"></div>
+    </section>
   </main>
 
   <!-- JS -->
   <script>
-    // ---- Cache-buster global pour iPhone/Safari ----
-    const V = '1039';
+    // ---- Cache-buster global ----
+    const V = '1040';
 
-    // ---- Enregistrer le Service Worker (PWA) ----
+    // ---- Service Worker (PWA) ----
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js').catch(() => {});
     }
 
-    // ---- Vérif du statut API (anti-cache total) ----
+    // ---- Vérif du statut API ----
     (async () => {
       const badge = document.getElementById('ia-badge');
       try {
@@ -96,27 +116,24 @@
         if (j && j.ok) {
           badge.textContent = 'En ligne';
           badge.className = 'chip chip--ok';
-          badge.setAttribute('aria-label', 'Serveur en ligne');
         } else {
           badge.textContent = 'Hors ligne';
           badge.className = 'chip chip--ko';
-          badge.setAttribute('aria-label', 'Serveur hors ligne');
         }
       } catch {
         badge.textContent = 'Hors ligne';
         badge.className = 'chip chip--ko';
-        badge.setAttribute('aria-label', 'Serveur hors ligne');
       }
     })();
 
     // ---- Advisor ----
-    const apiUrl    = '/api/advisor';
-    const promptEl  = document.getElementById('prompt');
-    const sendBtn   = document.getElementById('sendBtn');
-    const clearBtn  = document.getElementById('clearBtn');
-    const statusEl  = document.getElementById('status');
-    const adviceEl  = document.getElementById('advice');
-    const errorDot  = document.getElementById('error-dot');
+    const apiUrl = '/api/advisor';
+    const promptEl = document.getElementById('prompt');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusEl = document.getElementById('status');
+    const adviceEl = document.getElementById('advice');
+    const errorDot = document.getElementById('error-dot');
 
     const setError = (msg) => {
       errorDot.hidden = !msg;
@@ -139,7 +156,6 @@
       setError('');
     });
 
-    // Cmd/Ctrl + Enter pour envoyer
     promptEl.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') sendBtn.click();
     });
@@ -169,6 +185,71 @@
         setLoading(false);
       }
     });
+
+    // ---- Analyse rapide Y-Score ----
+    (function () {
+      const $ = id => document.getElementById(id);
+      const resBox = $('mmy-result');
+      const histBox = $('mmy-history');
+
+      function saveHistory(item) {
+        const key = 'mmy.history';
+        const arr = JSON.parse(localStorage.getItem(key) || '[]');
+        arr.unshift(item);
+        localStorage.setItem(key, JSON.stringify(arr.slice(0, 10)));
+        renderHistory();
+      }
+
+      function renderHistory() {
+        const arr = JSON.parse(localStorage.getItem('mmy.history') || '[]');
+        if (!arr.length) { histBox.innerHTML = ''; return; }
+        histBox.innerHTML = `
+          <h4 style="margin:12px 0 6px;">Dernières analyses</h4>
+          <ul style="margin:0;padding-left:18px">
+            ${arr.map(a => `
+              <li>Score <b>${a.yScore}</b> — Décision <b>${a.decision}</b> — Profit €${a.profitAbs} (${a.profitPct}%)
+                <small style="opacity:.7"> · ${new Date(a.createdAt).toLocaleString()}</small>
+              </li>`).join('')}
+          </ul>`;
+      }
+
+      $('mmy-run').addEventListener('click', async () => {
+        const body = {
+          price: +$('mmy-price').value,
+          marketValue: +$('mmy-mv').value,
+          risk: +$('mmy-risk').value,
+          daysToLiquidity: +$('mmy-days').value,
+          strategic: +$('mmy-strat').value
+        };
+        resBox.textContent = 'Calcul en cours…';
+        try {
+          const r = await fetch('/api/yscore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          const data = await r.json();
+          if (!r.ok) {
+            resBox.innerHTML = `<span style="color:#f55">Erreur:</span> ${data.error || 'API'}`;
+            return;
+          }
+          resBox.innerHTML = `
+            <div>Y-Score : <b>${data.yScore}</b></div>
+            <div>Décision : <b>${data.decision}</b></div>
+            <div>Profit : <b>€${data.profitAbs}</b> (${data.profitPct}%)</div>`;
+          saveHistory(data);
+        } catch (e) {
+          resBox.innerHTML = `<span style="color:#f55">Erreur réseau :</span> ${e}`;
+        }
+      });
+
+      $('mmy-clear').addEventListener('click', () => {
+        ['mmy-price', 'mmy-mv', 'mmy-risk', 'mmy-days', 'mmy-strat'].forEach(id => $(id).value = '');
+        resBox.innerHTML = '';
+      });
+
+      renderHistory();
+    })();
   </script>
 </body>
 </html>
