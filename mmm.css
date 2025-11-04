@@ -1,234 +1,83 @@
-/* === VARIABLES GLOBALES === */
-:root {
-  /* Thème clair */
-  --bg: #f9f9f9;
-  --bg-card: #ffffff;
-  --text: #111;
-  --text-muted: #555;
-  --border: #ddd;
-  --accent: #00b16a;
-  --error: #d64541;
-  --shadow: rgba(0, 0, 0, 0.1);
+/* ---- Layout / Header ---- */
+.nav {
+  display:flex; justify-content:space-between; align-items:center;
+  gap:16px; padding:16px 20px; position:sticky; top:0; z-index:5;
+  background:rgba(10,10,10,.75); backdrop-filter:saturate(140%) blur(8px);
+  border-bottom:1px solid rgba(255,255,255,.06);
 }
+.brand {display:flex; align-items:center; gap:10px; font-weight:700;}
+.brand-title {font-size:16px;}
+.brand-pill {font-size:12px; padding:.2rem .5rem; border:1px solid #2a2a2a; border-radius:999px; opacity:.9}
+.dot{width:8px; height:8px; border-radius:50%; background:linear-gradient(180deg,#2cf38b,#0a8b55); box-shadow:0 0 10px #2cf38b}
 
-/* Thème sombre automatique */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b0b0b;
-    --bg-card: #151515;
-    --text: #f3f3f3;
-    --text-muted: #aaa;
-    --border: #222;
-    --accent: #00ff9c;
-    --error: #ff4f4f;
-    --shadow: rgba(0, 0, 0, 0.3);
-  }
-}
+.status-wrap{display:flex; align-items:center; gap:8px; font-size:14px}
+.status-label{opacity:.8}
 
-/* === STYLES GÉNÉRAUX === */
-body {
-  font-family: "Inter", system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  margin: 0;
-  padding: 0;
-  line-height: 1.6;
-  transition: background 0.3s, color 0.3s;
+/* ---- Chips (badge état) ---- */
+.chip{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:.35rem .6rem; border-radius:999px; font-weight:600; font-size:12px;
+  border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03)
 }
+.chip--pending{color:#aaa}
+.chip--ok{color:#0df39b; border-color:rgba(13,243,155,.3); background:rgba(13,243,155,.08)}
+.chip--ko{color:#ff5266; border-color:rgba(255,82,102,.25); background:rgba(255,82,102,.08)}
 
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 16px;
+/* ---- Container & Cards ---- */
+.container{max-width:1050px; margin:24px auto; padding:0 16px}
+.cards-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:18px}
+.app-card{
+  display:flex; align-items:center; gap:12px; padding:14px 16px; border-radius:14px;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.08); text-decoration:none; color:inherit; transition:.2s ease;
 }
+.app-card:hover{transform:translateY(-1px); box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.app-emoji{font-size:20px}
+.app-title{font-weight:600}
 
-/* === HEADER === */
-.header {
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-  box-shadow: 0 1px 4px var(--shadow);
-  padding: 12px 0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+/* ---- Panel ---- */
+.panel{
+  border-radius:16px; padding:18px;
+  background:radial-gradient(1200px 500px at -20% -100%, rgba(50,170,255,.08), transparent 40%),
+             linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.08);
 }
+.panel-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
+.panel-title{font-weight:800; font-size:18px; display:flex; align-items:center; gap:10px}
+.pill{
+  padding:.25rem .55rem; border-radius:999px; font-size:12px; font-weight:700;
+  border:1px solid rgba(255,82,102,.28); color:#ff6b7d; background:rgba(255,82,102,.08)
+}
+.pill[hidden]{display:none}
 
-.header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+.hint{opacity:.7; font-size:13px; margin:.2rem 0 1rem}
 
-.brand {
-  font-weight: 600;
-  font-size: 1.05rem;
-  color: var(--accent);
+.prompt-row{display:flex; flex-direction:column; gap:10px}
+.prompt-input{
+  width:100%; background:#0e0f10; color:#eaeaea; border:1px solid #2a2a2a;
+  border-radius:12px; padding:12px 12px; outline:none; resize:vertical; min-height:98px;
 }
+.prompt-input:focus{border-color:#33d1ff; box-shadow:0 0 0 2px rgba(51,209,255,.15)}
+.prompt-actions{display:flex; gap:10px}
 
-.muted {
-  color: var(--text-muted);
-  font-size: 0.9rem;
+.btn{
+  padding:.7rem 1rem; border-radius:10px; border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03); color:#eaeaea; font-weight:700; cursor:pointer;
 }
+.btn--accent{background:linear-gradient(180deg,#1cc6ff,#4f7dff); border:none; color:#071120}
+.btn--accent:disabled{opacity:.7; cursor:not-allowed}
+.btn--ghost{background:transparent}
 
-/* === CARTES === */
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px;
-  margin-bottom: 18px;
-  box-shadow: 0 2px 8px var(--shadow);
-  transition: background 0.3s, border 0.3s;
+.status-line{min-height:24px; font-size:13px; opacity:.8; margin-top:6px}
+.spinner{
+  width:14px; height:14px; border-radius:50%;
+  border:2px solid rgba(255,255,255,.25); border-top-color:#1cc6ff; display:inline-block; animation:rot 1s linear infinite; vertical-align:-2px;
 }
+@keyframes rot{to{transform:rotate(360deg)}}
 
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+.subhead{margin:.9rem 0 .4rem; font-size:15px; opacity:.9}
+.answer{
+  background:#0e0f10; border:1px solid #2a2a2a; border-radius:12px;
+  padding:12px; white-space:pre-wrap; overflow:auto; min-height:120px;
 }
-
-.card-title {
-  font-weight: 600;
-  font-size: 1.05rem;
-}
-
-/* === CHIPS === */
-.chip {
-  border-radius: 20px;
-  padding: 3px 10px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #fff;
-  user-select: none;
-}
-
-.chip-ok {
-  background: var(--accent);
-}
-
-.chip-err {
-  background: var(--error);
-}
-
-/* === BOUTONS === */
-.btn {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 14px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: 0.2s;
-}
-
-.btn:hover {
-  filter: brightness(1.1);
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-.btn-primary:hover {
-  filter: brightness(1.15);
-}
-
-/* === INPUT / TEXTAREA === */
-.input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 10px;
-  font-size: 0.95rem;
-  resize: vertical;
-  transition: border 0.3s;
-}
-
-.input:focus {
-  border-color: var(--accent);
-  outline: none;
-  box-shadow: 0 0 4px var(--accent);
-}
-
-.field-label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-}
-
-/* === ZONE DE RÉPONSE === */
-.output {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  margin-top: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  box-shadow: 0 1px 3px var(--shadow);
-}
-
-.mono {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-/* === MESSAGE D'ERREUR === */
-.callout {
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-top: 10px;
-  font-size: 0.9rem;
-}
-
-.callout.err {
-  background: rgba(255, 0, 0, 0.08);
-  border: 1px solid var(--error);
-  color: var(--error);
-}
-
-/* === SPINNER === */
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  display: inline-block;
-  vertical-align: middle;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* === PETITS DÉTAILS === */
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.small {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-/* === LIENS === */
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
+.muted{opacity:.6}
