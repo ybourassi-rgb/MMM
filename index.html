@@ -5,63 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Muslim — Tableau de bord (V10.3)</title>
 
-  <!-- PWA + Styles (anti-cache via ?v=1036) -->
+  <!-- PWA + Styles -->
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="stylesheet" href="/mmm.css?v=1036" />
+  <link rel="stylesheet" href="/mmm.css?v=1038" />
   <meta name="theme-color" content="#0b0b0b" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body>
-  <header class="nav">
-    <div class="brand">
-      <span class="dot"></span>
+  <header class="nav" role="banner">
+    <div class="brand" aria-label="Identité de l’application">
+      <span class="dot" aria-hidden="true"></span>
       <span class="brand-title">Money Motor Muslim — Tableau de bord</span>
-      <span class="brand-pill">V10.3</span>
+      <span class="brand-pill" aria-label="Version">V10.3</span>
     </div>
 
-    <div class="status-wrap">
+    <div class="status-wrap" aria-live="polite">
       <span class="status-label">État IA :</span>
-      <span id="ia-badge" class="chip chip--pending">Vérification…</span>
+      <span id="ia-badge" class="chip chip--pending" aria-label="Statut du serveur">Vérification…</span>
     </div>
   </header>
 
-  <main class="container">
+  <main class="container" role="main">
     <!-- Apps -->
-    <section class="cards-row">
+    <section class="cards-row" aria-label="Applications">
       <a class="app-card" href="/market_live.html">
-        <span class="app-emoji">📈</span>
+        <span class="app-emoji" aria-hidden="true">📈</span>
         <span class="app-title">Marché en direct</span>
       </a>
 
       <a class="app-card" href="/publish_wizard.html">
-        <span class="app-emoji">🧩</span>
+        <span class="app-emoji" aria-hidden="true">🧩</span>
         <span class="app-title">Assistant de publication</span>
       </a>
 
       <a class="app-card" href="/auto_publisher.html">
-        <span class="app-emoji">🤖</span>
+        <span class="app-emoji" aria-hidden="true">🤖</span>
         <span class="app-title">Smart Auto-Publisher</span>
       </a>
     </section>
 
     <!-- Conseil instantané -->
-    <section class="panel">
+    <section class="panel" aria-labelledby="panel-title">
       <header class="panel-head">
-        <div class="panel-title">
-          <span class="title-emoji">💬</span> Conseil instantané
+        <div id="panel-title" class="panel-title">
+          <span class="title-emoji" aria-hidden="true">💬</span> Conseil instantané
         </div>
         <span id="error-dot" class="pill pill--error" hidden>Erreur</span>
       </header>
 
-      <div class="hint">Collez une annonce (Leboncoin, LaCentrale, Avito…) <em>ou</em> posez une question.</div>
+      <!-- ✅ Ligne d’aide supprimée -->
 
       <div class="prompt-row">
+        <label for="prompt" class="sr-only">Votre question ou vos liens</label>
         <textarea id="prompt" rows="4" class="prompt-input"
-          placeholder="Ex : Voici une annonce : https://www.leboncoin.fr/ad/voitures/3084707716 — Est-ce une bonne affaire ?"></textarea>
+          placeholder="Ex : https://www.leboncoin.fr/ad/voitures/3084707716 — Est-ce une bonne affaire ?"></textarea>
 
         <div class="prompt-actions">
-          <button id="sendBtn" class="btn btn--accent">Obtenir un conseil</button>
-          <button id="clearBtn" class="btn btn--ghost">Effacer</button>
+          <button id="sendBtn" type="button" class="btn btn--accent">Obtenir un conseil</button>
+          <button id="clearBtn" type="button" class="btn btn--ghost">Effacer</button>
         </div>
       </div>
 
@@ -74,12 +77,11 @@
 
   <!-- JS -->
   <script>
-    // ---- Vérif du statut API (anti-cache total) ----
+    // ---- Vérif du statut API ----
     (async () => {
       const badge = document.getElementById('ia-badge');
       try {
-        const url = '/api/status?ts=' + Date.now();
-        const r = await fetch(url, { cache: 'no-store' });
+        const r = await fetch('/api/status?ts=' + Date.now(), { cache: 'no-store' });
         const j = await r.json();
         if (j && j.ok) {
           badge.textContent = 'En ligne';
@@ -124,6 +126,10 @@
       setError('');
     });
 
+    promptEl.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') sendBtn.click();
+    });
+
     sendBtn.addEventListener('click', async () => {
       const prompt = (promptEl.value || '').trim();
       if (!prompt) {
@@ -139,9 +145,7 @@
           body: JSON.stringify({ prompt })
         });
         const data = await r.json();
-        if (!r.ok || !data.ok) {
-          throw new Error(data?.error || 'Erreur inconnue');
-        }
+        if (!r.ok || !data.ok) throw new Error(data?.error || 'Erreur inconnue');
         adviceEl.textContent = data.reply || '⚠️ Aucune réponse reçue.';
       } catch (e) {
         setError('Erreur');
