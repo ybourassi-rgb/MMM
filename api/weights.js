@@ -1,59 +1,55 @@
-// /api/weights.js
-const REST_URL   = process.env.UPSTASH_REDIS_REST_URL;
-const REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+export const config = { runtime: "edge" };
 
-const DEFAULT_WEIGHTS = {
-  value: 0.30, quality: 0.25, momentum: 0.20, risk: 0.15, liquidity: 0.10, halalPenalty: 15
-};
+export default async function handler(req) {
+  const headers = { "Cache-Control":"no-store","Content-Type":"application/json; charset=utf-8" };
+  const url = new URL(req.url);
+  const profile = url.searchParams.get('profile') || 'default';
 
-export default async function handler(req, res) {
-  res.setHeader("Cache-Control","no-store");
-  res.setHeader("Access-Control-Allow-Origin","*");
-  res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers","Content-Type");
-  if (req.method === "OPTIONS") return res.status(200).end();
-
-  const profile = String((req.query.profile || "default")).trim().toLowerCase();
-  const key = `weights:${profile}`;
-
-  try {
-    if (req.method === "GET") {
-      const r = await fetch(`${REST_URL}/get/${encodeURIComponent(key)}`, {
-        headers: { Authorization: `Bearer ${REST_TOKEN}` }
-      });
-      const data = await r.json();
-      const weights = data?.result ? JSON.parse(data.result) : DEFAULT_WEIGHTS;
-      return res.status(200).json({ ok:true, source: data?.result ? "kv" : "defaults", weights });
+  // Si pas de KV, on sert des défauts en GET, on refuse en POST
+  if(!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN){
+    if(req.method === 'GET'){
+      return new Response(JSON.stringify({
+        ok:true, source:'defaults',
+        weights:{ value:.30, quality:.25, momentum:.20, risk:.15, liquidity:.10, halalPenalty:15 }
+      }), {status:200, headers});
+    } else {
+      return new Response(JSON.stringify({ ok:false, error:'KV non configuré' }), {status:500, headers});
     }
+  }
 
-    if (req.method === "POST") {
-      const body = req.body || {};
-      const w = {
-        value: clamp(body.value, 0, 1),
-        quality: clamp(body.quality, 0, 1),
-        momentum: clamp(body.momentum, 0, 1),
-        risk: clamp(body.risk, 0, 1),
-        liquidity: clamp(body.liquidity, 0, 1),
-        halalPenalty: Math.max(0, Math.min(100, parseInt(body.halalPenalty ?? 0, 10)))
-      };
-      const s = (w.value + w.quality + w.momentum + w.risk + w.liquidity) || 1;
-      const norm = { ...w,
-        value: w.value/s, quality: w.quality/s, momentum: w.momentum/s, risk: w.risk/s, liquidity: w.liquidity/s
-      };
+  const base = process.env.UPSTASH_REDIS_REST_URL.replace(/\/+$/,'');
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const key = `ys:weights:${profile}`;
 
-      await fetch(`${REST_URL}/set/${encodeURIComponent(key)}`,{
-        method:"POST",
-        headers:{ Authorization:`Bearer ${REST_TOKEN}`,"Content-Type":"application/json"},
-        body: JSON.stringify({ value: JSON.stringify(norm) })
-      });
+  async function kvGet(k){
+    const r = await fetch(`${base}/get/${encodeURIComponent(k)}`, { headers:{ Authorization:`Bearer ${token}` }});
+    const js = await r.json();
+    return js?.result ? JSON.parse(js.result) : null;
+  }
+  async function kvSet(k, val){
+    const r = await fetch(`${base}/set/${encodeURIComponent(k)}`, {
+      method:'POST',
+      headers:{ 'Authorization':`Bearer ${token}`, 'Content-Type':'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ value: JSON.stringify(val) })
+    });
+    return r.ok;
+  }
 
-      return res.status(200).json({ ok:true, saved: { profile, weights: norm } });
+  try{
+    if(req.method === 'GET'){
+      const v = await kvGet(key);
+      return new Response(JSON.stringify({
+        ok:true, source: v ? 'kv' : 'defaults',
+        weights: v || { value:.30, quality:.25, momentum:.20, risk:.15, liquidity:.10, halalPenalty:15 }
+      }), {status:200, headers});
     }
-
-    return res.status(405).json({ ok:false, error:"Méthode non autorisée" });
-  } catch (e) {
-    return res.status(500).json({ ok:false, error: e?.message || "Erreur interne" });
+    if(req.method === 'POST'){
+      const w = await req.json();
+      await kvSet(key, w);
+      return new Response(JSON.stringify({ ok:true }), {status:200, headers});
+    }
+    return new Response(JSON.stringify({ ok:false, error:'Method not allowed' }), {status:405, headers});
+  }catch(e){
+    return new Response(JSON.stringify({ ok:false, error:e.message || 'weights error' }), {status:500, headers});
   }
 }
-
-function clamp(n,min,max){ const x = Number(n); if (Number.isNaN(x)) return min; return Math.max(min, Math.min(max, x)); }
