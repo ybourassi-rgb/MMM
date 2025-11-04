@@ -251,5 +251,12 @@
       renderHistory();
     })();
   </script>
-</body>
+  <!-- === Panneau Y-Score === -->
+<div id="yscore-panel"></div>
+
+<script src="components/yscore_panel.js"></script>
+<script>
+  // Monte le panneau sur la page
+  window.YScorePanel.mount("yscore-panel");
+</script></body>
 </html>
