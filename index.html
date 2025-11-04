@@ -1,209 +1,206 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Money Motor Y — Dashboard</title>
-  <style>
-    /* === FOND & POLICES === */
-    body{
-      margin:0;
-      padding:24px;
-      background: radial-gradient(circle at top, #0b0b0b 0%, #050505 100%);
-      color:#e6e6e6;
-      font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Arial;
-      overflow-x:hidden;
-    }
-
-    /* === CONTENEUR PRINCIPAL === */
-    .wrap{
-      max-width:960px;
-      margin:0 auto;
-      position:relative;
-      z-index:1;
-    }
-
-    h1{
-      font-size:26px;
-      margin:0 0 8px;
-      font-weight:700;
-      background:linear-gradient(90deg,#00bfff,#0070f3);
-      -webkit-background-clip:text;
-      -webkit-text-fill-color:transparent;
-      text-shadow:0 0 8px rgba(0,191,255,0.4);
-      letter-spacing:0.5px;
-    }
-
-    .bar{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      margin:16px 0 32px;
-    }
-
-    .pill{
-      display:inline-block;
-      padding:6px 12px;
-      border:1px solid rgba(0,191,255,.3);
-      border-radius:99px;
-      background:rgba(0,191,255,.08);
-      color:#00bfff;
-      font-weight:500;
-      letter-spacing:.4px;
-      box-shadow:0 0 10px rgba(0,191,255,.25);
-    }
-
-    /* === CARTES === */
-    .box{
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:16px;
-      padding:18px;
-      background:linear-gradient(180deg,rgba(20,20,20,0.95) 0%,rgba(10,10,10,0.95) 100%);
-      box-shadow:0 0 20px rgba(0,191,255,0.05), inset 0 0 12px rgba(0,191,255,0.05);
-      backdrop-filter:blur(10px);
-      position:relative;
-      transition:transform .2s, box-shadow .2s;
-    }
-    .box:hover{
-      transform:translateY(-3px);
-      box-shadow:0 0 25px rgba(0,191,255,0.25);
-    }
-
-    /* === SÉPARATION ENTRE BLOCS === */
-    #advisor{
-      margin-bottom:28px;
-      border-image:linear-gradient(90deg,rgba(0,191,255,0.4),rgba(0,191,255,0.05)) 1;
-      border-bottom:2px solid transparent;
-    }
-
-    /* === TEXTAREA & BOUTONS === */
-    textarea{
-      width:100%;
-      min-height:100px;
-      background:#0d0d0d;
-      border:1px solid rgba(0,191,255,.2);
-      color:#eee;
-      border-radius:10px;
-      padding:12px;
-      font-size:15px;
-      outline:none;
-      transition:border .2s, box-shadow .2s;
-    }
-    textarea:focus{
-      border-color:#00bfff;
-      box-shadow:0 0 12px rgba(0,191,255,0.25);
-    }
-
-    button{
-      padding:10px 14px;
-      border-radius:10px;
-      border:1px solid rgba(0,191,255,.25);
-      background:linear-gradient(180deg,#0b2436,#06131f);
-      color:#00bfff;
-      cursor:pointer;
-      font-weight:600;
-      letter-spacing:.3px;
-      box-shadow:0 0 12px rgba(0,191,255,0.15);
-      transition:all .2s;
-    }
-    button:hover{
-      background:linear-gradient(180deg,#103b5a,#0a2235);
-      box-shadow:0 0 18px rgba(0,191,255,0.3);
-      color:#fff;
-    }
-
-    /* === SORTIE CONSEIL === */
-    .out{
-      white-space:pre-wrap;
-      border-top:1px solid rgba(255,255,255,.08);
-      margin-top:12px;
-      padding-top:12px;
-      opacity:.95;
-      background:rgba(0,191,255,.04);
-      border-radius:8px;
-      padding:10px;
-      font-family:Consolas,monospace;
-    }
-
-    /* === ÉLÉMENTS FUTURISTES === */
-    .glow{
-      position:absolute;
-      width:240px;height:240px;
-      border-radius:50%;
-      filter:blur(120px);
-      z-index:0;
-      opacity:.4;
-      animation:float 6s ease-in-out infinite alternate;
-    }
-    .glow.blue{background:#0070f3;top:-60px;left:-60px;}
-    .glow.cyan{background:#00ffff;bottom:-60px;right:-60px;}
-    @keyframes float{
-      to{transform:translate(20px,20px) scale(1.1);}
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Money Motor Y — Tableau de bord</title>
+<style>
+  :root{
+    --bg:#0b0c0e; --panel:#121318; --muted:#9aa3ad; --text:#e9edf3;
+    --brand:#3ea6ff; --accent:#1ee2a5; --danger:#ff6b6b; --border:#1c1f28;
+    --chip:#161923; --chip-bd:#222635; --shadow:0 10px 30px rgba(0,0,0,.35);
+    --radius:14px; --radius-sm:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+  a{color:var(--brand);text-decoration:none}
+  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+  /* Header */
+  .top{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  .badge{background:var(--chip);border:1px solid var(--chip-bd);padding:4px 10px;border-radius:999px;color:var(--muted)}
+  .top h1{font-size:20px;margin:0}
+  /* Quick nav chips */
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{background:var(--chip);border:1px solid var(--chip-bd);padding:10px 14px;border-radius:999px;color:var(--text)}
+  /* Grid */
+  .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+  @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .panel h3{margin:0 0 12px;font-size:16px}
+  .panel .head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+  .panel .body{padding:16px}
+  .muted{color:var(--muted)}
+  /* Inputs / buttons */
+  .input, textarea{width:100%;background:#0e1015;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:12px}
+  textarea{min-height:120px;resize:vertical}
+  .btns{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{background:#151a22;border:1px solid var(--chip-bd);color:var(--text);padding:10px 14px;border-radius:10px;cursor:pointer}
+  .btn.primary{background:var(--brand);border-color:transparent;color:#001018}
+  .btn.ghost{background:transparent;border:1px dashed var(--chip-bd);color:var(--muted)}
+  .status{display:flex;align-items:center;gap:8px}
+  .status .pill{padding:4px 10px;border:1px solid var(--chip-bd);border-radius:999px;background:var(--chip);color:var(--muted)}
+  /* Response box */
+  .answer{background:#0e1015;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:10px}
+  .answer .title{font-size:12px;color:var(--muted);margin-bottom:6px}
+  /* Cards / lists */
+  .list{display:grid;gap:10px}
+  .card{background:#0f1219;border:1px solid var(--border);border-radius:12px;padding:12px}
+  .card .row{display:flex;justify-content:space-between;gap:8px}
+  .ok{color:var(--accent)} .bad{color:var(--danger)}
+  /* Y-Score mini */
+  .ys-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:640px){ .ys-grid{grid-template-columns:1fr} }
+  .range{display:grid;gap:6px}
+  .range label{font-weight:600}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap}
+  .kpi .pill{background:var(--chip);border:1px solid var(--chip-bd);border-radius:999px;padding:6px 10px}
+  .foot-note{font-size:12px;color:var(--muted)}
+</style>
 </head>
-
 <body>
-  <div class="wrap" id="dashboard">
-    <div class="glow blue"></div>
-    <div class="glow cyan"></div>
-
-    <h1>Money Motor Y</h1>
-    <div class="bar">
-      <span class="pill" id="env-pill">Statut : …</span>
+  <div class="wrap">
+    <!-- Header -->
+    <div class="top">
+      <div class="brand">
+        <span class="dot"></span>
+        <div>
+          <h1>Money Motor Y — Tableau de bord</h1>
+          <div class="muted">IA stratégique d’investissement • Version <span class="badge">v10.4</span></div>
+        </div>
+      </div>
+      <div class="status"><span class="pill">État IA : En ligne</span></div>
     </div>
 
-    <!-- 💬 CONSEIL INSTANTANÉ (tout en haut) -->
-    <section id="advisor" class="box">
-      <h3 style="margin:0 0 14px;color:#00bfff;text-shadow:0 0 6px rgba(0,191,255,0.6)">💬 Conseil instantané</h3>
-      <textarea id="q" placeholder="Décris une opportunité (prix, modèle, km, tendance, etc.)"></textarea>
-      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-        <button id="ask">Obtenir un conseil IA</button>
-        <button id="check">Vérifier le statut API</button>
-      </div>
-      <div class="out" id="out"></div>
-    </section>
+    <!-- Quick chips -->
+    <div class="chips">
+      <span class="chip">Conseil d’investissement</span>
+      <span class="chip">Marché en direct</span>
+      <span class="chip">Analyse rapide Y-Score</span>
+      <span class="chip">Alertes marché</span>
+    </div>
 
-    <!-- ⚙️ PANNEAU Y-SCORE -->
-    <section id="yscore-panel" class="box"></section>
+    <div class="grid">
+      <!-- Left column -->
+      <section class="panel">
+        <div class="head">
+          <h3>Conseil d’investissement</h3>
+          <span class="muted">Pose une question, colle un lien d’annonce ou décris l’opportunité.</span>
+        </div>
+        <div class="body">
+          <div class="muted" style="margin-bottom:8px">
+            <strong>Exemples :</strong> “Est-ce une bonne affaire ?”, “Achète ou évite ?”, “Stratégie de revente en 30 jours ?”
+          </div>
+          <textarea placeholder="Décris ton opportunité ou colle un lien… (auto, immo, business, crypto, etc.)"></textarea>
+          <div class="btns" style="margin-top:10px">
+            <button class="btn primary">Obtenir un conseil</button>
+            <button class="btn">Analyser avec Y-Score</button>
+            <button class="btn ghost">Effacer</button>
+          </div>
+          <!-- Answer box -->
+          <div class="answer">
+            <div class="title">Réponse condensée</div>
+            <div id="ai-answer" class="muted">En attente de votre demande.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right column -->
+      <aside class="panel">
+        <div class="head">
+          <h3>Marché en direct</h3>
+          <span class="muted">Signaux temps réel (démo)</span>
+        </div>
+        <div class="body list">
+          <div class="card">
+            <div class="row">
+              <div><strong>BMW 118d 2018</strong> • 112 000 km</div>
+              <div class="ok">Sous-côté ~6%</div>
+            </div>
+            <div class="muted">Prix: 10 900€ • Estimé: 11 600€ • Délai revente: ~21 j</div>
+          </div>
+          <div class="card">
+            <div class="row">
+              <div><strong>Renault Clio V 2020</strong> • 65 000 km</div>
+              <div class="bad">Trop chère ~8%</div>
+            </div>
+            <div class="muted">Prix: 12 800€ • Estimé: 11 800€ • Délai revente: ~28 j</div>
+          </div>
+          <div class="card">
+            <div class="row">
+              <div><strong>Peugeot 3008 2019</strong> • 89 000 km</div>
+              <div class="ok">Bon spread</div>
+            </div>
+            <div class="muted">Prix: 17 900€ • Estimé: 19 400€ • Délai revente: ~26 j</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Y-Score quick -->
+      <section class="panel">
+        <div class="head">
+          <h3>Analyse rapide Y-Score</h3>
+          <span class="muted">Glisse les curseurs et teste.</span>
+        </div>
+        <div class="body">
+          <div class="ys-grid">
+            <div class="range">
+              <label>Prix (€)</label>
+              <input type="number" class="input" placeholder="ex. 10 900" />
+            </div>
+            <div class="range">
+              <label>Valeur marché (€)</label>
+              <input type="number" class="input" placeholder="ex. 11 600" />
+            </div>
+            <div class="range">
+              <label>Risque (0–100)</label>
+              <input type="range" min="0" max="100" value="35" />
+            </div>
+            <div class="range">
+              <label>Stratégie (0–100)</label>
+              <input type="range" min="0" max="100" value="70" />
+            </div>
+          </div>
+          <div class="kpi" style="margin-top:12px">
+            <span class="pill">Y-Score estimé : <strong>72</strong>/100</span>
+            <span class="pill">Spread : <strong>+6%</strong></span>
+            <span class="pill">Revente : <strong>~21 j</strong></span>
+          </div>
+          <div class="foot-note" style="margin-top:8px">
+            Le Y-Score combine valeur, momentum, risque et liquidité pour classer les opportunités.
+          </div>
+        </div>
+      </section>
+
+      <!-- Highlights / Alerts -->
+      <section class="panel">
+        <div class="head">
+          <h3>Points forts & alertes</h3>
+          <span class="muted">Vue d’ensemble</span>
+        </div>
+        <div class="body list">
+          <div class="card"><strong>Signal</strong> — 3 annonces rentables détectées aujourd’hui.</div>
+          <div class="card"><strong>Marché</strong> — Décote moyenne compacte : 3–7% cette semaine.</div>
+          <div class="card"><strong>Risque</strong> — Volatilité des prix en baisse sur 14 jours.</div>
+          <div class="card"><strong>Astuce</strong> — Viser un spread ≥ 5% et marge nette ≥ 1 200€.</div>
+        </div>
+      </section>
+    </div>
   </div>
 
-  <script src="components/yscore_panel.js"></script>
+  <!-- Demo JS (facultatif) -->
   <script>
-    window.YScorePanel.mount("yscore-panel");
-    const $ = id => document.getElementById(id);
-
-    $("ask").onclick = async ()=>{
-      const prompt = $("q").value.trim();
-      $("out").textContent = "⏳ Envoi à l'IA...";
-      try{
-        const r = await fetch("/api/advisor",{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ prompt })
-        });
-        const data = await r.json().catch(()=>null);
-        $("out").textContent = data?.reply || data?.error || "Aucune réponse.";
-      }catch(e){ $("out").textContent = e.message || "Erreur réseau."; }
-    };
-
-    $("check").onclick = async ()=>{
-      $("out").textContent = "⏳ Vérification du statut…";
-      const r = await fetch("/api/status");
-      const s = await r.json();
-      $("env-pill").textContent =
-        `Statut: ${s.status} | OpenAI: ${s.hasOpenAIKey?'OK':'X'} | Upstash: ${s.hasUpstashKV?'OK':'X'}`;
-      $("out").textContent = JSON.stringify(s,null,2);
-    };
-
-    (async ()=>{
-      try{
-        const r = await fetch("/api/status");
-        const s = await r.json();
-        $("env-pill").textContent =
-          `Statut: ${s.status} | OpenAI: ${s.hasOpenAIKey?'OK':'X'} | Upstash: ${s.hasUpstashKV?'OK':'X'}`;
-      }catch{ $("env-pill").textContent = "Statut: offline"; }
-    })();
+    // Mini démo : bouton “Obtenir un conseil” remplit la réponse avec un texte statique
+    document.querySelector('.btn.primary')?.addEventListener('click', ()=>{
+      const box = document.getElementById('ai-answer');
+      box.textContent = "Analyse rapide : spread positif (~6%), risque modéré, liquidité correcte. " +
+                        "Négocier 300–500€ pour sécuriser la marge et viser une revente en ~3 semaines.";
+    });
+    document.querySelector('.btn.ghost')?.addEventListener('click', ()=>{
+      document.querySelector('textarea').value = "";
+      document.getElementById('ai-answer').textContent = "En attente de votre demande.";
+    });
   </script>
 </body>
 </html>
