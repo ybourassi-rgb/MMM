@@ -5,171 +5,151 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Muslim — Tableau de bord (V10.3)</title>
 
-  <!-- PWA / styles -->
+  <!-- PWA + styles -->
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="stylesheet" href="/mmm.css" />
   <meta name="theme-color" content="#0b0b0b" />
 </head>
 
 <body>
-  <!-- En-tête -->
   <header class="header">
-    <div class="container header-row">
-      <div class="brand">Money Motor Muslim — Tableau de bord (V10.3)</div>
-      <div class="health">
-        <span class="muted">État IA :</span>
-        <span id="ia-badge" class="chip">Vérification…</span>
+    <div class="wrap">
+      <h1>Money Motor Muslim — Tableau de bord (V10.3)</h1>
+      <div class="ia-state">
+        <span>État IA :</span>
+        <span id="ia-badge" class="pill">Vérification…</span>
       </div>
     </div>
   </header>
 
-  <main class="container" style="margin-top:18px">
-    <!-- Raccourcis -->
-    <section class="card" style="margin-bottom:16px">
-      <div class="actions" style="gap:8px; flex-wrap:wrap">
-        <a class="btn" href="/market_live.html">📈 Marché en direct</a>
-        <a class="btn" href="/publish_wizard.html">🧩 Assistant de publication</a>
-        <a class="btn" href="/auto_publisher.html">🤖 Smart Auto-Publisher</a>
-      </div>
-      <div class="small muted" style="margin-top:8px">
-        Serveur API côté Vercel • PWA installable • 100&nbsp;% licite
-      </div>
-    </section>
+  <main class="container">
+    <!-- Cartes rapides -->
+    <div class="cards">
+      <a class="btn" href="/market_live.html">📈 Marché en direct</a>
+      <a class="btn" href="/publish_wizard.html">🧩 Assistant de publication</a>
+      <a class="btn" href="/auto_publisher.html">🤖 Smart Auto-Publisher</a>
+    </div>
 
     <!-- Conseil instantané -->
     <section class="card">
       <div class="card-head">
-        <div class="card-title">💬 Conseil instantané</div>
-        <div class="chip chip-ok" id="chip-ok" hidden>Réponse générée</div>
-        <div class="chip chip-err" id="chip-err" hidden>Erreur</div>
+        <h2>💬 Conseil instantané</h2>
+        <span id="error-pill" class="pill pill-error" style="display:none">Erreur</span>
       </div>
 
-      <label class="field-label" for="topic">
-        Collez une ou plusieurs annonces (Leboncoin, LaCentrale, Avito…) <span class="muted">(ou posez une question)</span>
-      </label>
+      <p class="muted">
+        Collez une ou plusieurs annonces (Leboncoin, LaCentrale, Avito…) <em>ou</em> posez une question.
+      </p>
 
-      <textarea id="topic" rows="4" class="input"
+      <textarea id="prompt" rows="5"
         placeholder="Ex : Voici une annonce : https://www.leboncoin.fr/ad/voitures/3084707716 — Est-ce une bonne affaire ?"></textarea>
 
-      <div class="actions" style="gap:10px; margin-top:10px">
-        <button class="btn btn-primary" id="btn-ask" type="button">
-          <span id="ask-spin" class="spinner" hidden></span>
-          Obtenir un conseil
-        </button>
-        <button class="btn" id="btn-clear" type="button">Effacer</button>
+      <div class="actions">
+        <button id="sendBtn" class="btn primary">Obtenir un conseil</button>
+        <button id="clearBtn" class="btn">Effacer</button>
       </div>
 
-      <div id="advice" class="output" aria-live="polite" style="margin-top:12px"></div>
+      <div id="status" class="status"></div>
+
+      <h3>🪄 Réponse condensée</h3>
+      <pre id="advice" class="mono"></pre>
     </section>
   </main>
 
-  <!-- Script app -->
   <script>
-  // --- IA Status (badge) ---
-  (async function checkStatus() {
-    const badge = document.getElementById('ia-badge');
-    try {
-      const r = await fetch('/api/status', { cache: 'no-store' });
-      const j = await r.json().catch(() => ({}));
-      if (j && (j.ok || j.status === 'online')) {
-        badge.textContent = 'En ligne ✅';
-        badge.classList.add('chip-ok');
-      } else {
-        badge.textContent = 'Hors ligne ❌';
-        badge.classList.add('chip-err');
-      }
-    } catch {
-      badge.textContent = 'Hors ligne ❌';
-      badge.classList.add('chip-err');
-    }
-  })();
+    // --- config anti-cache léger
+    const V = '1032'; // incrémente quand tu déploies
 
-  // --- Conseil instantané ---
-  (function wireUI() {
-    const apiUrl   = '/api/advisor';
-    const $topic   = document.getElementById('topic');
-    const $ask     = document.getElementById('btn-ask');
-    const $clear   = document.getElementById('btn-clear');
-    const $out     = document.getElementById('advice');
-    const $ok      = document.getElementById('chip-ok');
-    const $err     = document.getElementById('chip-err');
-    const $spin    = document.getElementById('ask-spin');
-
-    function resetChips() {
-      $ok.hidden = true;
-      $err.hidden = true;
-    }
-
-    function toHtml(text) {
-      // Affichage simple : on préserve les sauts de ligne et on met en forme les titres '##'
-      const esc = (s) => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-      const lines = esc(text).split('\n').map(l => {
-        if (l.startsWith('### ')) return '<h4>' + l.slice(4) + '</h4>';
-        if (l.startsWith('## '))  return '<h3>' + l.slice(3) + '</h3>';
-        if (l.startsWith('**') && l.endsWith('**')) return '<strong>' + l.slice(2,-2) + '</strong>';
-        return l;
-      });
-      return '<pre class="mono">'+ lines.join('\n') +'</pre>';
-    }
-
-    async function ask() {
-      resetChips();
-      const prompt = ($topic.value || '').trim();
-      if (!prompt) {
-        $out.innerHTML = '<div class="callout err">💬 Écris une question ou colle un lien d’annonce.</div>';
-        return;
-      }
-
+    // -------- Badge "État IA"
+    (async function checkStatus() {
+      const badge = document.getElementById('ia-badge');
       try {
-        $ask.disabled = true;
-        $spin.hidden  = false;
-        $out.innerHTML = '<div class="muted">⏳ Analyse en cours…</div>';
+        const r = await fetch(`/api/status?v=${V}`, { cache: 'no-store' });
+        const data = await r.json().catch(() => ({}));
+        const ok = !!(data && data.ok);
+        badge.textContent = ok ? 'En ligne ✅' : 'Hors ligne ❌';
+        badge.classList.toggle('ok', ok);
+        badge.classList.toggle('ko', !ok);
+      } catch {
+        badge.textContent = 'Hors ligne ❌';
+        badge.classList.remove('ok');
+        badge.classList.add('ko');
+      }
+    })();
 
-        const r = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
-        });
+    // -------- Conseil instantané
+    (function wireAdvisor() {
+      const promptEl = document.getElementById('prompt');
+      const sendBtn  = document.getElementById('sendBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const adviceEl = document.getElementById('advice');
+      const statusEl = document.getElementById('status');
+      const errPill  = document.getElementById('error-pill');
 
-        const text = await r.text();  // tolérant: parfois l’API renvoie du texte
-        let data;
-        try { data = JSON.parse(text); } catch { data = { ok:false, error:text }; }
+      function showStatus(msg, type='info') {
+        statusEl.textContent = msg || '';
+        statusEl.className = `status ${type}`;
+      }
+      function showError(msg) {
+        errPill.style.display = '';
+        showStatus(msg, 'error');
+      }
+      function clearError() {
+        errPill.style.display = 'none';
+        showStatus('');
+      }
 
-        if (!r.ok || !data.ok) {
-          $err.hidden = false;
-          const msg = (data && data.error) ? data.error : ('Erreur HTTP '+ r.status);
-          $out.innerHTML = '<div class="callout err">❌ '+ msg +'</div>';
+      clearBtn.addEventListener('click', () => {
+        promptEl.value = '';
+        adviceEl.textContent = '';
+        clearError();
+      });
+
+      sendBtn.addEventListener('click', async () => {
+        const prompt = (promptEl.value || '').trim();
+        adviceEl.textContent = '';
+        clearError();
+
+        if (!prompt) {
+          showError('💬 Écris une question ou colle un lien d’annonce.');
           return;
         }
 
-        $ok.hidden = false;
-        const reply = data.reply || data.answer || '';
-        $out.innerHTML = toHtml(reply);
-      } catch (e) {
-        $err.hidden = false;
-        $out.innerHTML = '<div class="callout err">❌ ' + (e.message || 'Erreur réseau') + '</div>';
-      } finally {
-        $ask.disabled = false;
-        $spin.hidden  = true;
-      }
-    }
+        showStatus('⏳ Analyse en cours…', 'info');
+        sendBtn.disabled = true;
 
-    $ask.addEventListener('click', ask);
-    $clear.addEventListener('click', () => {
-      resetChips();
-      $topic.value = '';
-      $out.innerHTML = '';
-      $topic.focus();
-    });
+        try {
+          const r = await fetch(`/api/advisor?v=${V}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+          });
 
-    // Ctrl/Cmd+Enter pour envoyer
-    $topic.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        ask();
-      }
-    });
-  })();
+          // Gestion explicite des erreurs réseau/API
+          if (!r.ok) {
+            // essaye de lire un JSON d'erreur structuré
+            let txt = await r.text();
+            try {
+              const j = JSON.parse(txt);
+              txt = j.error || j.message || txt;
+            } catch {}
+            throw new Error(txt || `Erreur HTTP ${r.status}`);
+          }
+
+          const data = await r.json();
+          if (data && data.ok) {
+            adviceEl.textContent = data.reply || data.answer || '(Réponse vide)';
+            showStatus('✅ Réponse générée avec succès', 'success');
+          } else {
+            throw new Error(data?.error || 'Réponse invalide');
+          }
+        } catch (e) {
+          showError('❌ ' + (e.message || 'Load failed'));
+        } finally {
+          sendBtn.disabled = false;
+        }
+      });
+    })();
   </script>
 </body>
 </html>
