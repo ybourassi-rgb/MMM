@@ -12,28 +12,30 @@
     .pill{display:inline-block;padding:4px 10px;border:1px solid rgba(255,255,255,.2);border-radius:99px}
     textarea{width:100%;min-height:92px;background:#0d0d0d;border:1px solid rgba(255,255,255,.15);color:#eee;border-radius:10px;padding:10px}
     button{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#1b1b1b;color:#eee;cursor:pointer}
-    .box{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;background:#111}
+    .box{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;background:#111;margin-bottom:20px}
     .out{white-space:pre-wrap;border-top:1px solid rgba(255,255,255,.08);margin-top:10px;padding-top:10px;opacity:.95}
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="wrap" id="dashboard">
     <h1>Money Motor Y</h1>
     <div class="bar">
       <span class="pill" id="env-pill">Statut: …</span>
     </div>
 
-    <div id="yscore-panel" class="box" style="margin-bottom:20px"></div>
-
-    <div class="box">
-      <h3 style="margin:0 0 10px">Conseil instantané</h3>
+    <!-- CONSEIL INSTANTANÉ déplacé en haut -->
+    <section id="advisor" class="box">
+      <h3 style="margin:0 0 10px">💬 Conseil instantané</h3>
       <textarea id="q" placeholder="Décris une opportunité (prix, modèle, km, tendance, etc.)"></textarea>
       <div style="margin-top:8px;display:flex;gap:8px">
         <button id="ask">Obtenir un conseil IA</button>
         <button id="check">Vérifier le statut API</button>
       </div>
       <div class="out" id="out"></div>
-    </div>
+    </section>
+
+    <!-- PANNEAU Y-SCORE en dessous -->
+    <section id="yscore-panel" class="box"></section>
   </div>
 
   <script src="components/yscore_panel.js"></script>
