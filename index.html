@@ -3,260 +3,74 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Money Motor Muslim — Tableau de bord (V10.4)</title>
-
-  <!-- PWA + Styles -->
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="preload" href="/mmm.css?v=1040" as="style">
-  <link rel="stylesheet" href="/mmm.css?v=1040" />
-  <meta name="theme-color" content="#0b0b0b" />
-  <meta name="color-scheme" content="dark light">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="preconnect" href="https://api.openai.com" crossorigin>
+  <title>Money Motor Y — Dashboard</title>
+  <style>
+    body{margin:0;padding:24px;background:#0b0b0b;color:#eee;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .wrap{max-width:980px;margin:0 auto}
+    h1{font-size:22px;margin:0 0 8px}
+    .bar{display:flex;gap:8px;align-items:center;margin:16px 0 24px}
+    .pill{display:inline-block;padding:4px 10px;border:1px solid rgba(255,255,255,.2);border-radius:99px}
+    textarea{width:100%;min-height:92px;background:#0d0d0d;border:1px solid rgba(255,255,255,.15);color:#eee;border-radius:10px;padding:10px}
+    button{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#1b1b1b;color:#eee;cursor:pointer}
+    .box{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;background:#111}
+    .out{white-space:pre-wrap;border-top:1px solid rgba(255,255,255,.08);margin-top:10px;padding-top:10px;opacity:.95}
+  </style>
 </head>
-
 <body>
-  <header class="nav" role="banner">
-    <div class="brand" aria-label="Identité de l’application">
-      <span class="dot" aria-hidden="true"></span>
-      <span class="brand-title">Money Motor Muslim — Tableau de bord</span>
-      <span class="brand-pill" aria-label="Version">V10.4</span>
+  <div class="wrap">
+    <h1>Money Motor Y</h1>
+    <div class="bar">
+      <span class="pill" id="env-pill">Statut: …</span>
     </div>
 
-    <div class="status-wrap" aria-live="polite">
-      <span class="status-label">État IA :</span>
-      <span id="ia-badge" class="chip chip--pending" aria-label="Statut du serveur">Vérification…</span>
+    <div id="yscore-panel" class="box" style="margin-bottom:20px"></div>
+
+    <div class="box">
+      <h3 style="margin:0 0 10px">Conseil instantané</h3>
+      <textarea id="q" placeholder="Décris une opportunité (prix, modèle, km, tendance, etc.)"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button id="ask">Obtenir un conseil IA</button>
+        <button id="check">Vérifier le statut API</button>
+      </div>
+      <div class="out" id="out"></div>
     </div>
-  </header>
+  </div>
 
-  <main class="container" role="main">
-    <!-- Apps -->
-    <section class="cards-row" aria-label="Applications">
-      <a class="app-card" href="/market_live.html">
-        <span class="app-emoji" aria-hidden="true">📈</span>
-        <span class="app-title">Marché en direct</span>
-      </a>
-
-      <a class="app-card" href="/publish_wizard.html">
-        <span class="app-emoji" aria-hidden="true">🧩</span>
-        <span class="app-title">Assistant de publication</span>
-      </a>
-
-      <a class="app-card" href="/auto_publisher.html">
-        <span class="app-emoji" aria-hidden="true">🤖</span>
-        <span class="app-title">Smart Auto-Publisher</span>
-      </a>
-    </section>
-
-    <!-- Conseil instantané -->
-    <section class="panel" aria-labelledby="panel-title">
-      <header class="panel-head">
-        <div id="panel-title" class="panel-title">
-          <span class="title-emoji" aria-hidden="true">💬</span> Conseil instantané
-        </div>
-        <span id="error-dot" class="pill pill--error" hidden>Erreur</span>
-      </header>
-
-      <div class="prompt-row">
-        <label for="prompt" class="sr-only">Votre question ou vos liens</label>
-        <textarea id="prompt" rows="4" class="prompt-input"
-          placeholder="Ex : https://www.leboncoin.fr/ad/voitures/3084707716 — Est-ce une bonne affaire ?"></textarea>
-
-        <div class="prompt-actions">
-          <button id="sendBtn" type="button" class="btn btn--accent">Obtenir un conseil</button>
-          <button id="clearBtn" type="button" class="btn btn--ghost">Effacer</button>
-        </div>
-      </div>
-
-      <div id="status" class="status-line" aria-live="polite"></div>
-
-      <h3 class="subhead">🪄 Réponse condensée</h3>
-      <pre id="advice" class="answer"><span class="muted">En attente de votre demande…</span></pre>
-    </section>
-
-    <!-- 🔽 Nouvelle section : Analyse rapide Y-Score -->
-    <section id="mmy-analyse" style="margin:16px 0;padding:12px;border:1px solid #333;border-radius:12px;background:#0b0b0b">
-      <h3 style="margin:0 0 8px">Analyse rapide Y-Score</h3>
-
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
-        <input id="mmy-price" type="number" placeholder="Prix (€)" />
-        <input id="mmy-mv" type="number" placeholder="Valeur marché (€)" />
-        <input id="mmy-risk" type="number" placeholder="Risque (0–100)" />
-        <input id="mmy-days" type="number" placeholder="Jours avant revente" />
-        <input id="mmy-strat" type="number" placeholder="Stratégique (0–100)" />
-      </div>
-
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button id="mmy-run">Analyser</button>
-        <button id="mmy-clear" style="opacity:.8">Effacer</button>
-      </div>
-
-      <div id="mmy-result" style="margin-top:10px;padding:10px;border:1px dashed #444;border-radius:10px"></div>
-      <div id="mmy-history" style="margin-top:10px"></div>
-    </section>
-  </main>
-
-  <!-- JS -->
+  <script src="components/yscore_panel.js"></script>
   <script>
-    // ---- Cache-buster global ----
-    const V = '1040';
+    window.YScorePanel.mount("yscore-panel");
+    const $ = (id)=>document.getElementById(id);
 
-    // ---- Service Worker (PWA) ----
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-    }
-
-    // ---- Vérif du statut API ----
-    (async () => {
-      const badge = document.getElementById('ia-badge');
-      try {
-        const r = await fetch('/api/status?ts=' + Date.now(), { cache: 'no-store' });
-        const j = await r.json();
-        if (j && j.ok) {
-          badge.textContent = 'En ligne';
-          badge.className = 'chip chip--ok';
-        } else {
-          badge.textContent = 'Hors ligne';
-          badge.className = 'chip chip--ko';
-        }
-      } catch {
-        badge.textContent = 'Hors ligne';
-        badge.className = 'chip chip--ko';
-      }
-    })();
-
-    // ---- Advisor ----
-    const apiUrl = '/api/advisor';
-    const promptEl = document.getElementById('prompt');
-    const sendBtn = document.getElementById('sendBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const statusEl = document.getElementById('status');
-    const adviceEl = document.getElementById('advice');
-    const errorDot = document.getElementById('error-dot');
-
-    const setError = (msg) => {
-      errorDot.hidden = !msg;
-      if (msg) errorDot.textContent = msg;
-    };
-
-    const setLoading = (isLoading) => {
-      sendBtn.disabled = isLoading;
-      if (isLoading) {
-        statusEl.innerHTML = '<span class="spinner"></span> Je réfléchis…';
-        adviceEl.textContent = '';
-      } else {
-        statusEl.textContent = '';
-      }
-    };
-
-    clearBtn.addEventListener('click', () => {
-      promptEl.value = '';
-      adviceEl.innerHTML = '<span class="muted">En attente de votre demande…</span>';
-      setError('');
-    });
-
-    promptEl.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') sendBtn.click();
-    });
-
-    sendBtn.addEventListener('click', async () => {
-      const prompt = (promptEl.value || '').trim();
-      if (!prompt) {
-        setError('Écris une question ou colle un lien.');
-        return;
-      }
-      setError('');
-      setLoading(true);
-      try {
-        const r = await fetch(apiUrl + '?v=' + V, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+    $("ask").onclick = async ()=>{
+      const prompt = $("q").value.trim();
+      $("out").textContent = "⏳ Envoi à l'IA...";
+      try{
+        const r = await fetch("/api/advisor",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ prompt })
         });
-        const data = await r.json();
-        if (!r.ok || !data.ok) throw new Error(data?.error || 'Erreur inconnue');
-        adviceEl.textContent = data.reply || '⚠️ Aucune réponse reçue.';
-        statusEl.textContent = '✅ Réponse générée';
-      } catch (e) {
-        setError('Erreur');
-        adviceEl.textContent = '❌ ' + (e.message || 'Erreur réseau');
-      } finally {
-        setLoading(false);
-      }
-    });
+        const data = await r.json().catch(()=>null);
+        $("out").textContent = data?.reply || data?.error || "Aucune réponse.";
+      }catch(e){ $("out").textContent = e.message || "Erreur réseau."; }
+    };
 
-    // ---- Analyse rapide Y-Score ----
-    (function () {
-      const $ = id => document.getElementById(id);
-      const resBox = $('mmy-result');
-      const histBox = $('mmy-history');
+    $("check").onclick = async ()=>{
+      $("out").textContent = "⏳ Vérification du statut…";
+      const r = await fetch("/api/status");
+      const s = await r.json();
+      $("env-pill").textContent =
+        `Statut: ${s.status} | OpenAI: ${s.hasOpenAIKey?'OK':'X'} | Upstash: ${s.hasUpstashKV?'OK':'X'}`;
+      $("out").textContent = JSON.stringify(s,null,2);
+    };
 
-      function saveHistory(item) {
-        const key = 'mmy.history';
-        const arr = JSON.parse(localStorage.getItem(key) || '[]');
-        arr.unshift(item);
-        localStorage.setItem(key, JSON.stringify(arr.slice(0, 10)));
-        renderHistory();
-      }
-
-      function renderHistory() {
-        const arr = JSON.parse(localStorage.getItem('mmy.history') || '[]');
-        if (!arr.length) { histBox.innerHTML = ''; return; }
-        histBox.innerHTML = `
-          <h4 style="margin:12px 0 6px;">Dernières analyses</h4>
-          <ul style="margin:0;padding-left:18px">
-            ${arr.map(a => `
-              <li>Score <b>${a.yScore}</b> — Décision <b>${a.decision}</b> — Profit €${a.profitAbs} (${a.profitPct}%)
-                <small style="opacity:.7"> · ${new Date(a.createdAt).toLocaleString()}</small>
-              </li>`).join('')}
-          </ul>`;
-      }
-
-      $('mmy-run').addEventListener('click', async () => {
-        const body = {
-          price: +$('mmy-price').value,
-          marketValue: +$('mmy-mv').value,
-          risk: +$('mmy-risk').value,
-          daysToLiquidity: +$('mmy-days').value,
-          strategic: +$('mmy-strat').value
-        };
-        resBox.textContent = 'Calcul en cours…';
-        try {
-          const r = await fetch('/api/yscore', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-          });
-          const data = await r.json();
-          if (!r.ok) {
-            resBox.innerHTML = `<span style="color:#f55">Erreur:</span> ${data.error || 'API'}`;
-            return;
-          }
-          resBox.innerHTML = `
-            <div>Y-Score : <b>${data.yScore}</b></div>
-            <div>Décision : <b>${data.decision}</b></div>
-            <div>Profit : <b>€${data.profitAbs}</b> (${data.profitPct}%)</div>`;
-          saveHistory(data);
-        } catch (e) {
-          resBox.innerHTML = `<span style="color:#f55">Erreur réseau :</span> ${e}`;
-        }
-      });
-
-      $('mmy-clear').addEventListener('click', () => {
-        ['mmy-price', 'mmy-mv', 'mmy-risk', 'mmy-days', 'mmy-strat'].forEach(id => $(id).value = '');
-        resBox.innerHTML = '';
-      });
-
-      renderHistory();
+    (async ()=>{
+      try{
+        const r = await fetch("/api/status"); const s = await r.json();
+        $("env-pill").textContent =
+          `Statut: ${s.status} | OpenAI: ${s.hasOpenAIKey?'OK':'X'} | Upstash: ${s.hasUpstashKV?'OK':'X'}`;
+      }catch{ $("env-pill").textContent = "Statut: offline"; }
     })();
   </script>
-  <!-- === Panneau Y-Score === -->
-<div id="yscore-panel"></div>
-
-<script src="components/yscore_panel.js"></script>
-<script>
-  // Monte le panneau sur la page
-  window.YScorePanel.mount("yscore-panel");
-</script></body>
+</body>
 </html>
