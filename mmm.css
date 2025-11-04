@@ -80,4 +80,42 @@
   background:#0e0f10; border:1px solid #2a2a2a; border-radius:12px;
   padding:12px; white-space:pre-wrap; overflow:auto; min-height:120px;
 }
+
+/* -------------------------------------------------
+   ✅ Correctifs iPhone / Safari + lisibilité globale
+   ------------------------------------------------- */
+html { color-scheme: dark light; }           /* évite l’assombrissement automatique de Safari */
+
+.answer{
+  background:#0b0b0b;                       /* fond plus net */
+  color:#eaeaea;                            /* texte clair lisible */
+  border-color:#242424;
+  line-height:1.55;
+  word-break:break-word;
+}
+
+.prompt-input::placeholder{ color:#8a8a8a; }
+
+/* mode clair (si l’utilisateur force le light mode) */
+@media (prefers-color-scheme: light){
+  .answer{
+    background:#ffffff;
+    color:#111;
+    border-color:#e6e6e6;
+  }
+  .prompt-input{
+    background:#fff;
+    color:#111;
+    border-color:#ddd;
+  }
+}
+
+/* petit polish mobile */
+@media (max-width: 480px){
+  .panel{ padding:14px; }
+  .prompt-input{ min-height:88px; }
+  .btn{ padding:.65rem .9rem; }
+}
+
+/* utilitaire */
 .muted{opacity:.6}
