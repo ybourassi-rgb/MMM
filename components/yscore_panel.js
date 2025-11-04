@@ -20,7 +20,17 @@
     { id:"BMW-X3-2019", price:21000, fairValue:25000, momentum30dPct:3, volatility30dPct:18, avgDailyLiquidity:180, quality:68, halalCompliant:true }
   ];
 
-  async function j(url, opts){ const r = await fetch(url, opts); return r.json(); }
+  // ⬇️ Micro-patch: meilleure gestion d’erreurs HTTP et JSON invalide
+  async function j(url, opts) {
+    const r = await fetch(url, opts);
+    let data;
+    try { data = await r.json(); } catch { data = null; }
+    if (!r.ok) {
+      const msg = (data && (data.error || data.message)) || `HTTP ${r.status}`;
+      throw new Error(msg);
+    }
+    return data;
+  }
 
   function slider(id, label, value, min, max, step, suffix, hint) {
     const v = Number.isFinite(value) ? value : 0;
