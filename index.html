@@ -27,7 +27,7 @@
     .chips{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 18px}
     .chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:10px 14px;color:#dbe6ff}
     .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .input, textarea{width:100%;background:#0b0f14;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:12px}
+    .input, textarea{width:100%;background:#0b0f14;border:1px solid var(--line);border-radius:10px;color:#e9eef6;padding:12px}
     textarea{min-height:120px;resize:vertical}
     .btn{border:1px solid var(--line);background:#111824;color:#eaf2ff;padding:10px 14px;border-radius:10px;cursor:pointer}
     .btn.primary{background:var(--primary);border-color:#2f78c7;color:#061522}
@@ -178,7 +178,7 @@
       }
     })();
 
-    // --- CONSEIL
+    // --- CONSEIL (STREAMING + FALLBACK)
     const $in   = document.getElementById('advice-input');
     const $send = document.getElementById('advice-send');
     const $clr  = document.getElementById('advice-clear');
@@ -189,18 +189,48 @@
     $send.addEventListener('click', async () => {
       const prompt = ($in.value || '').trim();
       if(!prompt){ $box.style.display='block'; $txt.innerHTML='<span class="danger">Saisis un message.</span>'; return; }
-      $send.disabled = true; $txt.textContent = 'Analyse en cours…'; $box.style.display='block';
+
+      $send.disabled = true;
+      $box.style.display='block';
+      $txt.textContent = 'Analyse en cours…';
+
+      // 1) tentative en streaming
       try{
-        const data = await j('/api/advisor', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt })
+        const resp = await fetch('/api/advisor_stream', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ prompt })
         });
-        $txt.textContent = data.reply || '—';
+        if(!resp.ok || !resp.body){
+          throw new Error(await resp.text());
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let acc = '';
+        while(true){
+          const { value, done } = await reader.read();
+          if(done) break;
+          acc += decoder.decode(value, { stream:true });
+          $txt.textContent = acc || '…';
+        }
+        if(!acc.trim()) $txt.textContent = 'Réponse vide.';
       }catch(e){
-        $txt.innerHTML = '<span class="danger">'+ (e.message || 'Erreur') +'</span>';
+        // 2) fallback JSON classique
+        try{
+          const data = await j('/api/advisor', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ prompt })
+          });
+          $txt.textContent = data.reply || '—';
+        }catch(e2){
+          $txt.innerHTML = '<span class="danger">'+ (e2.message || e.message || 'Erreur') +'</span>';
+        }
       }finally{
         $send.disabled = false;
       }
     });
+
     $clr.addEventListener('click', ()=>{ $in.value=''; $box.style.display='none'; $txt.textContent=''; });
     $ys.addEventListener('click', ()=>{ $box.style.display='block'; $txt.textContent='(Bientôt) Analyse Y-Score détaillée…'; });
 
