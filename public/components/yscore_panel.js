@@ -1,200 +1,136 @@
-// public/components/yscore_panel.js
-(function () {
-  const CSS = `
-    .ys-box{border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:16px;background:#12161b;color:#e9eef6}
-    .ys-just{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-    .ys-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
-    .ys-label{min-width:90px;font-weight:700}
-    .ys-input{padding:10px 12px;border-radius:10px;border:1px solid #1c232b;background:#0b0f14;color:#e9eef6;flex:1 1 200px}
-    .ys-btn{padding:10px 12px;border-radius:10px;border:1px solid #1c232b;background:#0e141b;color:#eaf2ff;cursor:pointer}
-    .ys-btnP{padding:10px 12px;border-radius:10px;border:1px solid #2f78c7;background:#4da3ff;color:#061522;cursor:pointer;font-weight:600}
-    .ys-divider{height:1px;background:#1c232b;margin:12px 0 16px}
-    .ys-hint{opacity:.75}
-    .ys-badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#0f1420;border:1px solid #1c232b;color:#a9b3c1;font-size:12px}
-    .ys-good{color:#29d38d}
-    .ys-bad{color:#ff6b6b}
-    input[type="range"]{width:100%}
-  `;
-
-  // -------- utils
-  async function j(url, opts){
-    const r = await fetch(url, opts);
-    const raw = await r.text();
-    try{
-      const js = JSON.parse(raw);
-      if(!r.ok) throw new Error(js.error || ('HTTP '+r.status));
-      return js;
-    }catch{
-      throw new Error(raw || ('HTTP '+r.status));
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Money Motor Y — Tableau de bord</title>
+  <style>
+    :root{
+      --bg:#0c0f12; --panel:#12161b; --muted:#a9b3c1; --text:#e9eef6;
+      --primary:#4da3ff; --ok:#29d38d; --chip:#1a1f25; --line:#1c232b;
+      --danger:#ff6b6b; --badge:#0f1420;
     }
-  }
-
-  function slider(id, label, value, min, max, step, suffix, hint) {
-    const v = Number.isFinite(value) ? value : 0;
-    return `
-      <div style="margin:10px 0 16px">
-        <div class="ys-just">
-          <label class="ys-label">${label}</label>
-          <span class="ys-badge"><span id="${id}-val">${(suffix==="pts") ? v.toFixed(0) : v.toFixed(2)}</span> ${suffix||""}</span>
-        </div>
-        <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${v}">
-        ${hint ? `<small class="ys-hint">${hint}</small>` : ""}
+    *{box-sizing:border-box} html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial}
+    a{color:var(--primary);text-decoration:none}
+    .wrap{max-width:1100px;margin:28px auto;padding:0 16px}
+    header{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+    .title h1{margin:0 0 6px 0;font-size:28px}
+    .sub{color:var(--muted)}
+    .badges{display:flex;gap:8px;flex-wrap:wrap}
+    .badge{display:inline-flex;align-items:center;gap:6px;background:var(--badge);border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px #123b2e33 inset}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .module{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+    .module h3{margin:0 0 8px;font-size:18px}
+    .p-muted{color:var(--muted);margin:0 0 10px}
+    .chips{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 18px}
+    .chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:10px 14px;color:#dbe6ff}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .input, textarea{width:100%;background:#0b0f14;border:1px solid var(--line);border-radius:10px;color:#e9eef6;padding:12px}
+    textarea{min-height:120px;resize:vertical}
+    .btn{border:1px solid var(--line);background:#111824;color:#eaf2ff;padding:10px 14px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:var(--primary);border-color:#2f78c7;color:#061522}
+    .btn.ghost{background:#0e141b}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .stack{display:flex;gap:10px;flex-wrap:wrap}
+    .response{background:#0b1118;border:1px dashed #243244;border-radius:12px;padding:12px;margin-top:12px}
+    .response .title{font-weight:600;margin:0 0 6px}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    @media (max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}}
+    .kpi{background:#0e141a;border:1px solid var(--line);border-radius:10px;padding:12px}
+    .kpi .k{color:var(--muted);font-size:12px}
+    .kpi .v{font-weight:700;font-size:18px;margin-top:2px}
+    .list{display:flex;flex-direction:column;gap:10px}
+    .item{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0e141a}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0c1320;border:1px solid #253043;color:#9fb4d3;font-size:12px}
+    .danger{color:var(--danger)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- HEADER -->
+    <header>
+      <div class="title">
+        <h1>Money Motor Y — Tableau de bord</h1>
+        <div class="sub">IA stratégique d’investissement • <span class="pill">v10.4</span></div>
       </div>
-    `;
-  }
-
-  function mount(containerId="yscore-panel", opts={}){
-    const root = document.getElementById(containerId);
-    if(!root){ console.warn("[YScorePanel] container introuvable:", containerId); return; }
-
-    if(!document.getElementById("yscore-style")){
-      const st = document.createElement("style"); st.id="yscore-style"; st.textContent=CSS; document.head.appendChild(st);
-    }
-
-    const state = {
-      profile: (opts.defaultProfile || "default"),
-      weights: { value:.30, quality:.25, momentum:.20, risk:.15, liquidity:.10, halalPenalty:15 }
-    };
-
-    root.innerHTML = `
-      <div class="ys-box">
-        <div class="ys-just">
-          <h3 style="margin:0">Réglages du moteur Y-Score</h3>
-          <small id="ys-sum" class="ys-hint">Somme pondérations = …</small>
-        </div>
-
-        <div class="ys-row">
-          <label class="ys-label">Profil</label>
-          <input id="ys-profile" class="ys-input" value="${state.profile}" placeholder="default | conservateur | agressif…">
-          <button id="ys-load" class="ys-btn">Charger</button>
-        </div>
-
-        <div class="ys-divider"></div>
-
-        <div id="ys-sliders"></div>
-
-        <div class="ys-row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button id="ys-save" class="ys-btnP">Sauvegarder les pondérations</button>
-          <button id="ys-test" class="ys-btn">Tester le Y-Score (échantillon)</button>
-        </div>
-
-        <p id="ys-msg" style="margin-top:10px;display:none"></p>
+      <div class="badges">
+        <span class="badge"><span class="dot" id="status-dot"></span> <span id="status-text">État IA : En ligne</span></span>
       </div>
-    `;
+    </header>
 
-    const el = {
-      profile: root.querySelector("#ys-profile"),
-      load: root.querySelector("#ys-load"),
-      sliders: root.querySelector("#ys-sliders"),
-      save: root.querySelector("#ys-save"),
-      test: root.querySelector("#ys-test"),
-      sum: root.querySelector("#ys-sum"),
-      msg: root.querySelector("#ys-msg"),
-    };
+    <!-- QUICK CHIPS -->
+    <div class="chips">
+      <div class="chip">Conseil d’investissement</div>
+      <div class="chip">Marché en direct</div>
+      <div class="chip">Analyse rapide Y-Score</div>
+      <div class="chip">Alertes marché</div>
+    </div>
 
-    function msg(text, ok=true){
-      el.msg.textContent = text;
-      el.msg.style.display = "block";
-      el.msg.className = ok ? "ys-good" : "ys-bad";
-    }
+    <div class="grid">
+      <!-- CONSEIL -->
+      <section class="module" id="advice">
+        <h3>Conseil d’investissement</h3>
+        <p class="p-muted">Pose une question, colle un lien d’annonce ou décris l’opportunité. Nous te donnons un verdict chiffré + plan d’action.</p>
+        <div class="row"><textarea id="advice-input" placeholder="Ex : Est-ce une bonne affaire ? Acheter ou éviter ?"></textarea></div>
+        <div class="stack" style="margin-top:8px">
+          <button class="btn primary" id="advice-send">Obtenir un conseil</button>
+          <button class="btn ghost" id="advice-yscore">Analyser avec Y-Score</button>
+          <button class="btn" id="advice-clear">Effacer</button>
+        </div>
+        <div class="response" id="advice-resp" style="display:none">
+          <div class="title">Réponse condensée</div>
+          <div id="advice-text">—</div>
+        </div>
+      </section>
 
-    function renderSliders(){
-      const W = state.weights;
-      const sum = (W.value + W.quality + W.momentum + W.risk + W.liquidity);
-      el.sum.textContent = `Somme pondérations = ${sum.toFixed(2)} (renormalisée côté API)`;
+      <!-- MARCHÉ -->
+      <section class="module">
+        <h3>Marché en direct</h3>
+        <p class="p-muted">Flux synthétique des opportunités (auto, immo, business, crypto).</p>
+        <div class="kpis">
+          <div class="kpi"><div class="k">Opportunités du jour</div><div class="v">128</div></div>
+          <div class="kpi"><div class="k">Spread moyen</div><div class="v">+6.1%</div></div>
+          <div class="kpi"><div class="k">Risque médian</div><div class="v">34/100</div></div>
+          <div class="kpi"><div class="k">Liquidité</div><div class="v">Bonne</div></div>
+        </div>
+      </section>
 
-      el.sliders.innerHTML = [
-        slider("w-value","Value",W.value,0,1,0.01,"","Sous-valorisation (prix vs fairValue)."),
-        slider("w-quality","Quality",W.quality,0,1,0.01,"","Qualité (profitabilité, croissance, D/E, etc.)."),
-        slider("w-momentum","Momentum",W.momentum,0,1,0.01,"","Tendance 30 j."),
-        slider("w-risk","Risk",W.risk,0,1,0.01,"","Volatilité (plus bas = mieux)."),
-        slider("w-liquidity","Liquidity",W.liquidity,0,1,0.01,"","Volume/transactions (échelle log)."),
-        slider("w-halal","Halal penalty",W.halalPenalty,0,100,1,"pts","Pénalité si mode MMM & non halal (ignorée si modeMMM=false).")
-      ].join("");
+      <!-- ANALYSE Y-SCORE -->
+      <section class="module">
+        <h3>Analyse rapide Y-Score</h3>
+        <p class="p-muted">Rentre 3–4 chiffres clés pour un score instantané.</p>
+        <div class="row"><input class="input" id="price" placeholder="Prix (€)"></div>
+        <div class="row"><input class="input" id="market" placeholder="Valeur marché (€)"></div>
+        <div class="row"><input class="input" id="risk" placeholder="Risque (0–100)"></div>
+        <div class="row"><input class="input" id="liquidity" placeholder="Liquidité (transactions/mois)"></div>
+        <div class="stack" style="margin-top:8px">
+          <button class="btn primary" id="yscore-run">Analyser</button>
+          <button class="btn" id="yscore-clear">Effacer</button>
+        </div>
+        <div class="response" id="yscore-resp" style="display:none">
+          <div class="title">Résultat</div>
+          <div id="yscore-text">—</div>
+        </div>
+      </section>
 
-      [
-        ["w-value","value",false],
-        ["w-quality","quality",false],
-        ["w-momentum","momentum",false],
-        ["w-risk","risk",false],
-        ["w-liquidity","liquidity",false],
-        ["w-halal","halalPenalty",true],
-      ].forEach(([id,key,isInt])=>{
-        const r = root.querySelector("#"+id);
-        const v = root.querySelector("#"+id+"-val");
-        r.addEventListener("input", (e)=>{
-          const num = isInt ? parseInt(e.target.value,10) : parseFloat(e.target.value);
-          state.weights[key] = num;
-          v.textContent = isInt ? String(num) : num.toFixed(2);
-          const W = state.weights;
-          const sum = (W.value + W.quality + W.momentum + W.risk + W.liquidity);
-          el.sum.textContent = `Somme pondérations = ${sum.toFixed(2)} (renormalisée côté API)`;
-        });
-      });
-    }
+      <!-- ALERTES -->
+      <section class="module">
+        <h3>Alertes marché</h3>
+        <p class="p-muted">Crée des alertes selon le rendement ou le risque.</p>
+      </section>
+    </div>
 
-    async function load(){
-      try{
-        el.msg.style.display="none";
-        const prof = el.profile.value.trim() || "default";
-        const res = await j(`/api/weights?profile=${encodeURIComponent(prof)}`);
-        if(res?.weights){
-          state.profile = prof;
-          state.weights = res.weights;
-          renderSliders();
-          msg(`Profil « ${prof} » chargé (${res.source||"defaults"}).`, true);
-        }else{
-          msg("Impossible de charger les pondérations.", false);
-        }
-      }catch(e){ msg(e.message||"Erreur de chargement.", false); }
-    }
+    <!-- PANNEAU Y-SCORE -->
+    <div id="yscore-panel" style="margin-top:30px"></div>
 
-    async function save(){
-      try{
-        el.msg.style.display="none";
-        const prof = el.profile.value.trim() || "default";
-        const res = await j(`/api/weights?profile=${encodeURIComponent(prof)}`,{
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify(state.weights)
-        });
-        if(res?.ok){
-          msg(`Pondérations enregistrées pour « ${prof} ».`, true);
-        }else{
-          msg(res?.error || "Erreur de sauvegarde.", false);
-        }
-      }catch(e){ msg(e.message||"Erreur de sauvegarde.", false); }
-    }
+  </div>
 
-    async function testRun(){
-      try{
-        el.msg.style.display="none";
-        const SAMPLE_ITEMS = [
-          { id:"TSLA", price:210, fairValue:260, momentum30dPct:8.5, volatility30dPct:28, avgDailyLiquidity:120000, profitabilityPct:12, growthYoYPct:25, debtToEquity:0.4, halalCompliant:false },
-          { id:"BMW-X3-2019", price:21000, fairValue:25000, momentum30dPct:3, volatility30dPct:18, avgDailyLiquidity:180, quality:68, halalCompliant:true }
-        ];
-        const res = await j("/api/yscore",{
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ modeMMM:false, weights: state.weights, items: SAMPLE_ITEMS })
-        });
-        if(res?.ok){
-          const top = res.results?.[0];
-          msg(`✅ ${res.count} éléments scorés. Top: ${top?.id} (${top?.yScore}).`, true);
-          console.log("[YScorePanel] results:", res);
-        }else{
-          msg(res?.error || "Erreur Y-Score.", false);
-        }
-      }catch(e){ msg(e.message||"Erreur Y-Score.", false); }
-    }
-
-    // bind
-    renderSliders();
-    root.querySelector("#ys-load").addEventListener("click", load);
-    root.querySelector("#ys-save").addEventListener("click", save);
-    root.querySelector("#ys-test").addEventListener("click", testRun);
-
-    // auto-load au montage
-    load();
-  }
-
-  window.YScorePanel = { mount };
-})();
+  <!-- CHARGEMENT DU PANNEAU -->
+  <script src="/components/yscore_panel.js"></script>
+  <script>
+    window.YScorePanel?.mount("yscore-panel");
+  </script>
+</body>
+</html>
