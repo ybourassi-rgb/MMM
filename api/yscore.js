@@ -1,52 +1,57 @@
-// /api/yscore.js
-export default async function handler(req, res) {
-  res.setHeader("Cache-Control","no-store");
-  res.setHeader("Access-Control-Allow-Origin","*");
-  res.setHeader("Access-Control-Allow-Methods","POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers","Content-Type");
+export const config = { runtime: "edge" };
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ ok:false, error:"Méthode non autorisée" });
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
-  try {
-    const { items = [], weights = {}, modeMMM = false } = req.body || {};
-    if (!Array.isArray(items)) return res.status(400).json({ ok:false, error:"'items' doit être un tableau" });
+export default async function handler(req) {
+  const headers = {
+    "Cache-Control":"no-store",
+    "Content-Type":"application/json; charset=utf-8"
+  };
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ok:false,error:'Method not allowed'}), {status:405, headers});
+  }
+
+  try{
+    const { items = [], weights = {}, modeMMM = false } = await req.json();
 
     const W = {
-      value:     Number(weights.value)     || 0.30,
-      quality:   Number(weights.quality)   || 0.25,
-      momentum:  Number(weights.momentum)  || 0.20,
-      risk:      Number(weights.risk)      || 0.15,
-      liquidity: Number(weights.liquidity) || 0.10,
-      halalPenalty: Number.isFinite(weights.halalPenalty) ? weights.halalPenalty : 15
+      value:.30, quality:.25, momentum:.20, risk:.15, liquidity:.10,
+      halalPenalty:15, ...weights
     };
-    const sum = W.value + W.quality + W.momentum + W.risk + W.liquidity || 1;
-    W.value/=sum; W.quality/=sum; W.momentum/=sum; W.risk/=sum; W.liquidity/=sum;
+    const sum = (W.value + W.quality + W.momentum + W.risk + W.liquidity) || 1;
+    const w = {
+      value: W.value/sum, quality: W.quality/sum, momentum: W.momentum/sum,
+      risk: W.risk/sum, liquidity: W.liquidity/sum, halalPenalty: W.halalPenalty|0
+    };
 
     const results = items.map(it=>{
-      const fairValue = num(it.fairValue) || num(it.fairvalue) || num(it.fv) || num(it.price);
-      const valueScore = bounded((fairValue - num(it.price)) / Math.max(1, fairValue)); // 0..1
-      const quality = bounded(avg([pct(it.profitabilityPct), pct(it.growthYoYPct), invRatio(it.debtToEquity), pct(it.esg), pct(it.quality)]));
-      const momentum = bounded(pct(it.momentum30dPct));
-      const risk = 1 - bounded(pct(it.volatility30dPct));
-      const liquidity = bounded(Math.log10(Math.max(1, num(it.avgDailyLiquidity) || num(it.volume) || 0)) / 6);
+      const fair = Number(it.fairValue)||0, price = Number(it.price)||0;
+      const value = fair>0 ? clamp(((fair-price)/fair)*100, -100, 100) : 0;
+      const quality = clamp(
+        ('quality' in it) ? Number(it.quality)
+          : 0.5*(Number(it.profitabilityPct)||0) + 0.5*(Number(it.growthYoYPct)||0) - 30*(Number(it.debtToEquity)||0),
+        0, 100);
+      const momentum = clamp(Number(it.momentum30dPct)||0, -50, 50) + 50; // 0..100
+      const risk = 100 - clamp(Number(it.volatility30dPct)||0, 0, 100);
+      const liq = clamp(
+        ('avgDailyLiquidity' in it) ? Math.log10((Number(it.avgDailyLiquidity)||0)+1)*20 : 0,
+        0, 100);
 
-      let y = W.value*valueScore + W.quality*quality + W.momentum*momentum + W.risk*risk + W.liquidity*liquidity;
-      if (modeMMM && it.halalCompliant === false) { y -= (W.halalPenalty || 0)/100; } // inactif si non utilisé
+      let score = (
+        w.value*clamp(value,0,100) +
+        w.quality*quality +
+        w.momentum*momentum +
+        w.risk*risk +
+        w.liquidity*liq
+      );
 
-      return { ...it, yScore: round(y,3) };
-    }).sort((a,b)=>b.yScore - a.yScore);
+      if(modeMMM && it.halalCompliant === false) score -= w.halalPenalty;
+      return { id: it.id || 'item', yScore: Math.round(clamp(score, 0, 100)), features:{value,quality,momentum,risk,liq} };
+    }).sort((a,b)=> b.yScore - a.yScore);
 
-    return res.status(200).json({ ok:true, count: results.length, results });
-  } catch (e) {
-    console.error("yscore.js:", e);
-    return res.status(500).json({ ok:false, error: e?.message || "Erreur interne" });
+    return new Response(JSON.stringify({ ok:true, count:results.length, results }), {status:200, headers});
+  }catch(e){
+    return new Response(JSON.stringify({ ok:false, error:e.message || 'YS error' }), {status:500, headers});
   }
 }
-
-const num = (x)=>Number(x)||0;
-const pct = (v)=>bounded((Number(v)||0)/100);
-const avg = (a)=>{ const xs=a.filter(n=>Number.isFinite(n)); return xs.length? xs.reduce((p,c)=>p+c,0)/xs.length : 0; };
-const invRatio = (v)=>{ const x=Number(v)||0; return bounded(1/(1+Math.max(0,x))); };
-const bounded = (x)=>Math.max(0,Math.min(1,x));
-const round = (x,d=2)=>{ const k=10**d; return Math.round((x+Number.EPSILON)*k)/k; };
