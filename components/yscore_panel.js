@@ -25,30 +25,25 @@
     { id:"BMW-X3-2019", price:21000, fairValue:25000, momentum30dPct:3, volatility30dPct:18, avgDailyLiquidity:180, quality:68, halalCompliant:true }
   ];
 
-  // ⚙️ j(): gestion retry, timeout, et bannière avec fermeture automatique
+  // j(): retry + timeout + banner
   async function j(url, opts = {}, { retries = 3, timeoutMs = 8000, backoffMs = 600, onRetry } = {}) {
     let attempt = 0, lastErr;
-
     while (attempt <= retries) {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), timeoutMs);
-
       try {
         const r = await fetch(url, { ...opts, signal: controller.signal });
         clearTimeout(t);
-        let data = null;
-        try { data = await r.json(); } catch { /* pas de JSON */ }
-
+        let data = null; try { data = await r.json(); } catch {}
         if (!r.ok) {
           const msg = (data && (data.error || data.message)) || `HTTP ${r.status}`;
           if (r.status >= 400 && r.status < 500) throw new Error(msg);
           lastErr = new Error(msg);
-        } else return data; // ✅ succès
+        } else return data;
       } catch (e) {
         clearTimeout(t);
         lastErr = e.name === "AbortError" ? new Error("Timeout du serveur") : e;
       }
-
       attempt++;
       if (attempt <= retries) {
         onRetry && onRetry({ attempt, retries });
@@ -127,7 +122,7 @@
       bannerText: root.querySelector("#ys-banner-text"),
     };
 
-    // 🔔 gestion bannière
+    // Banner helpers (auto-close on error)
     let __ysBusyTimer = null;
     function setBusy(text){
       el.banner.classList.remove("ys-banner--error");
@@ -166,7 +161,7 @@
         slider("w-momentum","Momentum",W.momentum,0,1,0.01,"","Tendance 30 j."),
         slider("w-risk","Risk",W.risk,0,1,0.01,"","Volatilité (plus bas = mieux)."),
         slider("w-liquidity","Liquidity",W.liquidity,0,1,0.01,"","Volume/transactions (échelle log)."),
-        slider("w-halal","Halal penalty",W.halalPenalty,0,100,1,"pts","Pénalité si mode MMM & non halal.")
+        slider("w-halal","Halal penalty",W.halalPenalty,0,100,1,"pts","Pénalité si non conforme (optionnel).")
       ].join("");
 
       [
@@ -229,7 +224,7 @@
         setBusy("Calcul du Y-Score…");
         const res = await j("/api/yscore",{
           method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ modeMMM:true, weights: state.weights, items: SAMPLE_ITEMS })
+          body: JSON.stringify({ modeMMM:false, weights: state.weights, items: SAMPLE_ITEMS })
         }, { onRetry: ({attempt,retries}) => setBusy(`Reconnexion… tentative ${attempt}/${retries}`) });
         clearBusy();
         if(res?.ok){
