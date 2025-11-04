@@ -130,6 +130,13 @@
         </div>
       </section>
 
+      <!-- RÉGLAGES DU MOTEUR Y-SCORE (NOUVEAU) -->
+      <section class="module">
+        <h3>Réglages du moteur (Y-Score)</h3>
+        <p class="p-muted">Ajuste les pondérations, charge/enregistre des profils et teste sur un échantillon.</p>
+        <div id="yscore-panel"></div>
+      </section>
+
       <!-- ALERTES MARCHÉ -->
       <section class="module">
         <h3>Alertes marché</h3>
@@ -268,6 +275,12 @@
       ['price','market','risk','liquidity'].forEach(id=> $p(id).value='');
       $ybox.style.display='none'; $ytxt.textContent='';
     });
+  </script>
+
+  <!-- Panneau Y-Score (script + montage) -->
+  <script src="/components/yscore_panel.js"></script>
+  <script>
+    window.YScorePanel?.mount("yscore-panel");
   </script>
 </body>
 </html>
