@@ -1,111 +1,87 @@
-// MMM/api/weights.js
+// /api/weights.js
+export const config = { runtime: "edge" };
 
-// ---- Defaults ----
+const REST_URL   = process.env.UPSTASH_REDIS_REST_URL;
+const REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
 const DEFAULT_WEIGHTS = {
-  value: 0.30,
-  quality: 0.25,
-  momentum: 0.20,
-  risk: 0.15,
-  liquidity: 0.10,
-  halalPenalty: 15, // points soustraits si non halal (mode MMM)
+  value: 0.30, quality: 0.25, momentum: 0.20, risk: 0.15, liquidity: 0.10, halalPenalty: 15
 };
 
-// ---- In-memory fallback (volatile) ----
-const memoryStore = new Map();
-
-// ---- Upstash Redis (optionnel) ----
-const HAS_KV =
-  !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN;
+function json(data, status = 200) {
+  const headers = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Pragma": "no-cache",
+    "Vercel-CDN-Cache-Control": "no-store",
+    "CDN-Cache-Control": "no-store",
+  };
+  return new Response(JSON.stringify(data), { status, headers });
+}
 
 async function kvGet(key) {
-  if (!HAS_KV) return memoryStore.get(key);
-  const r = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+  const r = await fetch(`${REST_URL}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${REST_TOKEN}` }
   });
-  const json = await r.json().catch(() => ({}));
-  // Upstash renvoie { result: "..." } où ... est stringifié si set via /set
-  if (json && typeof json.result === "string") {
-    try { return JSON.parse(json.result); } catch { return json.result; }
-  }
-  return json?.result ?? null;
+  const data = await r.json(); // { result: "...json..." } ou { result: null }
+  return (data && data.result) ? JSON.parse(data.result) : null;
 }
 
 async function kvSet(key, value) {
-  if (!HAS_KV) {
-    memoryStore.set(key, value);
-    return true;
-  }
-  const payload = JSON.stringify(value);
-  const r = await fetch(`${process.env.UPSTASH_REDIS_REST_URL}/set/${encodeURIComponent(key)}/${encodeURIComponent(payload)}`, {
-    headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+  return fetch(`${REST_URL}/set/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${REST_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ value: JSON.stringify(value) })
   });
-  return r.ok;
 }
 
-// ---- Utils / validation ----
-function asNumber(x) {
-  const n = Number(x);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function normalizeWeights(input) {
-  const w = { ...DEFAULT_WEIGHTS, ...(input || {}) };
-  ["value", "quality", "momentum", "risk", "liquidity"].forEach((k) => {
-    w[k] = Math.max(0, asNumber(w[k]) ?? DEFAULT_WEIGHTS[k]);
-  });
-  w.halalPenalty = Math.max(0, Math.min(100, asNumber(w.halalPenalty) ?? DEFAULT_WEIGHTS.halalPenalty));
-
-  // renormalisation (somme = 1) pour les 5 premières clés
-  const sum = (w.value + w.quality + w.momentum + w.risk + w.liquidity) || 1;
-  return {
-    value: w.value / sum,
-    quality: w.quality / sum,
-    momentum: w.momentum / sum,
-    risk: w.risk / sum,
-    liquidity: w.liquidity / sum,
-    halalPenalty: w.halalPenalty,
-  };
-}
-
-function keyFor(profile = "default") {
-  return `yscore:weights:${profile}`;
-}
-
-// ---- Handler (Vercel/Next) ----
-export default async function handler(req, res) {
+export default async function handler(req) {
   try {
-    const profile = (req.query?.profile || "default").toString();
-    const key = keyFor(profile);
+    const { searchParams } = new URL(req.url);
+    const profile = (searchParams.get("profile") || "default").trim().toLowerCase();
+    const key = `weights:${profile}`;
 
     if (req.method === "GET") {
       const saved = await kvGet(key);
-      const weights = saved ? normalizeWeights(saved) : normalizeWeights(DEFAULT_WEIGHTS);
-      return res.status(200).json({
-        ok: true,
-        profile,
-        source: saved ? (HAS_KV ? "kv" : "memory") : "defaults",
-        weights,
-        version: "weights.v1.0.0",
-      });
+      if (saved) return json({ ok: true, source: "kv", weights: saved });
+      return json({ ok: true, source: "defaults", weights: DEFAULT_WEIGHTS });
     }
 
     if (req.method === "POST") {
-      const body = typeof req.body === "object" && req.body !== null ? req.body
-                 : JSON.parse(req.body || "{}");
+      const body = await req.json();
+      // Nettoyage & sécurité minimale
+      const w = {
+        value: clamp(body.value, 0, 1),
+        quality: clamp(body.quality, 0, 1),
+        momentum: clamp(body.momentum, 0, 1),
+        risk: clamp(body.risk, 0, 1),
+        liquidity: clamp(body.liquidity, 0, 1),
+        halalPenalty: Math.max(0, Math.min(100, parseInt(body.halalPenalty ?? 0, 10)))
+      };
+      // Renormalisation (hors halalPenalty)
+      const s = (w.value + w.quality + w.momentum + w.risk + w.liquidity) || 1;
+      const norm = { ...w };
+      norm.value     = w.value     / s;
+      norm.quality   = w.quality   / s;
+      norm.momentum  = w.momentum  / s;
+      norm.risk      = w.risk      / s;
+      norm.liquidity = w.liquidity / s;
 
-      const next = normalizeWeights(body);
-      await kvSet(key, next);
-
-      return res.status(200).json({
-        ok: true,
-        profile,
-        saved: true,
-        weights: next,
-      });
+      await kvSet(key, norm);
+      return json({ ok: true, saved: { profile, weights: norm } });
     }
 
-    return res.status(405).json({ ok: false, error: "Méthode non autorisée" });
-  } catch (err) {
-    return res.status(400).json({ ok: false, error: err?.message || "Invalid request" });
+    return json({ ok: false, error: "Method not allowed" }, 405);
+  } catch (e) {
+    return json({ ok: false, error: e?.message || "Unexpected error" }, 500);
   }
+}
+
+function clamp(n, min, max) {
+  const x = Number(n);
+  if (Number.isNaN(x)) return min;
+  return Math.max(min, Math.min(max, x));
 }
