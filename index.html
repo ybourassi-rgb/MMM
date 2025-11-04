@@ -36,14 +36,6 @@
     .stack{display:flex;gap:10px;flex-wrap:wrap}
     .response{background:#0b1118;border:1px dashed #243244;border-radius:12px;padding:12px;margin-top:12px}
     .response .title{font-weight:600;margin:0 0 6px}
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-    @media (max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}}
-    .kpi{background:#0e141a;border:1px solid var(--line);border-radius:10px;padding:12px}
-    .kpi .k{color:var(--muted);font-size:12px}
-    .kpi .v{font-weight:700;font-size:18px;margin-top:2px}
-    .list{display:flex;flex-direction:column;gap:10px}
-    .item{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0e141a}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0c1320;border:1px solid #253043;color:#9fb4d3;font-size:12px}
     .danger{color:var(--danger)}
   </style>
 </head>
@@ -72,10 +64,13 @@
       <!-- CONSEIL D’INVESTISSEMENT -->
       <section class="module" id="advice">
         <h3>Conseil d’investissement</h3>
-        <p class="p-muted">Pose une question, colle un lien d’annonce ou décris l’opportunité. Nous te donnons un verdict chiffré + plan d’action.</p>
+        <p class="p-muted">
+          Pose une question, colle un lien d’annonce ou décris l’opportunité.<br>
+          Nous te donnons un verdict chiffré + un plan d’action clair.
+        </p>
 
         <div class="row">
-          <textarea id="advice-input" placeholder="Exemples : Est-ce une bonne affaire ?  Acheter ou éviter ?  Stratégie de revente en 30 jours ?"></textarea>
+          <textarea id="advice-input" placeholder="Exemples : Est-ce une bonne affaire ? Acheter ou éviter ? Stratégie de revente en 30 jours ?"></textarea>
         </div>
 
         <div class="stack" style="margin-top:8px">
@@ -94,28 +89,12 @@
       <section class="module">
         <h3>Marché en direct</h3>
         <p class="p-muted">Flux synthétique des opportunités (auto, immo, business, crypto). Mise à jour en continu.</p>
-        <div class="kpis">
-          <div class="kpi"><div class="k">Opportunités du jour</div><div class="v">128</div></div>
-          <div class="kpi"><div class="k">Spread moyen</div><div class="v">+6.1%</div></div>
-          <div class="kpi"><div class="k">Risque médian</div><div class="v">34/100</div></div>
-          <div class="kpi"><div class="k">Liquidité</div><div class="v">Bonne</div></div>
-        </div>
-        <div class="list" style="margin-top:12px">
-          <div class="item">
-            <div><strong>BMW X3 2019 — 21 000€</strong> <span class="pill">Auto</span></div>
-            <div class="p-muted">Valeur marché: 25 000€ • Spread ~19% • Risque: 32/100</div>
-          </div>
-          <div class="item">
-            <div><strong>Studio centre — 139 k€</strong> <span class="pill">Immo</span></div>
-            <div class="p-muted">Loyer cible: 690€ • Rendement brut: 5,9% • Risque: 41/100</div>
-          </div>
-        </div>
       </section>
 
-      <!-- ANALYSE RAPIDE Y-SCORE -->
+      <!-- Y-SCORE -->
       <section class="module">
         <h3>Analyse rapide Y-Score</h3>
-        <p class="p-muted">Rentre 3–4 chiffres clés et obtiens un score instantané (rentabilité, risque, liquidité, momentum).</p>
+        <p class="p-muted">Entre les données et obtiens un score de performance global.</p>
         <div class="row"><input class="input" id="price" placeholder="Prix (€)" inputmode="decimal"></div>
         <div class="row"><input class="input" id="market" placeholder="Valeur marché (€)" inputmode="decimal"></div>
         <div class="row"><input class="input" id="risk" placeholder="Risque (0–100)" inputmode="numeric"></div>
@@ -130,39 +109,29 @@
         </div>
       </section>
 
-      <!-- ALERTES MARCHÉ -->
+      <!-- ALERTES -->
       <section class="module">
         <h3>Alertes marché</h3>
-        <p class="p-muted">Crée des alertes ciblées (prix, rendement, risque, temps de revente). Nous te prévenons dès qu’une opportunité matche.</p>
-        <div class="list">
-          <div class="item">
-            <div><strong>Auto</strong> • Spread ≥ 12% • Risque ≤ 40/100</div>
-            <div class="p-muted">2 alertes actives</div>
-          </div>
-          <div class="item">
-            <div><strong>Immo</strong> • Rendement brut ≥ 6% • Cash-on-cash ≥ 9%</div>
-            <div class="p-muted">1 alerte active</div>
-          </div>
-        </div>
+        <p class="p-muted">Crée des alertes ciblées (prix, rendement, risque). Nous te prévenons dès qu’une opportunité correspond.</p>
       </section>
     </div>
   </div>
 
   <script>
-    // --- helper JSON avec gestion d’erreurs (utile dès que tu branches l’API)
+    // === Fonction fetch JSON universelle ===
     async function j(url, opts){
       const r = await fetch(url, opts);
-      const raw = await r.text();
-      try{
-        const json = JSON.parse(raw);
-        if(!r.ok) throw new Error(json.error || 'Erreur ' + r.status);
-        return json;
-      }catch{
-        throw new Error(raw || ('Erreur ' + r.status));
+      const t = await r.text();
+      try {
+        const js = JSON.parse(t);
+        if (!r.ok) throw new Error(js.error || 'Erreur '+r.status);
+        return js;
+      } catch {
+        throw new Error(t || 'Erreur '+r.status);
       }
     }
 
-    // CONSEIL D’INVESTISSEMENT
+    // === CONSEIL D’INVESTISSEMENT ===
     const $in   = document.getElementById('advice-input');
     const $send = document.getElementById('advice-send');
     const $clr  = document.getElementById('advice-clear');
@@ -172,48 +141,30 @@
 
     $send.addEventListener('click', async () => {
       const prompt = ($in.value || '').trim();
-      if(!prompt){ $box.style.display='block'; $txt.innerHTML='<span class="danger">Saisis un message.</span>'; return; }
-      $send.disabled = true; $txt.textContent = 'Analyse en cours…'; $box.style.display='block';
+      if(!prompt){
+        $box.style.display='block';
+        $txt.innerHTML='<span class="danger">Saisis un message.</span>';
+        return;
+      }
+      $send.disabled = true;
+      $txt.textContent = 'Analyse en cours…';
+      $box.style.display='block';
       try{
-        // Quand tu seras prêt côté serveur, garde cette ligne :
-        // const data = await j('/api/advisor', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt }) });
-        // $txt.textContent = data.reply;
-
-        // --- DEMO locale (supprimer quand l’API est branchée)
-        setTimeout(()=>{ $txt.textContent = 'Analyse rapide : spread positif (~6%), risque modéré, liquidité correcte. Négocier 300–500€ et viser une revente en 30–45 jours.'; }, 500);
+        const data = await j('/api/advisor', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ prompt })
+        });
+        $txt.textContent = data.reply || 'Réponse vide.';
       }catch(e){
-        $txt.innerHTML = '<span class="danger">'+ (e.message || 'Erreur') +'</span>';
+        $txt.innerHTML = '<span class="danger">'+(e.message || 'Erreur API')+'</span>';
       }finally{
         $send.disabled = false;
       }
     });
+
     $clr.addEventListener('click', ()=>{ $in.value=''; $box.style.display='none'; $txt.textContent=''; });
-    $ys.addEventListener('click', ()=>{ $box.style.display='block'; $txt.textContent='(Bientôt) Lancement de l’analyse Y-Score détaillée…'; });
-
-    // Y-SCORE (mini démo client)
-    const $p = id => document.getElementById(id);
-    const $yrun = document.getElementById('yscore-run');
-    const $yclr = document.getElementById('yscore-clear');
-    const $ybox = document.getElementById('yscore-resp');
-    const $ytxt = document.getElementById('yscore-text');
-
-    $yrun.addEventListener('click', ()=>{
-      const price = parseFloat($p('price').value||0);
-      const market= parseFloat($p('market').value||0);
-      const risk  = Math.max(0, Math.min(100, parseFloat($p('risk').value||50)));
-      const liq   = Math.max(0, parseFloat($p('liquidity').value||0));
-
-      const spread = market>0 ? ((market-price)/market)*100 : 0;
-      // score très simplifié juste pour la démo visuelle
-      const score = Math.round( (Math.max(0, Math.min(100, spread*3))) * 0.5 + (100-risk)*0.4 + Math.min(100, Math.log10(liq+1)*20) * 0.1 );
-      $ybox.style.display = 'block';
-      $ytxt.textContent = `Y-Score ≈ ${score}/100 • Spread ${spread.toFixed(1)}% • Risque ${risk}/100 • Liquidité ${liq}`;
-    });
-
-    $yclr.addEventListener('click', ()=>{
-      ['price','market','risk','liquidity'].forEach(id=> $p(id).value='');
-      $ybox.style.display='none'; $ytxt.textContent='';
-    });
+    $ys.addEventListener('click', ()=>{ $box.style.display='block'; $txt.textContent='(Prochainement : analyse Y-Score complète)'; });
   </script>
 </body>
 </html>
