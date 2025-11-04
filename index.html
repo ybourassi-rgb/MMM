@@ -1,205 +1,218 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Money Motor Y — Tableau de bord</title>
-<style>
-  :root{
-    --bg:#0b0c0e; --panel:#121318; --muted:#9aa3ad; --text:#e9edf3;
-    --brand:#3ea6ff; --accent:#1ee2a5; --danger:#ff6b6b; --border:#1c1f28;
-    --chip:#161923; --chip-bd:#222635; --shadow:0 10px 30px rgba(0,0,0,.35);
-    --radius:14px; --radius-sm:10px;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
-  a{color:var(--brand);text-decoration:none}
-  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-  /* Header */
-  .top{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:18px}
-  .brand{display:flex;align-items:center;gap:12px}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
-  .badge{background:var(--chip);border:1px solid var(--chip-bd);padding:4px 10px;border-radius:999px;color:var(--muted)}
-  .top h1{font-size:20px;margin:0}
-  /* Quick nav chips */
-  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-  .chip{background:var(--chip);border:1px solid var(--chip-bd);padding:10px 14px;border-radius:999px;color:var(--text)}
-  /* Grid */
-  .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
-  @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
-  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-  .panel h3{margin:0 0 12px;font-size:16px}
-  .panel .head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
-  .panel .body{padding:16px}
-  .muted{color:var(--muted)}
-  /* Inputs / buttons */
-  .input, textarea{width:100%;background:#0e1015;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:12px}
-  textarea{min-height:120px;resize:vertical}
-  .btns{display:flex;gap:10px;flex-wrap:wrap}
-  .btn{background:#151a22;border:1px solid var(--chip-bd);color:var(--text);padding:10px 14px;border-radius:10px;cursor:pointer}
-  .btn.primary{background:var(--brand);border-color:transparent;color:#001018}
-  .btn.ghost{background:transparent;border:1px dashed var(--chip-bd);color:var(--muted)}
-  .status{display:flex;align-items:center;gap:8px}
-  .status .pill{padding:4px 10px;border:1px solid var(--chip-bd);border-radius:999px;background:var(--chip);color:var(--muted)}
-  /* Response box */
-  .answer{background:#0e1015;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:10px}
-  .answer .title{font-size:12px;color:var(--muted);margin-bottom:6px}
-  /* Cards / lists */
-  .list{display:grid;gap:10px}
-  .card{background:#0f1219;border:1px solid var(--border);border-radius:12px;padding:12px}
-  .card .row{display:flex;justify-content:space-between;gap:8px}
-  .ok{color:var(--accent)} .bad{color:var(--danger)}
-  /* Y-Score mini */
-  .ys-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  @media (max-width:640px){ .ys-grid{grid-template-columns:1fr} }
-  .range{display:grid;gap:6px}
-  .range label{font-weight:600}
-  .kpi{display:flex;gap:10px;flex-wrap:wrap}
-  .kpi .pill{background:var(--chip);border:1px solid var(--chip-bd);border-radius:999px;padding:6px 10px}
-  .foot-note{font-size:12px;color:var(--muted)}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Money Motor Y — Tableau de bord</title>
+  <style>
+    :root{
+      --bg:#0c0f12; --panel:#12161b; --muted:#a9b3c1; --text:#e9eef6;
+      --primary:#4da3ff; --ok:#29d38d; --chip:#1a1f25; --line:#1c232b;
+      --danger:#ff6b6b; --badge:#0f1420;
+    }
+    *{box-sizing:border-box} html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial}
+    a{color:var(--primary);text-decoration:none}
+    .wrap{max-width:1100px;margin:28px auto;padding:0 16px}
+    header{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+    .title h1{margin:0 0 6px 0;font-size:28px}
+    .sub{color:var(--muted)}
+    .badges{display:flex;gap:8px;flex-wrap:wrap}
+    .badge{display:inline-flex;align-items:center;gap:6px;background:var(--badge);border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px #123b2e33 inset}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .module{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+    .module h3{margin:0 0 8px;font-size:18px}
+    .p-muted{color:var(--muted);margin:0 0 10px}
+    .chips{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 18px}
+    .chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:10px 14px;color:#dbe6ff}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .input, textarea{width:100%;background:#0b0f14;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:12px}
+    textarea{min-height:120px;resize:vertical}
+    .btn{border:1px solid var(--line);background:#111824;color:#eaf2ff;padding:10px 14px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:var(--primary);border-color:#2f78c7;color:#061522}
+    .btn.ghost{background:#0e141b}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .stack{display:flex;gap:10px;flex-wrap:wrap}
+    .response{background:#0b1118;border:1px dashed #243244;border-radius:12px;padding:12px;margin-top:12px}
+    .response .title{font-weight:600;margin:0 0 6px}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    @media (max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}}
+    .kpi{background:#0e141a;border:1px solid var(--line);border-radius:10px;padding:12px}
+    .kpi .k{color:var(--muted);font-size:12px}
+    .kpi .v{font-weight:700;font-size:18px;margin-top:2px}
+    .list{display:flex;flex-direction:column;gap:10px}
+    .item{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0e141a}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0c1320;border:1px solid #253043;color:#9fb4d3;font-size:12px}
+    .danger{color:var(--danger)}
+  </style>
 </head>
 <body>
   <div class="wrap">
-    <!-- Header -->
-    <div class="top">
-      <div class="brand">
-        <span class="dot"></span>
-        <div>
-          <h1>Money Motor Y — Tableau de bord</h1>
-          <div class="muted">IA stratégique d’investissement • Version <span class="badge">v10.4</span></div>
-        </div>
+    <!-- HEADER -->
+    <header>
+      <div class="title">
+        <h1>Money Motor Y — Tableau de bord</h1>
+        <div class="sub">IA stratégique d’investissement • <span class="pill">v10.4</span></div>
       </div>
-      <div class="status"><span class="pill">État IA : En ligne</span></div>
-    </div>
+      <div class="badges">
+        <span class="badge"><span class="dot"></span> État IA : En ligne</span>
+      </div>
+    </header>
 
-    <!-- Quick chips -->
+    <!-- QUICK CHIPS -->
     <div class="chips">
-      <span class="chip">Conseil d’investissement</span>
-      <span class="chip">Marché en direct</span>
-      <span class="chip">Analyse rapide Y-Score</span>
-      <span class="chip">Alertes marché</span>
+      <div class="chip">Conseil d’investissement</div>
+      <div class="chip">Marché en direct</div>
+      <div class="chip">Analyse rapide Y-Score</div>
+      <div class="chip">Alertes marché</div>
     </div>
 
     <div class="grid">
-      <!-- Left column -->
-      <section class="panel">
-        <div class="head">
-          <h3>Conseil d’investissement</h3>
-          <span class="muted">Pose une question, colle un lien d’annonce ou décris l’opportunité.</span>
+      <!-- CONSEIL D’INVESTISSEMENT -->
+      <section class="module" id="advice">
+        <h3>Conseil d’investissement</h3>
+        <p class="p-muted">Pose une question, colle un lien d’annonce ou décris l’opportunité. Nous te donnons un verdict chiffré + plan d’action.</p>
+
+        <div class="row">
+          <textarea id="advice-input" placeholder="Exemples : Est-ce une bonne affaire ?  Acheter ou éviter ?  Stratégie de revente en 30 jours ?"></textarea>
         </div>
-        <div class="body">
-          <div class="muted" style="margin-bottom:8px">
-            <strong>Exemples :</strong> “Est-ce une bonne affaire ?”, “Achète ou évite ?”, “Stratégie de revente en 30 jours ?”
+
+        <div class="stack" style="margin-top:8px">
+          <button class="btn primary" id="advice-send">Obtenir un conseil</button>
+          <button class="btn ghost" id="advice-yscore">Analyser avec Y-Score</button>
+          <button class="btn" id="advice-clear">Effacer</button>
+        </div>
+
+        <div class="response" id="advice-resp" style="display:none">
+          <div class="title">Réponse condensée</div>
+          <div id="advice-text">—</div>
+        </div>
+      </section>
+
+      <!-- MARCHÉ EN DIRECT -->
+      <section class="module">
+        <h3>Marché en direct</h3>
+        <p class="p-muted">Flux synthétique des opportunités (auto, immo, business, crypto). Mise à jour en continu.</p>
+        <div class="kpis">
+          <div class="kpi"><div class="k">Opportunités du jour</div><div class="v">128</div></div>
+          <div class="kpi"><div class="k">Spread moyen</div><div class="v">+6.1%</div></div>
+          <div class="kpi"><div class="k">Risque médian</div><div class="v">34/100</div></div>
+          <div class="kpi"><div class="k">Liquidité</div><div class="v">Bonne</div></div>
+        </div>
+        <div class="list" style="margin-top:12px">
+          <div class="item">
+            <div><strong>BMW X3 2019 — 21 000€</strong> <span class="pill">Auto</span></div>
+            <div class="p-muted">Valeur marché: 25 000€ • Spread ~19% • Risque: 32/100</div>
           </div>
-          <textarea placeholder="Décris ton opportunité ou colle un lien… (auto, immo, business, crypto, etc.)"></textarea>
-          <div class="btns" style="margin-top:10px">
-            <button class="btn primary">Obtenir un conseil</button>
-            <button class="btn">Analyser avec Y-Score</button>
-            <button class="btn ghost">Effacer</button>
-          </div>
-          <!-- Answer box -->
-          <div class="answer">
-            <div class="title">Réponse condensée</div>
-            <div id="ai-answer" class="muted">En attente de votre demande.</div>
+          <div class="item">
+            <div><strong>Studio centre — 139 k€</strong> <span class="pill">Immo</span></div>
+            <div class="p-muted">Loyer cible: 690€ • Rendement brut: 5,9% • Risque: 41/100</div>
           </div>
         </div>
       </section>
 
-      <!-- Right column -->
-      <aside class="panel">
-        <div class="head">
-          <h3>Marché en direct</h3>
-          <span class="muted">Signaux temps réel (démo)</span>
+      <!-- ANALYSE RAPIDE Y-SCORE -->
+      <section class="module">
+        <h3>Analyse rapide Y-Score</h3>
+        <p class="p-muted">Rentre 3–4 chiffres clés et obtiens un score instantané (rentabilité, risque, liquidité, momentum).</p>
+        <div class="row"><input class="input" id="price" placeholder="Prix (€)" inputmode="decimal"></div>
+        <div class="row"><input class="input" id="market" placeholder="Valeur marché (€)" inputmode="decimal"></div>
+        <div class="row"><input class="input" id="risk" placeholder="Risque (0–100)" inputmode="numeric"></div>
+        <div class="row"><input class="input" id="liquidity" placeholder="Liquidité (transactions/mois)" inputmode="numeric"></div>
+        <div class="stack" style="margin-top:8px">
+          <button class="btn primary" id="yscore-run">Analyser</button>
+          <button class="btn" id="yscore-clear">Effacer</button>
         </div>
-        <div class="body list">
-          <div class="card">
-            <div class="row">
-              <div><strong>BMW 118d 2018</strong> • 112 000 km</div>
-              <div class="ok">Sous-côté ~6%</div>
-            </div>
-            <div class="muted">Prix: 10 900€ • Estimé: 11 600€ • Délai revente: ~21 j</div>
-          </div>
-          <div class="card">
-            <div class="row">
-              <div><strong>Renault Clio V 2020</strong> • 65 000 km</div>
-              <div class="bad">Trop chère ~8%</div>
-            </div>
-            <div class="muted">Prix: 12 800€ • Estimé: 11 800€ • Délai revente: ~28 j</div>
-          </div>
-          <div class="card">
-            <div class="row">
-              <div><strong>Peugeot 3008 2019</strong> • 89 000 km</div>
-              <div class="ok">Bon spread</div>
-            </div>
-            <div class="muted">Prix: 17 900€ • Estimé: 19 400€ • Délai revente: ~26 j</div>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Y-Score quick -->
-      <section class="panel">
-        <div class="head">
-          <h3>Analyse rapide Y-Score</h3>
-          <span class="muted">Glisse les curseurs et teste.</span>
-        </div>
-        <div class="body">
-          <div class="ys-grid">
-            <div class="range">
-              <label>Prix (€)</label>
-              <input type="number" class="input" placeholder="ex. 10 900" />
-            </div>
-            <div class="range">
-              <label>Valeur marché (€)</label>
-              <input type="number" class="input" placeholder="ex. 11 600" />
-            </div>
-            <div class="range">
-              <label>Risque (0–100)</label>
-              <input type="range" min="0" max="100" value="35" />
-            </div>
-            <div class="range">
-              <label>Stratégie (0–100)</label>
-              <input type="range" min="0" max="100" value="70" />
-            </div>
-          </div>
-          <div class="kpi" style="margin-top:12px">
-            <span class="pill">Y-Score estimé : <strong>72</strong>/100</span>
-            <span class="pill">Spread : <strong>+6%</strong></span>
-            <span class="pill">Revente : <strong>~21 j</strong></span>
-          </div>
-          <div class="foot-note" style="margin-top:8px">
-            Le Y-Score combine valeur, momentum, risque et liquidité pour classer les opportunités.
-          </div>
+        <div class="response" id="yscore-resp" style="display:none">
+          <div class="title">Résultat</div>
+          <div id="yscore-text">—</div>
         </div>
       </section>
 
-      <!-- Highlights / Alerts -->
-      <section class="panel">
-        <div class="head">
-          <h3>Points forts & alertes</h3>
-          <span class="muted">Vue d’ensemble</span>
-        </div>
-        <div class="body list">
-          <div class="card"><strong>Signal</strong> — 3 annonces rentables détectées aujourd’hui.</div>
-          <div class="card"><strong>Marché</strong> — Décote moyenne compacte : 3–7% cette semaine.</div>
-          <div class="card"><strong>Risque</strong> — Volatilité des prix en baisse sur 14 jours.</div>
-          <div class="card"><strong>Astuce</strong> — Viser un spread ≥ 5% et marge nette ≥ 1 200€.</div>
+      <!-- ALERTES MARCHÉ -->
+      <section class="module">
+        <h3>Alertes marché</h3>
+        <p class="p-muted">Crée des alertes ciblées (prix, rendement, risque, temps de revente). Nous te prévenons dès qu’une opportunité matche.</p>
+        <div class="list">
+          <div class="item">
+            <div><strong>Auto</strong> • Spread ≥ 12% • Risque ≤ 40/100</div>
+            <div class="p-muted">2 alertes actives</div>
+          </div>
+          <div class="item">
+            <div><strong>Immo</strong> • Rendement brut ≥ 6% • Cash-on-cash ≥ 9%</div>
+            <div class="p-muted">1 alerte active</div>
+          </div>
         </div>
       </section>
     </div>
   </div>
 
-  <!-- Demo JS (facultatif) -->
   <script>
-    // Mini démo : bouton “Obtenir un conseil” remplit la réponse avec un texte statique
-    document.querySelector('.btn.primary')?.addEventListener('click', ()=>{
-      const box = document.getElementById('ai-answer');
-      box.textContent = "Analyse rapide : spread positif (~6%), risque modéré, liquidité correcte. " +
-                        "Négocier 300–500€ pour sécuriser la marge et viser une revente en ~3 semaines.";
+    // --- helper JSON avec gestion d’erreurs (utile dès que tu branches l’API)
+    async function j(url, opts){
+      const r = await fetch(url, opts);
+      const raw = await r.text();
+      try{
+        const json = JSON.parse(raw);
+        if(!r.ok) throw new Error(json.error || 'Erreur ' + r.status);
+        return json;
+      }catch{
+        throw new Error(raw || ('Erreur ' + r.status));
+      }
+    }
+
+    // CONSEIL D’INVESTISSEMENT
+    const $in   = document.getElementById('advice-input');
+    const $send = document.getElementById('advice-send');
+    const $clr  = document.getElementById('advice-clear');
+    const $ys   = document.getElementById('advice-yscore');
+    const $box  = document.getElementById('advice-resp');
+    const $txt  = document.getElementById('advice-text');
+
+    $send.addEventListener('click', async () => {
+      const prompt = ($in.value || '').trim();
+      if(!prompt){ $box.style.display='block'; $txt.innerHTML='<span class="danger">Saisis un message.</span>'; return; }
+      $send.disabled = true; $txt.textContent = 'Analyse en cours…'; $box.style.display='block';
+      try{
+        // Quand tu seras prêt côté serveur, garde cette ligne :
+        // const data = await j('/api/advisor', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt }) });
+        // $txt.textContent = data.reply;
+
+        // --- DEMO locale (supprimer quand l’API est branchée)
+        setTimeout(()=>{ $txt.textContent = 'Analyse rapide : spread positif (~6%), risque modéré, liquidité correcte. Négocier 300–500€ et viser une revente en 30–45 jours.'; }, 500);
+      }catch(e){
+        $txt.innerHTML = '<span class="danger">'+ (e.message || 'Erreur') +'</span>';
+      }finally{
+        $send.disabled = false;
+      }
     });
-    document.querySelector('.btn.ghost')?.addEventListener('click', ()=>{
-      document.querySelector('textarea').value = "";
-      document.getElementById('ai-answer').textContent = "En attente de votre demande.";
+    $clr.addEventListener('click', ()=>{ $in.value=''; $box.style.display='none'; $txt.textContent=''; });
+    $ys.addEventListener('click', ()=>{ $box.style.display='block'; $txt.textContent='(Bientôt) Lancement de l’analyse Y-Score détaillée…'; });
+
+    // Y-SCORE (mini démo client)
+    const $p = id => document.getElementById(id);
+    const $yrun = document.getElementById('yscore-run');
+    const $yclr = document.getElementById('yscore-clear');
+    const $ybox = document.getElementById('yscore-resp');
+    const $ytxt = document.getElementById('yscore-text');
+
+    $yrun.addEventListener('click', ()=>{
+      const price = parseFloat($p('price').value||0);
+      const market= parseFloat($p('market').value||0);
+      const risk  = Math.max(0, Math.min(100, parseFloat($p('risk').value||50)));
+      const liq   = Math.max(0, parseFloat($p('liquidity').value||0));
+
+      const spread = market>0 ? ((market-price)/market)*100 : 0;
+      // score très simplifié juste pour la démo visuelle
+      const score = Math.round( (Math.max(0, Math.min(100, spread*3))) * 0.5 + (100-risk)*0.4 + Math.min(100, Math.log10(liq+1)*20) * 0.1 );
+      $ybox.style.display = 'block';
+      $ytxt.textContent = `Y-Score ≈ ${score}/100 • Spread ${spread.toFixed(1)}% • Risque ${risk}/100 • Liquidité ${liq}`;
+    });
+
+    $yclr.addEventListener('click', ()=>{
+      ['price','market','risk','liquidity'].forEach(id=> $p(id).value='');
+      $ybox.style.display='none'; $ytxt.textContent='';
     });
   </script>
 </body>
