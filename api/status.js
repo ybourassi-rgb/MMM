@@ -1,16 +1,18 @@
-export default function handler(req, res) {
-  // 🔒 Anti-cache pour Safari, Vercel et CDN
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('CDN-Cache-Control', 'no-store');
-  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+export const config = { runtime: "edge" };
 
-  // ✅ Réponse simple indiquant que l’API est en ligne
-  res.status(200).json({
+export default async function handler(req) {
+  const headers = {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "CDN-Cache-Control": "no-store",
+    "Vercel-CDN-Cache-Control": "no-store",
+    "Content-Type": "application/json; charset=utf-8"
+  };
+
+  return new Response(JSON.stringify({
     ok: true,
     status: "online",
-    server: "vercel",
-    timestamp: new Date().toISOString()
-  });
+    ts: Date.now()
+  }), { status: 200, headers });
 }
