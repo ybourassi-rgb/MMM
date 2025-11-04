@@ -7,10 +7,14 @@
 
   <!-- PWA + Styles -->
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="stylesheet" href="/mmm.css?v=1038" />
+  <link rel="preload" href="/mmm.css?v=1039" as="style">
+  <link rel="stylesheet" href="/mmm.css?v=1039" />
   <meta name="theme-color" content="#0b0b0b" />
+  <meta name="color-scheme" content="dark light">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- (Optionnel) Pré-connexion : neutre si call OpenAI côté serveur -->
+  <link rel="preconnect" href="https://api.openai.com" crossorigin>
 </head>
 
 <body>
@@ -55,8 +59,6 @@
         <span id="error-dot" class="pill pill--error" hidden>Erreur</span>
       </header>
 
-      <!-- ✅ Ligne d’aide supprimée -->
-
       <div class="prompt-row">
         <label for="prompt" class="sr-only">Votre question ou vos liens</label>
         <textarea id="prompt" rows="4" class="prompt-input"
@@ -77,7 +79,15 @@
 
   <!-- JS -->
   <script>
-    // ---- Vérif du statut API ----
+    // ---- Cache-buster global pour iPhone/Safari ----
+    const V = '1039';
+
+    // ---- Enregistrer le Service Worker (PWA) ----
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    }
+
+    // ---- Vérif du statut API (anti-cache total) ----
     (async () => {
       const badge = document.getElementById('ia-badge');
       try {
@@ -86,13 +96,16 @@
         if (j && j.ok) {
           badge.textContent = 'En ligne';
           badge.className = 'chip chip--ok';
+          badge.setAttribute('aria-label', 'Serveur en ligne');
         } else {
           badge.textContent = 'Hors ligne';
           badge.className = 'chip chip--ko';
+          badge.setAttribute('aria-label', 'Serveur hors ligne');
         }
       } catch {
         badge.textContent = 'Hors ligne';
         badge.className = 'chip chip--ko';
+        badge.setAttribute('aria-label', 'Serveur hors ligne');
       }
     })();
 
@@ -126,6 +139,7 @@
       setError('');
     });
 
+    // Cmd/Ctrl + Enter pour envoyer
     promptEl.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') sendBtn.click();
     });
@@ -139,7 +153,7 @@
       setError('');
       setLoading(true);
       try {
-        const r = await fetch(apiUrl, {
+        const r = await fetch(apiUrl + '?v=' + V, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt })
@@ -147,6 +161,7 @@
         const data = await r.json();
         if (!r.ok || !data.ok) throw new Error(data?.error || 'Erreur inconnue');
         adviceEl.textContent = data.reply || '⚠️ Aucune réponse reçue.';
+        statusEl.textContent = '✅ Réponse générée';
       } catch (e) {
         setError('Erreur');
         adviceEl.textContent = '❌ ' + (e.message || 'Erreur réseau');
