@@ -5,43 +5,173 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Y — Dashboard</title>
   <style>
-    body{margin:0;padding:24px;background:#0b0b0b;color:#eee;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
-    .wrap{max-width:980px;margin:0 auto}
-    h1{font-size:22px;margin:0 0 8px}
-    .bar{display:flex;gap:8px;align-items:center;margin:16px 0 24px}
-    .pill{display:inline-block;padding:4px 10px;border:1px solid rgba(255,255,255,.2);border-radius:99px}
-    textarea{width:100%;min-height:92px;background:#0d0d0d;border:1px solid rgba(255,255,255,.15);color:#eee;border-radius:10px;padding:10px}
-    button{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#1b1b1b;color:#eee;cursor:pointer}
-    .box{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px;background:#111;margin-bottom:20px}
-    .out{white-space:pre-wrap;border-top:1px solid rgba(255,255,255,.08);margin-top:10px;padding-top:10px;opacity:.95}
+    /* === FOND & POLICES === */
+    body{
+      margin:0;
+      padding:24px;
+      background: radial-gradient(circle at top, #0b0b0b 0%, #050505 100%);
+      color:#e6e6e6;
+      font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      overflow-x:hidden;
+    }
+
+    /* === CONTENEUR PRINCIPAL === */
+    .wrap{
+      max-width:960px;
+      margin:0 auto;
+      position:relative;
+      z-index:1;
+    }
+
+    h1{
+      font-size:26px;
+      margin:0 0 8px;
+      font-weight:700;
+      background:linear-gradient(90deg,#00bfff,#0070f3);
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+      text-shadow:0 0 8px rgba(0,191,255,0.4);
+      letter-spacing:0.5px;
+    }
+
+    .bar{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      margin:16px 0 32px;
+    }
+
+    .pill{
+      display:inline-block;
+      padding:6px 12px;
+      border:1px solid rgba(0,191,255,.3);
+      border-radius:99px;
+      background:rgba(0,191,255,.08);
+      color:#00bfff;
+      font-weight:500;
+      letter-spacing:.4px;
+      box-shadow:0 0 10px rgba(0,191,255,.25);
+    }
+
+    /* === CARTES === */
+    .box{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:16px;
+      padding:18px;
+      background:linear-gradient(180deg,rgba(20,20,20,0.95) 0%,rgba(10,10,10,0.95) 100%);
+      box-shadow:0 0 20px rgba(0,191,255,0.05), inset 0 0 12px rgba(0,191,255,0.05);
+      backdrop-filter:blur(10px);
+      position:relative;
+      transition:transform .2s, box-shadow .2s;
+    }
+    .box:hover{
+      transform:translateY(-3px);
+      box-shadow:0 0 25px rgba(0,191,255,0.25);
+    }
+
+    /* === SÉPARATION ENTRE BLOCS === */
+    #advisor{
+      margin-bottom:28px;
+      border-image:linear-gradient(90deg,rgba(0,191,255,0.4),rgba(0,191,255,0.05)) 1;
+      border-bottom:2px solid transparent;
+    }
+
+    /* === TEXTAREA & BOUTONS === */
+    textarea{
+      width:100%;
+      min-height:100px;
+      background:#0d0d0d;
+      border:1px solid rgba(0,191,255,.2);
+      color:#eee;
+      border-radius:10px;
+      padding:12px;
+      font-size:15px;
+      outline:none;
+      transition:border .2s, box-shadow .2s;
+    }
+    textarea:focus{
+      border-color:#00bfff;
+      box-shadow:0 0 12px rgba(0,191,255,0.25);
+    }
+
+    button{
+      padding:10px 14px;
+      border-radius:10px;
+      border:1px solid rgba(0,191,255,.25);
+      background:linear-gradient(180deg,#0b2436,#06131f);
+      color:#00bfff;
+      cursor:pointer;
+      font-weight:600;
+      letter-spacing:.3px;
+      box-shadow:0 0 12px rgba(0,191,255,0.15);
+      transition:all .2s;
+    }
+    button:hover{
+      background:linear-gradient(180deg,#103b5a,#0a2235);
+      box-shadow:0 0 18px rgba(0,191,255,0.3);
+      color:#fff;
+    }
+
+    /* === SORTIE CONSEIL === */
+    .out{
+      white-space:pre-wrap;
+      border-top:1px solid rgba(255,255,255,.08);
+      margin-top:12px;
+      padding-top:12px;
+      opacity:.95;
+      background:rgba(0,191,255,.04);
+      border-radius:8px;
+      padding:10px;
+      font-family:Consolas,monospace;
+    }
+
+    /* === ÉLÉMENTS FUTURISTES === */
+    .glow{
+      position:absolute;
+      width:240px;height:240px;
+      border-radius:50%;
+      filter:blur(120px);
+      z-index:0;
+      opacity:.4;
+      animation:float 6s ease-in-out infinite alternate;
+    }
+    .glow.blue{background:#0070f3;top:-60px;left:-60px;}
+    .glow.cyan{background:#00ffff;bottom:-60px;right:-60px;}
+    @keyframes float{
+      to{transform:translate(20px,20px) scale(1.1);}
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap" id="dashboard">
+    <div class="glow blue"></div>
+    <div class="glow cyan"></div>
+
     <h1>Money Motor Y</h1>
     <div class="bar">
-      <span class="pill" id="env-pill">Statut: …</span>
+      <span class="pill" id="env-pill">Statut : …</span>
     </div>
 
-    <!-- CONSEIL INSTANTANÉ déplacé en haut -->
+    <!-- 💬 CONSEIL INSTANTANÉ (tout en haut) -->
     <section id="advisor" class="box">
-      <h3 style="margin:0 0 10px">💬 Conseil instantané</h3>
+      <h3 style="margin:0 0 14px;color:#00bfff;text-shadow:0 0 6px rgba(0,191,255,0.6)">💬 Conseil instantané</h3>
       <textarea id="q" placeholder="Décris une opportunité (prix, modèle, km, tendance, etc.)"></textarea>
-      <div style="margin-top:8px;display:flex;gap:8px">
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
         <button id="ask">Obtenir un conseil IA</button>
         <button id="check">Vérifier le statut API</button>
       </div>
       <div class="out" id="out"></div>
     </section>
 
-    <!-- PANNEAU Y-SCORE en dessous -->
+    <!-- ⚙️ PANNEAU Y-SCORE -->
     <section id="yscore-panel" class="box"></section>
   </div>
 
   <script src="components/yscore_panel.js"></script>
   <script>
     window.YScorePanel.mount("yscore-panel");
-    const $ = (id)=>document.getElementById(id);
+    const $ = id => document.getElementById(id);
 
     $("ask").onclick = async ()=>{
       const prompt = $("q").value.trim();
@@ -68,7 +198,8 @@
 
     (async ()=>{
       try{
-        const r = await fetch("/api/status"); const s = await r.json();
+        const r = await fetch("/api/status");
+        const s = await r.json();
         $("env-pill").textContent =
           `Statut: ${s.status} | OpenAI: ${s.hasOpenAIKey?'OK':'X'} | Upstash: ${s.hasUpstashKV?'OK':'X'}`;
       }catch{ $("env-pill").textContent = "Statut: offline"; }
