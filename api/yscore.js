@@ -1,36 +1,61 @@
 // api/yscore.js
 export const config = { runtime: "edge" };
 
-// utils
+// ---------- Utils ----------
 function clamp(n, a, b){ n = Number(n); if (Number.isNaN(n)) n = 0; return Math.max(a, Math.min(b, n)); }
 function num(n){ n = Number(n); return Number.isNaN(n) ? 0 : n; }
-const headers = { "Cache-Control":"no-store", "Content-Type":"application/json; charset=utf-8" };
+const HEADERS = { "Cache-Control":"no-store", "Content-Type":"application/json; charset=utf-8" };
+
+// Charge /api/config (KV) si dispo, sinon valeurs par défaut
+async function loadConfigOrDefault(){
+  // En Edge, on ne connaît pas location côté serveur ; on reconstruit l’URL API locale si VERCEL_URL est défini.
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+  const url = `${base}/api/config`;
+  try{
+    const r = await fetch(url, { method:'GET', headers:{ 'Cache-Control':'no-store' } });
+    const j = await r.json();
+    if (j && j.ok && j.config) return j.config;
+  }catch{}
+  // fallback local si /api/config indispo
+  return {
+    weights: {
+      weightPrice: 20,
+      weightMarketValue: 20,
+      weightProfitability: 25,
+      weightRisk: 15,
+      weightTimeToLiquidity: 10,
+      weightStrategic: 10
+    },
+    thresholds: { excellent: 80, acceptable: 60, risky: 40 },
+    timeDecayFactor: 2
+  };
+}
 
 /**
- * MODE 1 (MMM)  : { items:[{ id, price, fairValue, volatility30dPct, avgDailyLiquidity, ... }], weights?, modeMMM? }
- * SORTIE        : { ok:true, count, results:[{ id, yScore, features:{value,quality,momentum,risk,liq} }] }
+ * MODE 1 (MMM)  : { items:[{ id, price, fairValue, volatility30dPct, avgDailyLiquidity, quality?, profitabilityPct?, growthYoYPct?, debtToEquity?, halalCompliant? }], weights?, modeMMM? }
+ * SORTIE        : { ok:true, count, results:[{ id, yScore, features:{ value, quality, momentum, risk, liq } }] }
  *
- * MODE 2 (simple): { price, marketValue, risk, daysToLiquidity, strategic }
+ * MODE 2 (simple v10.4): { price, marketValue, risk, daysToLiquidity, strategic }
  * SORTIE        : { price, marketValue, risk, daysToLiquidity, strategic, profitAbs, profitPct, yScore, decision, createdAt }
  */
 export default async function handler(req) {
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ ok:false, error:"Method not allowed" }), { status:405, headers });
+    return new Response(JSON.stringify({ ok:false, error:"Method not allowed" }), { status:405, headers:HEADERS });
   }
 
   let body;
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ ok:false, error:"Bad JSON" }), { status:400, headers });
+    return new Response(JSON.stringify({ ok:false, error:"Bad JSON" }), { status:400, headers:HEADERS });
   }
 
-  // --- MODE 1: compat MMM (ton implémentation existante) ---
+  // ---------- MODE 1 : Compat MMM (ton format items[...]) ----------
   if (Array.isArray(body.items)) {
     try {
       const { items = [], weights = {}, modeMMM = false } = body;
 
-      // poids normalisés (comme avant)
+      // Poids normalisés (comme ta version originale)
       const W = {
         value:.30, quality:.25, momentum:.20, risk:.15, liquidity:.10,
         halalPenalty:15, ...weights
@@ -44,7 +69,6 @@ export default async function handler(req) {
       const results = items.map(it=>{
         const fair = num(it.fairValue), price = num(it.price);
 
-        // mêmes features qu’avant
         const value = fair>0 ? clamp(((fair-price)/fair)*100, -100, 100) : 0;
         const quality = clamp(
           ("quality" in it) ? num(it.quality)
@@ -72,13 +96,13 @@ export default async function handler(req) {
         };
       }).sort((a,b)=> b.yScore - a.yScore);
 
-      return new Response(JSON.stringify({ ok:true, count:results.length, results }), { status:200, headers });
+      return new Response(JSON.stringify({ ok:true, count:results.length, results }), { status:200, headers:HEADERS });
     } catch(e) {
-      return new Response(JSON.stringify({ ok:false, error:e?.message || "YS error" }), { status:500, headers });
+      return new Response(JSON.stringify({ ok:false, error:e?.message || "YS error" }), { status:500, headers:HEADERS });
     }
   }
 
-  // --- MODE 2: format simple v10.4 ---
+  // ---------- MODE 2 : Format simple v10.4 ----------
   try {
     const input = {
       price: num(body.price),
@@ -88,38 +112,26 @@ export default async function handler(req) {
       strategic: clamp(num(body.strategic ?? 70), 0, 100),
     };
 
-    // garde-fous
+    // Garde-fous basiques
     if (input.price < 0 || input.marketValue < 0) {
-      return new Response(JSON.stringify({ error: "price/marketValue doivent être ≥ 0" }), { status:400, headers });
+      return new Response(JSON.stringify({ error: "price/marketValue doivent être ≥ 0" }), { status:400, headers:HEADERS });
     }
     if (input.marketValue > 0 && input.price > input.marketValue * 2) {
-      return new Response(JSON.stringify({ error: "Anti-outlier: price > 2x marketValue" }), { status:400, headers });
+      return new Response(JSON.stringify({ error: "Anti-outlier: price > 2x marketValue" }), { status:400, headers:HEADERS });
     }
 
-    // config pondérations v10.4 (somme ≈ 100)
-    const cfg = {
-      weights: {
-        weightPrice: 20,
-        weightMarketValue: 20,
-        weightProfitability: 25,
-        weightRisk: 15,
-        weightTimeToLiquidity: 10,
-        weightStrategic: 10
-      },
-      thresholds: { excellent: 80, acceptable: 60, risky: 40 },
-      timeDecayFactor: 2
-    };
+    // Charge config depuis /api/config si dispo (KV), sinon valeurs par défaut
+    const cfg = await loadConfigOrDefault();
 
     const result = computeYScoreV104(input, cfg);
     const payload = { ...input, ...result, createdAt: new Date().toISOString() };
-
-    return new Response(JSON.stringify(payload), { status:201, headers });
+    return new Response(JSON.stringify(payload), { status:201, headers:HEADERS });
   } catch(e) {
-    return new Response(JSON.stringify({ error: e?.message || "YS error" }), { status:500, headers });
+    return new Response(JSON.stringify({ error: e?.message || "YS error" }), { status:500, headers:HEADERS });
   }
 }
 
-// --- calcul v10.4 (moteur Money Motor Y)
+// ---------- Calcul v10.4 (moteur Money Motor Y) ----------
 function computeYScoreV104(d, cfg) {
   const w = cfg.weights, t = cfg.thresholds;
   const safeDiv = (a, b) => (b > 0 ? a / b : 0);
