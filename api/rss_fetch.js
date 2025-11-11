@@ -23,12 +23,10 @@ function parseItems(xml, source) {
       (block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"))?.[1] ?? "")
         .replace(/<!\[CDATA\[(.*?)\]\]>/gis, "$1")
         .trim();
-
     const title = get("title");
     const link  = get("link") || get("guid") || "";
     const pub   = get("pubDate") || get("dc:date") || "";
     const iso   = pub ? new Date(pub).toISOString() : new Date().toISOString();
-
     if (title || link) {
       items.push({
         id: (link || title || Math.random().toString(36).slice(2)).slice(-64),
@@ -78,9 +76,5 @@ export default async function handler(req) {
 
   out.sort((a, b) => new Date(b.updatedAtISO) - new Date(a.updatedAtISO));
 
-  return new Response(JSON.stringify({
-    ok: true,
-    serverNowISO: new Date().toISOString(),
-    items: out,
-  }), { status:200, headers:headers() });
+  return new Response(JSON.stringify({ ok:true, serverNowISO:new Date().toISOString(), items:out }), { status:200, headers:headers() });
 }
