@@ -17,16 +17,18 @@ export default async function handler() {
   const hasOpenAIKey =
     !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 10;
 
-  // -> lit les bons noms, et accepte l'ancienne variante "REDIS" en fallback
+  // Lecture des variables Upstash si présentes
   const restUrl =
     process.env.UPSTASH_REST_URL || process.env.UPSTASH_REDIS_REST_URL || '';
   const restToken =
     process.env.UPSTASH_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
   const hasUpstashKV = !!(restUrl && restToken);
 
-  // 🔹 Ajouts non-cassants (pour “Marché en direct”)
+  // 🔹 Informations serveur
   const now = new Date();
   const serverNowISO = now.toISOString();
+
+  // 🔹 Formatage date FR (avec mois en toutes lettres)
   const todayFr = now.toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
@@ -34,26 +36,45 @@ export default async function handler() {
     year: 'numeric',
   });
 
-  // 🔹 Petit “feed” démo/placeholder (à remplacer par tes vraies sources)
-  // Laisse vide [] si tu préfères : l’UI gère le cas "aucune opportunité".
+  // 🔹 Exemples de données du marché (à remplacer par tes flux réels)
   const feed = [
-    // { id:'ex-1', type:'auto', title:'BMW 320d 2019 • 92 000 km', price:17900, url:'https://exemple.com/1', updatedAtISO: serverNowISO },
-    // { id:'ex-2', type:'immo', title:'Studio Gueliz • 34 m²', price:460000, url:'https://exemple.com/2', updatedAtISO: serverNowISO },
+    {
+      id: 'bmw-320d-2019',
+      type: 'auto',
+      title: 'BMW 320d 2019 • 92 000 km',
+      price: 17900,
+      url: 'https://www.amazon.fr/?tag=ton-tag-affil', // 🔗 lien affilié (Amazon)
+      updatedAtISO: serverNowISO,
+    },
+    {
+      id: 'studio-gueliz-34m2',
+      type: 'immo',
+      title: 'Studio Gueliz • 34 m² • 460 000 MAD',
+      price: 460000,
+      url: 'https://www.booking.com/?aid=TON_AID', // 🔗 lien affilié (Booking)
+      updatedAtISO: serverNowISO,
+    },
+    {
+      id: 'btc-analysis',
+      type: 'crypto',
+      title: 'Bitcoin — signal achat confirmé (RSI : 48,9 %)',
+      price: 61750,
+      url: 'https://coinmarketcap.com/',
+      updatedAtISO: serverNowISO,
+    },
   ];
 
+  // 🔹 Réponse API
   const body = {
-    // 🟢 Champs historiques (inchangés)
     ok: true,
     status: 'online',
     hasOpenAIKey,
     hasUpstashKV,
     env: process.env.VERCEL_ENV || 'unknown',
     ts: Date.now(),
-
-    // 🆕 Champs ajoutés (optionnels pour l’UI Marché)
-    serverNowISO, // horloge serveur (source de vérité)
-    todayFr,      // “Aujourd’hui : mardi …”
-    feed,         // tableau d’opportunités (peut rester [])
+    serverNowISO,
+    todayFr, // ex. "mardi 11 novembre 2025"
+    feed,
   };
 
   return new Response(JSON.stringify(body), { status: 200, headers: headers() });
