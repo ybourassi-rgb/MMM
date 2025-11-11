@@ -1,11 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-
-    // page d'accueil -> /public/index.html
     { "source": "/", "destination": "/public/index.html" },
-
-    // tout le reste (CSS/JS/images/manifest/SW/etc.) -> /public/*
     { "source": "/(.*)", "destination": "/public/$1" }
   ],
   "headers": [
