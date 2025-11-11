@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Y — Tableau de bord</title>
-  <!-- deploy test: force redeploy v10.4.1 -->
+  <!-- build v10.4.1 (avec Marché dynamique + affiliation) -->
   <style>
     :root{
       --bg:#0c0f12; --panel:#12161b; --muted:#a9b3c1; --text:#e9eef6;
@@ -102,16 +102,8 @@
           <div class="kpi"><div class="k">Risque médian</div><div class="v">34/100</div></div>
           <div class="kpi"><div class="k">Liquidité</div><div class="v">Bonne</div></div>
         </div>
-        <div class="list" style="margin-top:12px">
-          <div class="item">
-            <div><strong>BMW X3 2019 — 21 000€</strong> <span class="pill">Auto</span></div>
-            <div class="p-muted">Valeur marché: 25 000€ • Spread ~19% • Risque: 32/100</div>
-          </div>
-          <div class="item">
-            <div><strong>Studio centre — 139 k€</strong> <span class="pill">Immo</span></div>
-            <div class="p-muted">Loyer cible: 690€ • Rendement brut: 5,9% • Risque: 41/100</div>
-          </div>
-        </div>
+        <!-- Liste dynamique -->
+        <div class="list" id="market-list" style="margin-top:12px"></div>
       </section>
 
       <!-- ANALYSE RAPIDE Y-SCORE -->
@@ -132,7 +124,7 @@
         </div>
       </section>
 
-      <!-- RÉGLAGES DU MOTEUR Y-SCORE (NOUVEAU) -->
+      <!-- RÉGLAGES DU MOTEUR Y-SCORE -->
       <section class="module">
         <h3>Réglages du moteur (Y-Score)</h3>
         <p class="p-muted">Ajuste les pondérations, charge/enregistre des profils et teste sur un échantillon.</p>
@@ -157,12 +149,12 @@
     </div>
 
     <footer>
-      Money Motor Y • build v10.4.1 — déployé pour test de routage
+      Money Motor Y • build v10.4.1 — déployé avec marché dynamique
     </footer>
   </div>
 
+  <!-- =================== LOGIQUE =================== -->
   <script>
-    // --- helper JSON avec gestion d’erreurs
     async function j(url, opts){
       const r = await fetch(url, opts);
       const raw = await r.text();
@@ -175,7 +167,7 @@
       }
     }
 
-    // --- Badge statut
+    // --- BADGE ÉTAT IA
     (async () => {
       try {
         const s = await j('/api/status');
@@ -191,102 +183,83 @@
       }
     })();
 
-    // --- CONSEIL (STREAMING + FALLBACK)
-    const $in   = document.getElementById('advice-input');
-    const $send = document.getElementById('advice-send');
-    const $clr  = document.getElementById('advice-clear');
-    const $ys   = document.getElementById('advice-yscore');
-    const $box  = document.getElementById('advice-resp');
-    const $txt  = document.getElementById('advice-text');
+    // --- CONSEIL D’INVESTISSEMENT
+    const $in=document.getElementById('advice-input'),$send=document.getElementById('advice-send'),$clr=document.getElementById('advice-clear'),$ys=document.getElementById('advice-yscore'),$box=document.getElementById('advice-resp'),$txt=document.getElementById('advice-text');
 
-    $send.addEventListener('click', async () => {
-      const prompt = ($in.value || '').trim();
-      if(!prompt){ $box.style.display='block'; $txt.innerHTML='<span class="danger">Saisis un message.</span>'; return; }
-
-      $send.disabled = true;
-      $box.style.display='block';
-      $txt.textContent = 'Analyse en cours…';
-
-      // 1) tentative en streaming
+    $send.addEventListener('click', async ()=>{
+      const prompt = ($in.value||'').trim();
+      if(!prompt){$box.style.display='block';$txt.innerHTML='<span class="danger">Saisis un message.</span>';return;}
+      $send.disabled=true;$box.style.display='block';$txt.textContent='Analyse en cours…';
       try{
-        const resp = await fetch('/api/advisor_stream', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({ prompt })
-        });
-        if(!resp.ok || !resp.body){
-          throw new Error(await resp.text());
-        }
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let acc = '';
-        while(true){
-          const { value, done } = await reader.read();
-          if(done) break;
-          acc += decoder.decode(value, { stream:true });
-          $txt.textContent = acc || '…';
-        }
-        if(!acc.trim()) $txt.textContent = 'Réponse vide.';
+        const resp = await fetch('/api/advisor_stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+        if(!resp.ok||!resp.body)throw new Error(await resp.text());
+        const reader=resp.body.getReader();const decoder=new TextDecoder();let acc='';
+        while(true){const {value,done}=await reader.read();if(done)break;acc+=decoder.decode(value,{stream:true});$txt.textContent=acc||'…';}
+        if(!acc.trim())$txt.textContent='Réponse vide.';
       }catch(e){
-        // 2) fallback JSON classique
-        try{
-          const data = await j('/api/advisor', {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ prompt })
-          });
-          $txt.textContent = data.reply || '—';
-        }catch(e2){
-          $txt.innerHTML = '<span class="danger">'+ (e2.message || e.message || 'Erreur') +'</span>';
-        }
-      }finally{
-        $send.disabled = false;
-      }
+        try{const data=await j('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+          $txt.textContent=data.reply||'—';
+        }catch(e2){$txt.innerHTML='<span class="danger">'+(e2.message||e.message||'Erreur')+'</span>';}
+      }finally{$send.disabled=false;}
     });
 
-    $clr.addEventListener('click', ()=>{ $in.value=''; $box.style.display='none'; $txt.textContent=''; });
-    $ys.addEventListener('click', ()=>{ $box.style.display='block'; $txt.textContent='(Bientôt) Analyse Y-Score détaillée…'; });
+    $clr.addEventListener('click',()=>{$in.value='';$box.style.display='none';$txt.textContent='';});
+    $ys.addEventListener('click',()=>{$box.style.display='block';$txt.textContent='(Bientôt) Analyse Y-Score détaillée…';});
 
-    // --- Y-SCORE (API réelle)
-    const $p = id => document.getElementById(id);
-    const $yrun = document.getElementById('yscore-run');
-    const $yclr = document.getElementById('yscore-clear');
-    const $ybox = document.getElementById('yscore-resp');
-    const $ytxt = document.getElementById('yscore-text');
-
-    $yrun.addEventListener('click', async ()=>{
-      const price = parseFloat($p('price').value||0);
-      const market= parseFloat($p('market').value||0);
-      const risk  = Math.max(0, Math.min(100, parseFloat($p('risk').value||50)));
-      const liq   = Math.max(0, parseFloat($p('liquidity').value||0));
-
+    // --- Y-SCORE
+    const $p=id=>document.getElementById(id);const $yrun=document.getElementById('yscore-run');const $yclr=document.getElementById('yscore-clear');const $ybox=document.getElementById('yscore-resp');const $ytxt=document.getElementById('yscore-text');
+    $yrun.addEventListener('click',async()=>{
+      const price=parseFloat($p('price').value||0);const market=parseFloat($p('market').value||0);
+      const risk=Math.max(0,Math.min(100,parseFloat($p('risk').value||50)));const liq=Math.max(0,parseFloat($p('liquidity').value||0));
       try{
-        const data = await j('/api/yscore', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            modeMMM:false,
-            items:[{ id:'custom', price, fairValue:market, volatility30dPct:100-risk, avgDailyLiquidity:liq }]
-          })
-        });
-        const top = data.results?.[0];
-        $ybox.style.display = 'block';
-        $ytxt.textContent = top ? `Y-Score ${top.yScore}/100 • Value ${top.features.value.toFixed(1)} • Momentum ${top.features.momentum.toFixed(0)} • Risque ${top.features.risk.toFixed(0)} • Liquidité ${top.features.liq.toFixed(0)}` : '—';
-      }catch(e){
-        $ybox.style.display = 'block';
-        $ytxt.textContent = e.message || 'Erreur Y-Score';
-      }
+        const data=await j('/api/yscore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({modeMMM:false,items:[{id:'custom',price,fairValue:market,volatility30dPct:100-risk,avgDailyLiquidity:liq}]})});
+        const top=data.results?.[0];$ybox.style.display='block';
+        $ytxt.textContent=top?`Y-Score ${top.yScore}/100 • Value ${top.features.value.toFixed(1)} • Momentum ${top.features.momentum.toFixed(0)} • Risque ${top.features.risk.toFixed(0)} • Liquidité ${top.features.liq.toFixed(0)}`:'—';
+      }catch(e){$ybox.style.display='block';$ytxt.textContent=e.message||'Erreur Y-Score';}
     });
-
-    $yclr.addEventListener('click', ()=>{
-      ['price','market','risk','liquidity'].forEach(id=> $p(id).value='');
-      $ybox.style.display='none'; $ytxt.textContent='';
-    });
+    $yclr.addEventListener('click',()=>{['price','market','risk','liquidity'].forEach(id=>$p(id).value='');$ybox.style.display='none';$ytxt.textContent='';});
   </script>
 
-  <!-- Panneau Y-Score (script + montage) -->
-  <script src="/components/yscore_panel.js"></script>
+  <!-- ===== MARCHÉ EN DIRECT DYNAMIQUE ===== -->
   <script>
-    window.YScorePanel?.mount("yscore-panel");
-  </script>
-</body>
-</html>
+    (async () => {
+      const list = document.getElementById('market-list');
+      if (!list) return;
+
+      const el = (tag, attrs = {}, children = []) => {
+        const n = document.createElement(tag);
+        Object.entries(attrs).forEach(([k, v]) => (n[k] = v));
+        [].concat(children).forEach(c =>
+          n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c)
+        );
+        return n;
+      };
+
+      const affiliateHref = (rawUrl, type = 'gen') =>
+        `/api/r?u=${encodeURIComponent(rawUrl)}&s=${encodeURIComponent(type||'gen')}`;
+
+      async function loadMarket() {
+        list.innerHTML = '<div class="item">Chargement…</div>';
+        try {
+          const r = await fetch('/api/status', { cache: 'no-store' });
+          const data = await r.json();
+          if (!r.ok || !data.ok) throw new Error(data.error || 'Erreur API');
+          const feed = Array.isArray(data.feed) ? data.feed : [];
+          list.innerHTML = '';
+
+          if (feed.length === 0) {
+            list.appendChild(el('div', { className: 'item p-muted' }, 'Aucune opportunité disponible.'));
+            return;
+          }
+
+          for (const it of feed) {
+            const title = el('div', {}, [
+              el('strong', {}, it.title || '—'),
+              ' ',
+              el('span', { className: 'pill' }, (it.type || 'GEN').toUpperCase())
+            ]);
+            const meta = el('div', { className: 'p-muted' }, [
+              (typeof it.price === 'number' ? `Prix: ${it.price.toLocaleString('fr-FR')} MAD • ` : ''),
+              it.updatedAtISO ? `Maj: ${new Date(it.updatedAtISO).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}` : ''
+            ]);
+            const card = el
