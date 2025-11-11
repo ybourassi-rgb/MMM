@@ -1,4 +1,3 @@
-// /api/rss_fetch.js
 export const config = { runtime: "edge" };
 
 function headers() {
