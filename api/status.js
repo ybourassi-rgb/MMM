@@ -6,156 +6,196 @@ function headers() {
     'Cache-Control': 'no-store, no-cache, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
-    'CDN-Cache-Control': 'no-store',
-    'Vercel-CDN-Cache-Control': 'no-store',
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
   };
 }
 
 /**
- * SOURCES — n’hésite pas à en ajouter/enlever.
- * NOTE: On reste sur des flux RSS/Atom publics fiables.
+ * On charge par PETITS GROUPES pour éviter FUNCTION_INVOCATION_TIMEOUT.
+ * Tu peux ajuster/ajouter des URLs : max ~4 par groupe pour rester safe.
  */
-const SOURCES = [
-  // 🔹 Crypto (FR/EN)
-  'https://fr.cointelegraph.com/rss',
-  'https://cointelegraph.com/rss',
-  'https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml',
-  'https://bitcoinmagazine.com/.rss/full/',
-  'https://cryptopotato.com/feed/',
+const SOURCE_GROUPS = [
+  // 1) Crypto
+  [
+    'https://fr.cointelegraph.com/rss',
+    'https://cointelegraph.com/rss',
+    'https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml',
+    'https://bitcoinmagazine.com/.rss/full/',
+  ],
 
-  // 🔹 Finance / Marchés
-  'https://finance.yahoo.com/news/rssindex',
-  'https://www.reuters.com/finance/rss',            // (alias) certains déploiements renvoient business
-  'https://www.reuters.com/markets/rss',            // marchés
-  'https://www.cnbc.com/id/100003114/device/rss',  // Markets
-  'https://www.cnbc.com/id/10000664/device/rss',   // Investing
+  // 2) Marchés/Finance (monde)
+  [
+    'https://finance.yahoo.com/news/rssindex',
+    'https://www.reuters.com/markets/rss',
+    'https://www.cnbc.com/id/100003114/device/rss',
+    'https://www.cnbc.com/id/10000664/device/rss',
+  ],
 
-  // 🔹 FX / Macro / Commodities (selon dispos)
-  'https://www.dailyfx.com/feeds/market-news',      // FX
-  'https://www.kitco.com/rss/gold.xml',             // Or & métaux
+  // 3) Auto (idées d’affaires)
+  [
+    'https://www.ebay.fr/sch/i.html?_nkw=BMW+320d&_sop=10&_rss=1',
+    'https://www.ebay.fr/sch/i.html?_nkw=Mercedes+C220&_sop=10&_rss=1',
+    'https://www.ebay.fr/sch/i.html?_nkw=Audi+A3&_sop=10&_rss=1',
+  ],
 
-  // 🔹 Auto: exemples eBay (RSS natif)
-  'https://www.ebay.fr/sch/i.html?_nkw=BMW+320d&_sop=10&_rss=1',
-  'https://www.ebay.fr/sch/i.html?_nkw=Mercedes+C220&_sop=10&_rss=1',
-  'https://www.ebay.fr/sch/i.html?_nkw=Audi+A3&_sop=10&_rss=1',
+  // 4) Finance FR / Immo / Business (FR)
+  [
+    'https://www.lesechos.fr/rss/rss_une.xml',
+    'https://www.boursorama.com/rss/flux-actualites-bourse/',
+    'https://www.latribune.fr/rss/latest',
+    'https://investir.lesechos.fr/rss/flux-actualites.xml',
+  ],
+
+  // 5) Tech / IA
+  [
+    'https://techcrunch.com/feed/',
+    'https://www.theverge.com/rss/index.xml',
+    'https://www.wired.com/feed/rss',
+    'https://arstechnica.com/feed/',
+  ],
 ];
 
-/** Essaie d’inférer un type par URL/source ou le titre */
-function guessType(u = '', title = '') {
-  const s = (u + ' ' + title).toLowerCase();
+// ---------- helpers ----------
+function guessType(u = '', t = '') {
+  const s = (u + ' ' + t).toLowerCase();
   if (s.includes('ebay')) return 'auto';
-  if (s.includes('immo') || s.includes('immobil') || s.includes('real estate') || s.includes('seloger')) return 'immo';
-  if (s.includes('crypto') || s.includes('cointelegraph') || s.includes('coindesk') || s.includes('bitcoin') || s.includes('btc') || s.includes('cryptopotato')) return 'crypto';
-  if (s.includes('reuters') || s.includes('cnbc') || s.includes('yahoo') || s.includes('market') || s.includes('finance') || s.includes('stocks')) return 'marches';
-  if (s.includes('dailyfx') || s.includes('forex') || s.includes('fx')) return 'fx';
-  if (s.includes('kitco') || s.includes('gold') || s.includes('silver') || s.includes('oil') || s.includes('brent')) return 'commod';
+  if (s.includes('immo') || s.includes('immobil') || s.includes('seloger') || s.includes('real estate')) return 'immo';
+  if (s.includes('coin') || s.includes('crypto') || s.includes('bitcoin') || s.includes('btc')) return 'crypto';
+  if (s.includes('cnbc') || s.includes('reuters') || s.includes('yahoo') || s.includes('boursorama') || s.includes('lesechos') || s.includes('investir')) return 'marches';
+  if (s.includes('techcrunch') || s.includes('verge') || s.includes('wired') || s.includes('arstechnica') || s.includes('ai') || s.includes('artificial intelligence')) return 'tech';
   return 'gen';
 }
 
-/** Extrait un prix du titre si présent (€, MAD, $, DHS) */
-function extractPriceFromTitle(title) {
-  if (!title) return null;
-  const t = title.replace(/\u00A0/g, ' ');
-  const m = t.match(/(\d[\d\s.,’']+)\s?(€|eur|mad|dhs|usd|\$)?/i);
+function extractPrice(title = '') {
+  const m = title.replace(/\u00A0/g,' ').match(/(\d[\d\s.,’']+)\s?(€|eur|usd|\$|mad|dhs)?/i);
   if (!m) return null;
-  const raw = m[1]
-    .replace(/[^\d.,]/g, '')
-    .replace(/\.(?=\d{3}\b)/g, '') // 1.000.000 -> 1000000
-    .replace(',', '.');
-  const val = parseFloat(raw);
-  return Number.isFinite(val) ? Math.round(val) : null;
+  const cleaned = m[1].replace(/[^\d.,]/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? Math.round(n) : null;
 }
 
-function dedupe(items, key = (x) => (x.url || x.title || x.id || '')) {
+function dedupe(list, key = x => x.url || x.title || x.id) {
   const seen = new Set();
   const out = [];
-  for (const it of items) {
-    const k = key(it);
+  for (const x of list) {
+    const k = key(x);
     if (!k || seen.has(k)) continue;
     seen.add(k);
-    out.push(it);
+    out.push(x);
   }
   return out;
 }
 
-export default async function handler(req) {
-  const hasOpenAIKey =
-    !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 10;
+// Traduction FR optionnelle via OpenAI (si clé dispo) — timeout strict pour ne pas dépasser la limite Edge
+async function translateFRIfPossible(titles, OPENAI_KEY, timeoutMs = 2500) {
+  if (!OPENAI_KEY || !titles?.length) return null;
 
-  // Upstash (facultatif pour le tracking /api/r)
-  const restUrl =
-    process.env.UPSTASH_REST_URL || process.env.UPSTASH_REDIS_REST_URL || '';
-  const restToken =
-    process.env.UPSTASH_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
-  const hasUpstashKV = !!(restUrl && restToken);
+  // On tronque à 24 titres max pour rester rapide
+  const toTranslate = titles.slice(0, 24);
 
-  const now = new Date();
-  const serverNowISO = now.toISOString();
-  const todayFr = now.toLocaleDateString('fr-FR', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  });
-
-  let feed = [];
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Construit l’origin (pour appeler notre proxy local /api/rss_fetch)
-    const host = req.headers.get('host') || process.env.VERCEL_URL;
-    const origin = host?.startsWith('http') ? host : `https://${host}`;
-
-    const r = await fetch(`${origin}/api/rss_fetch`, {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls: SOURCES }),
-      cache: 'no-store',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: 'Tu es un traducteur. Traduis des titres de news en français, de façon naturelle, sans perdre les symboles (€/$). Réponds en JSON: {"t":[]}' },
+          { role: 'user', content: JSON.stringify({ t: toTranslate }) },
+        ],
+      }),
     });
-
-    if (!r.ok) throw new Error(`rss_fetch HTTP ${r.status}`);
+    clearTimeout(id);
+    if (!r.ok) return null;
     const data = await r.json();
+    const content = data?.choices?.[0]?.message?.content || '{}';
+    const parsed = JSON.parse(content);
+    const arr = Array.isArray(parsed.t) ? parsed.t : null;
+    return arr && arr.length === toTranslate.length ? arr : null;
+  } catch {
+    clearTimeout(id);
+    return null;
+  }
+}
 
-    // Sécurise et filtre erreurs
-    const items = (Array.isArray(data.items) ? data.items : [])
-      .filter(x => !x.error && !/^Erreur RSS:/i.test(x.title || ''));
+// -------------- handler --------------
+export default async function handler(req) {
+  const now = new Date();
+  const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.MoneyMotorY || process.env.MMM_Vercel_Key || '';
 
-    // Normalise -> (id, type, title, price, url, updatedAtISO, source)
-    feed = items.map(x => {
-      const type = guessType(x.url || x.source, x.title || '');
-      return {
-        id: x.id,
-        type,
-        title: (x.title || '').trim(),
-        price: extractPriceFromTitle(x.title),
-        url: x.url || null,
-        updatedAtISO: x.updatedAtISO,
-        source: x.source,
-      };
-    });
+  const host = req.headers.get('host') || process.env.VERCEL_URL;
+  const origin = host?.startsWith('http') ? host : `https://${host}`;
 
-    // Dédoublonne par (url || title), ordonne par date, coupe à 60 éléments
-    feed = dedupe(feed, it => (it.url || it.title || it.id))
-      .sort((a, b) => new Date(b.updatedAtISO) - new Date(a.updatedAtISO))
-      .slice(0, 60);
+  let all = [];
 
-  } catch (_e) {
-    // En cas de panne RSS -> fallback visuel minimal (ne casse pas la page)
-    feed = [
-      { id:'demo-1', type:'crypto',  title:'BTC renoue avec les 61k$ — momentum positif', price:61000, url:'https://www.coindesk.com/',       updatedAtISO: serverNowISO, source:'demo' },
-      { id:'demo-2', type:'marches', title:'Actions EU: rebond des valeurs bancaires',     price:null,  url:'https://www.reuters.com/markets/', updatedAtISO: serverNowISO, source:'demo' },
-      { id:'demo-3', type:'auto',    title:'BMW 320d 2019 • 92 000 km — 17 900€',         price:17900, url:'https://www.ebay.fr/',             updatedAtISO: serverNowISO, source:'demo' },
+  try {
+    // On boucle par groupes (séquentiel) pour éviter le timeout global
+    for (const group of SOURCE_GROUPS) {
+      const r = await fetch(`${origin}/api/rss_fetch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: group }),
+        cache: 'no-store',
+      });
+
+      if (r.ok) {
+        const data = await r.json();
+        const items = (data.items || []).map(x => ({
+          id: x.id,
+          type: guessType(x.url, x.title),
+          title: (x.title || '').trim(),
+          url: x.url || null,
+          source: x.source || '',
+          updatedAtISO: x.updatedAtISO || now.toISOString(),
+          price: extractPrice(x.title || ''),
+        }));
+        all.push(...items);
+      }
+
+      // mini pause entre groupes pour ne pas saturer (200ms)
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(res => setTimeout(res, 200));
+    }
+
+    // Dédoublonne + tri date + limite
+    all = dedupe(all).sort((a,b)=> new Date(b.updatedAtISO) - new Date(a.updatedAtISO)).slice(0, 60);
+
+    // Traduction partielle FR (si clé) sur les premiers titres
+    const fr = await translateFRIfPossible(all.map(x=>x.title), OPENAI_KEY, 2500);
+    if (fr) {
+      for (let i=0;i<fr.length && i<all.length;i++) {
+        all[i].title = fr[i] || all[i].title;
+      }
+    }
+  } catch (e) {
+    // Fallback visuel si jamais tout casse
+    all = [
+      { id: 'demo-crypto',  type: 'crypto',  title: 'Bitcoin rebondit au-dessus de 61 000 $', url: 'https://www.coindesk.com', updatedAtISO: now.toISOString() },
+      { id: 'demo-marches', type: 'marches', title: 'Les marchés européens clôturent en hausse', url: 'https://www.reuters.com/markets', updatedAtISO: now.toISOString() },
+      { id: 'demo-tech',    type: 'tech',    title: 'Nouveau modèle d’IA : percée en vision', url: 'https://techcrunch.com', updatedAtISO: now.toISOString() },
+      { id: 'demo-auto',    type: 'auto',    title: 'BMW 320d 2019 • 92 000 km — 17 900 €', url: 'https://www.ebay.fr', updatedAtISO: now.toISOString() },
+      { id: 'demo-immo',    type: 'immo',    title: 'Location meublée : les rendements se maintiennent', url: 'https://www.lesechos.fr', updatedAtISO: now.toISOString() },
     ];
   }
 
   const body = {
     ok: true,
-    status: 'online',
-    hasOpenAIKey,
-    hasUpstashKV,
-    env: process.env.VERCEL_ENV || 'unknown',
     ts: Date.now(),
-    serverNowISO,
-    todayFr,
-    feed,
+    env: process.env.VERCEL_ENV || 'unknown',
+    todayFr: now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    serverNowISO: now.toISOString(),
+    feed: all,
+    count: all.length,
   };
 
   return new Response(JSON.stringify(body), { status: 200, headers: headers() });
