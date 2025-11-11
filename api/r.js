@@ -10,30 +10,52 @@ function noStore() {
   };
 }
 
-// ✅ Autorise les domaines pour tes offres & articles
+// ✅ Domains autorisés (affiliation / redirection)
+// (Tu peux en ajouter/retirer à tout moment)
 const ALLOW = [
   // e-commerce / auto
   "ebay.fr","www.ebay.fr",
-  "amzn.to","amazon.fr","www.amazon.fr",
+  "amazon.fr","www.amazon.fr","amzn.to",
 
-  // travel
+  // travel (si tu les utilises)
   "booking.com","www.booking.com",
   "airbnb.fr","www.airbnb.fr",
 
   // crypto news
   "coindesk.com","www.coindesk.com",
-  "cointelegraph.com","www.cointelegraph.com",
+  "cointelegraph.com","www.cointelegraph.com","fr.cointelegraph.com",
 
-  // presse éco/finance (ajoute ceux que tu utilises)
-  "lesechos.fr","www.lesechos.fr",
-  "zonebourse.com","www.zonebourse.com"
+  // presse éco/finance FR
+  "lesechos.fr","www.lesechos.fr","investir.lesechos.fr",
+  "zonebourse.com","www.zonebourse.com",
+  "boursorama.com","www.boursorama.com",
+
+  // finance/business EN
+  "reuters.com","www.reuters.com",
+  "cnbc.com","www.cnbc.com",
+
+  // tech / startups
+  "techcrunch.com","www.techcrunch.com",
+  "theverge.com","www.theverge.com"
 ];
 
-function isAllowed(u) {
+// Vérifie si host correspond à la allowlist (gère sous-domaines)
+function isHostAllowed(hostname) {
+  const h = (hostname || "").toLowerCase();
+  return ALLOW.some(d => h === d || h.endsWith(`.${d}`));
+}
+
+// Normalise l'URL (force https si pas de protocole)
+function normalizeUrl(u) {
   try {
-    const h = new URL(u).hostname.toLowerCase();
-    return ALLOW.some(d => h === d || h.endsWith(`.${d}`));
-  } catch { return false; }
+    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+    const url = new URL(u);
+    // refuse tout sauf http/https
+    if (!/^https?$/.test(url.protocol.replace(":",""))) throw new Error("bad_protocol");
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 async function incrClick(key) {
@@ -50,13 +72,21 @@ async function incrClick(key) {
 
 export default async function handler(req) {
   const urlObj = new URL(req.url);
-  const u = urlObj.searchParams.get("u");              // URL à rediriger (brute)
-  const s = urlObj.searchParams.get("s") || "gen";     // source/type (auto/immo/crypto…)
+  const raw = urlObj.searchParams.get("u");         // URL à rediriger (brute)
+  const s   = urlObj.searchParams.get("s") || "gen"; // source/type (auto/immo/crypto/finance/tech…)
 
-  if (!u) return new Response("Missing u", { status: 400, headers: noStore() });
-  if (!isAllowed(u)) return new Response("Domain not allowed", { status: 400, headers: noStore() });
+  if (!raw) {
+    return new Response("Missing u", { status: 400, headers: noStore() });
+  }
 
-  const target = new URL(u);
+  const target = normalizeUrl(raw);
+  if (!target) {
+    return new Response("Bad URL", { status: 400, headers: noStore() });
+  }
+
+  if (!isHostAllowed(target.hostname)) {
+    return new Response("Domain not allowed", { status: 400, headers: noStore() });
+  }
 
   // Ajoute un subid si absent (tracking)
   if (!target.searchParams.has("subid")) {
@@ -66,6 +96,6 @@ export default async function handler(req) {
   // Comptage (non bloquant)
   incrClick(`click:${s}:${target.hostname}`);
 
-  // Redirection 302
+  // Redirection 302 → annonceur / média
   return Response.redirect(target.toString(), 302);
 }
