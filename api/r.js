@@ -1,3 +1,4 @@
+// /api/r.js
 export const config = { runtime: "edge" };
 
 function noStore() {
@@ -9,14 +10,15 @@ function noStore() {
   };
 }
 
-// Whitelist optionnelle via env (CSV). Si vide → autorise tout HTTPS.
+// ⚙️ Si la variable d'env AFFIL_DOMAINS est vide => on autorise TOUS les hôtes HTTPS.
+// Sinon, on restreint à la liste fournie (CSV).
 const ENV_ALLOW = (process.env.AFFIL_DOMAINS || "")
   .split(",")
   .map(s => s.trim().toLowerCase())
   .filter(Boolean);
 
 function isAllowedHost(host) {
-  if (ENV_ALLOW.length === 0) return true;
+  if (ENV_ALLOW.length === 0) return true; // mode permissif
   return ENV_ALLOW.some(d => host === d || host.endsWith(`.${d}`));
 }
 
@@ -59,15 +61,4 @@ export default async function handler(req) {
     if (debug) {
       return new Response(JSON.stringify({
         ok: true,
-        received: u,
-        final: target.toString(),
-        host,
-        allowedBy: ENV_ALLOW.length ? "ENV_ALLOW" : "permissive-https",
-      }, null, 2), { status: 200, headers: { ...noStore(), "Content-Type": "application/json; charset=utf-8" } });
-    }
-
-    return Response.redirect(target.toString(), 302);
-  } catch (e) {
-    return new Response(`Erreur interne: ${e?.message || e}`, { status: 500, headers: noStore() });
-  }
-}
+        received
