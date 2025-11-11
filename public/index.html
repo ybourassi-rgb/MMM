@@ -4,14 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Y — Tableau de bord</title>
-  <!-- deploy test: force redeploy v10.4.1 -->
+  <!-- build v10.4.1 (stable) -->
   <style>
     :root{
       --bg:#0c0f12; --panel:#12161b; --muted:#a9b3c1; --text:#e9eef6;
       --primary:#4da3ff; --ok:#29d38d; --chip:#1a1f25; --line:#1c232b;
       --danger:#ff6b6b; --badge:#0f1420;
     }
-    *{box-sizing:border-box} html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
     a{color:var(--primary);text-decoration:none}
     .wrap{max-width:1100px;margin:28px auto;padding:0 16px}
     header{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
@@ -37,11 +38,6 @@
     .stack{display:flex;gap:10px;flex-wrap:wrap}
     .response{background:#0b1118;border:1px dashed #243244;border-radius:12px;padding:12px;margin-top:12px}
     .response .title{font-weight:600;margin:0 0 6px}
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-    @media (max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}}
-    .kpi{background:#0e141a;border:1px solid var(--line);border-radius:10px;padding:12px}
-    .kpi .k{color:var(--muted);font-size:12px}
-    .kpi .v{font-weight:700;font-size:18px;margin-top:2px}
     .list{display:flex;flex-direction:column;gap:10px}
     .item{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0e141a}
     .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0c1320;border:1px solid #253043;color:#9fb4d3;font-size:12px}
@@ -62,7 +58,7 @@
       </div>
     </header>
 
-    <!-- QUICK CHIPS (affichage simple) -->
+    <!-- QUICK CHIPS -->
     <div class="chips">
       <div class="chip">Conseil d’investissement</div>
       <div class="chip">Marché en direct</div>
@@ -71,7 +67,7 @@
     </div>
 
     <div class="grid">
-      <!-- CONSEIL D’INVESTISSEMENT -->
+      <!-- CONSEIL -->
       <section class="module" id="advice">
         <h3>Conseil d’investissement</h3>
         <p class="p-muted">Pose une question, colle un lien d’annonce ou décris l’opportunité. Nous te donnons un verdict chiffré + plan d’action.</p>
@@ -93,69 +89,34 @@
       </section>
 
       <!-- MARCHÉ EN DIRECT -->
-      <section class="module">
+      <section class="module" id="market">
         <h3>Marché en direct</h3>
         <p class="p-muted">Flux synthétique des opportunités (auto, immo, business, crypto). Mise à jour en continu.</p>
-        <div class="kpis">
-          <div class="kpi"><div class="k">Opportunités du jour</div><div class="v">128</div></div>
-          <div class="kpi"><div class="k">Spread moyen</div><div class="v">+6.1%</div></div>
-          <div class="kpi"><div class="k">Risque médian</div><div class="v">34/100</div></div>
-          <div class="kpi"><div class="k">Liquidité</div><div class="v">Bonne</div></div>
-        </div>
         <div class="list" style="margin-top:12px" id="market-list">
-          <!-- Rempli dynamiquement via /api/status -->
+          <div class="item p-muted">Chargement des opportunités…</div>
         </div>
       </section>
 
-      <!-- ANALYSE RAPIDE Y-SCORE -->
+      <!-- Y-SCORE (placeholder) -->
       <section class="module">
         <h3>Analyse rapide Y-Score</h3>
-        <p class="p-muted">Rentre 3–4 chiffres clés et obtiens un score instantané (rentabilité, risque, liquidité, momentum).</p>
-        <div class="row"><input class="input" id="price" placeholder="Prix (€)" inputmode="decimal"></div>
-        <div class="row"><input class="input" id="market" placeholder="Valeur marché (€)" inputmode="decimal"></div>
-        <div class="row"><input class="input" id="risk" placeholder="Risque (0–100)" inputmode="numeric"></div>
-        <div class="row"><input class="input" id="liquidity" placeholder="Liquidité (transactions/mois)" inputmode="numeric"></div>
-        <div class="stack" style="margin-top:8px">
-          <button class="btn primary" id="yscore-run">Analyser</button>
-          <button class="btn" id="yscore-clear">Effacer</button>
-        </div>
-        <div class="response" id="yscore-resp" style="display:none">
-          <div class="title">Résultat</div>
-          <div id="yscore-text">—</div>
-        </div>
+        <p class="p-muted">À venir.</p>
       </section>
 
-      <!-- RÉGLAGES (placeholder conservé) -->
-      <section class="module">
-        <h3>Réglages du moteur (Y-Score)</h3>
-        <p class="p-muted">Ajuste les pondérations, charge/enregistre des profils et teste sur un échantillon.</p>
-        <div id="yscore-panel"></div>
-      </section>
-
-      <!-- ALERTES MARCHÉ -->
+      <!-- ALERTES (placeholder) -->
       <section class="module">
         <h3>Alertes marché</h3>
-        <p class="p-muted">Crée des alertes ciblées (prix, rendement, risque, temps de revente). Nous te prévenons dès qu’une opportunité matche.</p>
-        <div class="list">
-          <div class="item">
-            <div><strong>Auto</strong> • Spread ≥ 12% • Risque ≤ 40/100</div>
-            <div class="p-muted">2 alertes actives</div>
-          </div>
-          <div class="item">
-            <div><strong>Immo</strong> • Rendement brut ≥ 6% • Cash-on-cash ≥ 9%</div>
-            <div class="p-muted">1 alerte active</div>
-          </div>
-        </div>
+        <p class="p-muted">À venir.</p>
       </section>
     </div>
 
     <footer>
-      Money Motor Y • build v10.4.1 — déployé pour test de routage
+      Money Motor Y • build v10.4.1 — stable
     </footer>
   </div>
 
   <script>
-    // --- helper JSON avec gestion d’erreurs
+    // --- helper JSON
     async function j(url, opts){
       const r = await fetch(url, opts);
       const raw = await r.text();
@@ -168,21 +129,22 @@
       }
     }
 
-    // --- Badge statut
+    // --- Remplit badge + marché
     (async () => {
       try {
         const s = await j('/api/status');
         const dot = document.getElementById('status-dot');
         const st  = document.getElementById('status-text');
         if (!s.hasOpenAIKey) { dot.style.background = '#ff6b6b'; st.textContent = 'État IA : Clé OpenAI manquante'; }
-        else if (!s.hasUpstashKV) { dot.style.background = '#ffb020'; st.textContent = 'État IA : KV non configuré'; }
         else { dot.style.background = '#29d38d'; st.textContent = 'État IA : En ligne'; }
 
-        // Remplir la liste marché (si s.feed existe)
         const list = document.getElementById('market-list');
-        if (Array.isArray(s.feed) && s.feed.length) {
-          list.innerHTML = '';
-          for (const it of s.feed) {
+        list.innerHTML = '';
+        const feed = Array.isArray(s.feed) ? s.feed : [];
+        if (!feed.length) {
+          list.innerHTML = '<div class="item p-muted">Aucune opportunité pour le moment.</div>';
+        } else {
+          for (const it of feed) {
             const time = it.updatedAtISO ? new Date(it.updatedAtISO).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
             const div = document.createElement('div');
             div.className = 'item';
@@ -194,14 +156,16 @@
             list.appendChild(div);
           }
         }
-      } catch {
+      } catch (e) {
         const dot = document.getElementById('status-dot');
         const st  = document.getElementById('status-text');
         dot.style.background = '#ff6b6b'; st.textContent = 'État IA : Hors ligne';
+        const list = document.getElementById('market-list');
+        list.innerHTML = `<div class="item danger">Erreur: ${e.message}</div>`;
       }
     })();
 
-    // --- CONSEIL (STREAMING + FALLBACK)
+    // --- CONSEIL (streaming -> fallback)
     const $in   = document.getElementById('advice-input');
     const $send = document.getElementById('advice-send');
     const $clr  = document.getElementById('advice-clear');
@@ -217,7 +181,7 @@
       $box.style.display='block';
       $txt.textContent = 'Analyse en cours…';
 
-      // 1) tentative en streaming
+      // 1) Streaming si dispo
       try{
         const resp = await fetch('/api/advisor_stream', {
           method:'POST',
@@ -238,7 +202,7 @@
         }
         if(!acc.trim()) $txt.textContent = 'Réponse vide.';
       }catch(e){
-        // 2) fallback JSON classique
+        // 2) Fallback JSON
         try{
           const data = await j('/api/advisor', {
             method:'POST',
@@ -256,47 +220,6 @@
 
     $clr.addEventListener('click', ()=>{ $in.value=''; $box.style.display='none'; $txt.textContent=''; });
     $ys.addEventListener('click', ()=>{ $box.style.display='block'; $txt.textContent='(Bientôt) Analyse Y-Score détaillée…'; });
-
-    // --- Y-SCORE (API réelle)
-    const $p = id => document.getElementById(id);
-    const $yrun = document.getElementById('yscore-run');
-    const $yclr = document.getElementById('yscore-clear');
-    const $ybox = document.getElementById('yscore-resp');
-    const $ytxt = document.getElementById('yscore-text');
-
-    $yrun?.addEventListener('click', async ()=>{
-      const price = parseFloat($p('price').value||0);
-      const market= parseFloat($p('market').value||0);
-      const risk  = Math.max(0, Math.min(100, parseFloat($p('risk').value||50)));
-      const liq   = Math.max(0, parseFloat($p('liquidity').value||0));
-
-      try{
-        const data = await j('/api/yscore', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            modeMMM:false,
-            items:[{ id:'custom', price, fairValue:market, volatility30dPct:100-risk, avgDailyLiquidity:liq }]
-          })
-        });
-        const top = data.results?.[0];
-        $ybox.style.display = 'block';
-        $ytxt.textContent = top ? `Y-Score ${top.yScore}/100 • Value ${top.features.value.toFixed(1)} • Momentum ${top.features.momentum.toFixed(0)} • Risque ${top.features.risk.toFixed(0)} • Liquidité ${top.features.liq.toFixed(0)}` : '—';
-      }catch(e){
-        $ybox.style.display = 'block';
-        $ytxt.textContent = e.message || 'Erreur Y-Score';
-      }
-    });
-
-    $yclr?.addEventListener('click', ()=>{
-      ['price','market','risk','liquidity'].forEach(id=> $p(id)?.value='');
-      if($ybox){ $ybox.style.display='none'; $ytxt.textContent=''; }
-    });
-  </script>
-
-  <!-- Panneau Y-Score (script + montage) -->
-  <script src="/components/yscore_panel.js"></script>
-  <script>
-    window.YScorePanel?.mount("yscore-panel");
   </script>
 </body>
 </html>
