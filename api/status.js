@@ -13,23 +13,21 @@ function headers() {
   };
 }
 
-// 👉 AJOUTE ICI TES RSS réels (exemples génériques ci-dessous)
-// Choisis des RSS qui listent des opportunités ou actualités marché.
+// 👉 Mets tes flux ici (tu peux en ajouter/supprimer)
 const SOURCES = [
-  // 'https://example.com/auto.rss',
-  // 'https://example.com/immo.rss',
-  // 'https://example.com/crypto.rss',
+  'https://fr.cointelegraph.com/rss',
+  'https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml',
+  'https://www.ebay.fr/sch/i.html?_nkw=BMW+320d&_sop=10&_rss=1',
 ];
 
 function guessType(urlOrSource) {
   const u = (urlOrSource || '').toLowerCase();
-  if (u.includes('auto') || u.includes('car') || u.includes('voiture')) return 'auto';
+  if (u.includes('auto') || u.includes('car') || u.includes('voiture') || u.includes('ebay')) return 'auto';
   if (u.includes('immo') || u.includes('realestate') || u.includes('immobilier')) return 'immo';
-  if (u.includes('crypto') || u.includes('coin') || u.includes('btc')) return 'crypto';
+  if (u.includes('crypto') || u.includes('coin') || u.includes('btc') || u.includes('coindesk') || u.includes('cointelegraph')) return 'crypto';
   return 'gen';
 }
 
-// extrait un nombre du titre (ex: “21 000€” → 21000)
 function extractPriceFromTitle(title) {
   if (!title) return null;
   const m = title.replace(/\u00A0/g,' ').match(/(\d[\d\s.,’']+)\s?(€|eur|mad|dhs|usd)?/i);
@@ -39,21 +37,7 @@ function extractPriceFromTitle(title) {
   return isNaN(val) ? null : Math.round(val);
 }
 
-async function fetchRssItems(urls) {
-  // Appelle la route /api/rss_fetch (même projet)
-  const r = await fetch('https://'+(process.env.VERCEL_URL || '')+'/api/rss_fetch', {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({ urls }),
-    cache: 'no-store',
-  });
-  if (!r.ok) throw new Error(`rss_fetch HTTP ${r.status}`);
-  const data = await r.json();
-  if (!data.ok) throw new Error(data.error || 'rss_fetch non OK');
-  return data.items || [];
-}
-
-export default async function handler() {
+export default async function handler(req) {
   const hasOpenAIKey =
     !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 10;
 
@@ -72,32 +56,41 @@ export default async function handler() {
   let feed = [];
 
   try {
+    // 🔑 construit l’origin du déploiement courant
+    const host = req?.headers?.get('host') || process.env.VERCEL_URL || 'mmm-alpha-one.vercel.app';
+    const origin = host.startsWith('http') ? host : `https://${host}`;
+
     if (SOURCES.length) {
-      const items = await fetchRssItems(SOURCES);
-      feed = items.map(x => {
-        const type  = guessType(x.url || x.source);
-        const price = extractPriceFromTitle(x.title);
-        return {
-          id: x.id,
-          type,
-          title: x.title,
-          price,
-          url: x.url,                  // ⚠️ si tu as un lien affilié, mets-le ici
-          updatedAtISO: x.updatedAtISO,
-          source: x.source,
-        };
+      // appelle l’API interne /api/rss_fetch du même domaine
+      const r = await fetch(`${origin}/api/rss_fetch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: SOURCES }),
+        cache: 'no-store',
       });
+      if (!r.ok) throw new Error(`rss_fetch HTTP ${r.status}`);
+      const data = await r.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      feed = items.map(x => ({
+        id: x.id,
+        type: guessType(x.url || x.source),
+        title: x.title,
+        price: extractPriceFromTitle(x.title),
+        url: x.url,                       // si tu as un lien affilié natif, il sera utilisé
+        updatedAtISO: x.updatedAtISO,
+        source: x.source,
+      }));
     }
   } catch (e) {
-    // En cas d'erreur RSS, on ne casse pas le heartbeat
+    // ne casse pas le heartbeat si RSS KO
     feed = [];
   }
 
-  // 🧪 Fallback de démo si aucune source n’est fournie
+  // 🧪 fallback démo si rien
   if (feed.length === 0) {
     feed = [
-      { id:'demo-1', type:'auto', title:'BMW 320d 2019 • 92 000 km — 17 900€', price:17900, url:'https://www.amazon.fr/?tag=ton-tag-affil', updatedAtISO: serverNowISO, source: 'demo' },
-      { id:'demo-2', type:'immo', title:'Studio Gueliz • 34 m² — 460 000 MAD',  price:460000, url:'https://www.booking.com/?aid=TON_AID',      updatedAtISO: serverNowISO, source: 'demo' },
+      { id:'demo-1', type:'auto',  title:'BMW 320d 2019 • 92 000 km — 17 900€', price:17900, url:'https://www.ebay.fr', updatedAtISO: serverNowISO, source:'demo' },
+      { id:'demo-2', type:'crypto',title:'Bitcoin — signal momentum positif',     price:null,  url:'https://www.coindesk.com', updatedAtISO: serverNowISO, source:'demo' },
     ];
   }
 
