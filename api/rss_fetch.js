@@ -1,89 +1,80 @@
-// /api/rss_fetch.js
-export const config = { runtime: 'nodejs' }; // ✅ plus tolérant que Edge pour les timeouts
+export const config = { runtime: "edge" };
 
 function headers() {
   return {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Access-Control-Allow-Origin': '*',
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Pragma": "no-cache",
+    "CDN-Cache-Control": "no-store",
+    "Vercel-CDN-Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
   };
 }
 
-// parseur minimal RSS + Atom
-function parseFeed(xml, source) {
+function parseItems(xml, source) {
   const items = [];
-
-  // RSS <item>
-  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)) {
-    const chunk = m[1];
-    const get = (tag, fallbackRE) => {
-      const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
-      const mm = chunk.match(re);
-      if (mm?.[1]) return mm[1].trim();
-      if (fallbackRE) {
-        const mm2 = chunk.match(fallbackRE);
-        if (mm2?.[1]) return mm2[1].trim();
-      }
-      return '';
-    };
-    const title = get('title');
-    const link  = get('link', /<guid.*?>([\s\S]*?)<\/guid>/i);
-    const pub   = get('pubDate') || get('date') || '';
-    if (title && link) items.push({ title, link, pubDate: pub, source });
-  }
-
-  // Atom <entry>
-  if (items.length === 0) {
-    for (const m of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi)) {
-      const chunk = m[1];
-      const t = (chunk.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').trim();
-      const l = (chunk.match(/<link[^>]*href="([^"]+)"/i)?.[1] || '').trim();
-      const d = (chunk.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i)?.[1] || '').trim();
-      if (t && l) items.push({ title: t, link: l, pubDate: d, source });
+  const itemRe = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
+  let m;
+  while ((m = itemRe.exec(xml))) {
+    const block = m[1];
+    const get = (tag) =>
+      (block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"))?.[1] ?? "")
+        .replace(/<!\[CDATA\[(.*?)\]\]>/gis, "$1")
+        .trim();
+    const title = get("title");
+    const link  = get("link") || get("guid") || "";
+    const pub   = get("pubDate") || get("dc:date") || "";
+    const iso   = pub ? new Date(pub).toISOString() : new Date().toISOString();
+    if (title || link) {
+      items.push({
+        id: (link || title || Math.random().toString(36).slice(2)).slice(-64),
+        title, url: link || null, source, updatedAtISO: iso,
+      });
     }
   }
-
   return items;
 }
 
-export default async function handler(req, res) {
-  try {
-    const u = new URL(req.url, 'http://x'); // base fictive pour parse
-    const rss = u.searchParams.get('u');
-    const max = Math.max(1, Math.min(30, +(u.searchParams.get('max') || '12')));
+export default async function handler(req) {
+  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: headers() });
 
-    if (!rss) {
-      return new Response(JSON.stringify({ ok:false, error:'Missing u' }), { status:400, headers:headers() });
-    }
-
-    // 12s timeout
-    const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), 12000);
-
-    const r = await fetch(rss, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36',
-        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
-        'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
-      },
-      cache: 'no-store',
-    });
-    clearTimeout(to);
-
-    if (!r.ok) {
-      const t = await r.text().catch(() => r.statusText);
-      return new Response(JSON.stringify({ ok:false, error:`RSS ${r.status}: ${t}` }), { status:502, headers:headers() });
-    }
-
-    const xml = await r.text();
-    const items = parseFeed(xml, rss).slice(0, max);
-    return new Response(JSON.stringify({ ok:true, source:rss, items }), { status:200, headers:headers() });
-  } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e?.message||e) }), { status:500, headers:headers() });
+  let urls = [];
+  if (req.method === "GET") {
+    const u = new URL(req.url).searchParams.get("url");
+    if (u) urls = [u];
+  } else if (req.method === "POST") {
+    const body = await req.json().catch(()=> ({}));
+    urls = Array.isArray(body?.urls) ? body.urls : [];
+  } else {
+    return new Response(JSON.stringify({ ok:false, error:"Méthode non autorisée" }), { status:405, headers:headers() });
   }
+
+  if (!urls.length) {
+    return new Response(JSON.stringify({ ok:false, error:"Aucune URL fournie" }), { status:400, headers:headers() });
+  }
+
+  const out = [];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const xml = await r.text();
+      out.push(...parseItems(xml, u));
+    } catch (e) {
+      out.push({
+        id: `err-${Math.random().toString(36).slice(2)}`,
+        title: `Erreur RSS: ${u}`,
+        url: u,
+        source: u,
+        updatedAtISO: new Date().toISOString(),
+        error: String(e?.message || e),
+      });
+    }
+  }
+
+  out.sort((a, b) => new Date(b.updatedAtISO) - new Date(a.updatedAtISO));
+
+  return new Response(JSON.stringify({ ok:true, serverNowISO:new Date().toISOString(), items:out }), { status:200, headers:headers() });
 }
