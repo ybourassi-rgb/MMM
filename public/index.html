@@ -65,6 +65,7 @@
     </div>
 
     <div class="grid">
+      <!-- CONSEIL -->
       <section class="module" id="advice">
         <h3>Conseil d’investissement</h3>
         <p class="p-muted">Pose une question, colle un lien d’annonce ou décris l’opportunité.</p>
@@ -80,6 +81,7 @@
         </div>
       </section>
 
+      <!-- MARCHÉ -->
       <section class="module" id="market">
         <h3>Marché en direct</h3>
         <p class="p-muted">Flux synthétique des opportunités (auto, immo, crypto...).</p>
@@ -99,38 +101,96 @@
       catch{ throw new Error(raw || ('Erreur '+r.status)); }
     }
 
-    // Badge état
+    // ===== BADGE ÉTAT =====
     (async () => {
       try {
         const s = await j('/api/status');
         const dot = document.getElementById('status-dot');
         const st  = document.getElementById('status-text');
         if (!s.hasOpenAIKey) { dot.style.background = '#ff6b6b'; st.textContent = 'État IA : Clé OpenAI manquante'; }
-        else if (!s.hasUpstashKV) { dot.style.background = '#ffb020'; st.textContent = 'État IA : KV non configuré'; }
+        else if (s.hasUpstashKV === false) { dot.style.background = '#ffb020'; st.textContent = 'État IA : KV non configuré'; }
         else { dot.style.background = '#29d38d'; st.textContent = 'État IA : En ligne'; }
-      } catch {}
+      } catch {
+        const dot = document.getElementById('status-dot');
+        const st  = document.getElementById('status-text');
+        dot.style.background = '#ff6b6b'; st.textContent = 'État IA : Hors ligne';
+      }
     })();
 
-    // Marché en direct
+    // ===== CONSEIL (appel /api/advisor) =====
+    (()=>{
+      const $in   = document.getElementById('advice-input');
+      const $send = document.getElementById('advice-send');
+      const $clr  = document.getElementById('advice-clear');
+      const $ys   = document.getElementById('advice-yscore');
+      const $box  = document.getElementById('advice-resp');
+      const $txt  = document.getElementById('advice-text');
+
+      $send.addEventListener('click', async ()=>{
+        const prompt = ($in.value||'').trim();
+        $box.style.display = 'block';
+        if(!prompt){ $txt.innerHTML = '<span class="danger">Saisis un message.</span>'; return; }
+        $send.disabled = true;
+        $txt.textContent = 'Analyse en cours…';
+        try{
+          const data = await j('/api/advisor',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ prompt })
+          });
+          $txt.textContent = data.reply || '—';
+        }catch(e){
+          $txt.innerHTML = '<span class="danger">'+ (e.message || 'Erreur') +'</span>';
+        }finally{
+          $send.disabled = false;
+        }
+      });
+
+      $clr.addEventListener('click', ()=>{
+        $in.value = '';
+        $box.style.display = 'none';
+        $txt.textContent = '';
+      });
+
+      $ys.addEventListener('click', ()=>{
+        $box.style.display = 'block';
+        $txt.textContent = '(Bientôt) Analyse Y-Score détaillée…';
+      });
+    })();
+
+    // ===== MARCHÉ EN DIRECT (affiliation via /api/r) =====
     (async ()=>{
       const dateEl = document.getElementById('market-date');
-      const list = document.getElementById('market-list');
+      const list   = document.getElementById('market-list');
       list.innerHTML = '<div class="item">Chargement…</div>';
+
+      function card(it){
+        const div = document.createElement('div');
+        div.className = 'item';
+        const type = (it.type||'gen').toUpperCase();
+        const time = it.updatedAtISO ? new Date(it.updatedAtISO).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
+        const btn  = it.url
+          ? `<a class="btn" style="margin-top:8px" target="_blank" rel="nofollow sponsored noopener" href="/api/r?u=${encodeURIComponent(it.url)}&s=${encodeURIComponent(it.type||'gen')}">Voir l’offre</a>`
+          : '';
+        div.innerHTML = `
+          <div><strong>${it.title||'—'}</strong> <span class="pill">${type}</span></div>
+          <div class="p-muted">${time}</div>
+          ${btn}
+        `;
+        return div;
+      }
+
       try{
         const data = await j('/api/status');
-        dateEl.textContent = `Aujourd’hui : ${data.todayFr}`;
+        if (data.todayFr) dateEl.textContent = `Aujourd’hui : ${data.todayFr}`;
         list.innerHTML = '';
-        if(!data.feed?.length){ list.innerHTML = '<div class="item p-muted">Aucune opportunité disponible.</div>'; return; }
-        for(const it of data.feed){
-          const div = document.createElement('div');
-          div.className = 'item';
-          div.innerHTML = `
-            <div><strong>${it.title}</strong> <span class="pill">${(it.type||'GEN').toUpperCase()}</span></div>
-            <div class="p-muted">${it.updatedAtISO ? new Date(it.updatedAtISO).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
-            ${it.url ? `<a class="btn" style="margin-top:8px" target="_blank" rel="nofollow sponsored noopener" href="/api/r?u=${encodeURIComponent(it.url)}&s=${encodeURIComponent(it.type||'gen')}">Voir l’offre</a>` : ''}
-          `;
-          list.appendChild(div);
+
+        const feed = Array.isArray(data.feed) ? data.feed : [];
+        if (!feed.length){
+          list.innerHTML = '<div class="item p-muted">Aucune opportunité disponible.</div>';
+          return;
         }
+        for (const it of feed) list.appendChild(card(it));
       }catch(e){
         list.innerHTML = '<div class="item danger">Erreur : '+e.message+'</div>';
       }
