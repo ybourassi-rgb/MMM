@@ -13,21 +13,12 @@ export default async function handler(req) {
     });
   }
 
-  try {
-    // Import dynamique pour ne pas casser le build Edge
-    const { runCycle } = await import("../lib/affiliator_run.js");
-    const result = await runCycle();
-    return new Response(JSON.stringify({ ok: true, ...result }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({
-      ok: false,
-      error: err?.message || String(err)
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
-  }
+  // 🔹 Ping Railway (ou autre worker) et répond tout de suite
+  fetch("https://ton-projet-railway.up.railway.app/runCycle", { method: "POST" })
+    .catch(console.error);
+
+  return new Response(JSON.stringify({ ok: true, msg: "Cycle déclenché ✅" }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
 }
