@@ -13,11 +13,28 @@ function headers() {
   };
 }
 
-// 👉 Ajoute/retire tes flux ici (tu peux étendre la liste)
+// 👉 Ajoute/retire tes flux ici (liste enrichie : finance, crypto, tech, auto)
 const SOURCES = [
+  // --- Crypto / Marchés crypto ---
   'https://fr.cointelegraph.com/rss',
   'https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml',
-  'https://www.ebay.fr/sch/i.html?_nkw=BMW+320d&_sop=10&_rss=1',
+
+  // --- Finance / Bourse FR ---
+  'https://www.zonebourse.com/rss/actualite/',
+  'https://investir.lesechos.fr/rss/flux.xml',
+  'https://www.boursorama.com/rss/flux-actualites-economie.xml',
+
+  // --- Finance / Business EN ---
+  'https://www.reuters.com/finance/rss',
+  'https://www.reuters.com/business/finance/rss',
+  'https://www.cnbc.com/id/100003114/device/rss/rss.html',
+
+  // --- Tech / Startups ---
+  'https://techcrunch.com/feed/',
+  'https://www.theverge.com/rss/index.xml',
+
+  // --- Auto deals ---
+  'https://www.ebay.fr/sch/i.html?_nkw=voiture&_sop=10&_rss=1',
 ];
 
 function guessType(urlOrSource = '') {
@@ -25,6 +42,8 @@ function guessType(urlOrSource = '') {
   if (u.includes('ebay') || u.includes('auto') || u.includes('voiture') || u.includes('car')) return 'auto';
   if (u.includes('immo') || u.includes('immobilier') || u.includes('realestate')) return 'immo';
   if (u.includes('crypto') || u.includes('coin') || u.includes('btc') || u.includes('coindesk') || u.includes('cointelegraph')) return 'crypto';
+  if (u.includes('bourse') || u.includes('finance') || u.includes('boursorama') || u.includes('investir') || u.includes('reuters')) return 'finance';
+  if (u.includes('tech') || u.includes('crunch') || u.includes('verge')) return 'tech';
   return 'gen';
 }
 
@@ -32,23 +51,21 @@ function extractPriceFromTitle(title = '') {
   const m = title.replace(/\u00A0/g,' ').match(/(\d[\d\s.,’']+)\s?(€|eur|mad|dhs|usd)?/i);
   if (!m) return null;
   const n = m[1]
-    .replace(/[^\d.,]/g,'')       // garde chiffres . ,
-    .replace(/\.(?=\d{3}\b)/g,'') // enlève séparateurs de milliers US
+    .replace(/[^\d.,]/g,'')
+    .replace(/\.(?=\d{3}\b)/g,'')
     .replace(',', '.');
   const val = parseFloat(n);
   return Number.isFinite(val) ? Math.round(val) : null;
 }
 
 export default async function handler(req) {
-  // Indicateurs de configuration
   const hasOpenAIKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 10);
 
-  // Upstash (facultatif; ne bloque rien si absent)
+  // Upstash (facultatif)
   const restUrl   = process.env.UPSTASH_REST_URL   || process.env.UPSTASH_REDIS_REST_URL   || '';
   const restToken = process.env.UPSTASH_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
   const hasUpstashKV = !!(restUrl && restToken);
 
-  // Horloge + date FR
   const now = new Date();
   const serverNowISO = now.toISOString();
   const todayFr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -56,11 +73,9 @@ export default async function handler(req) {
   let feed = [];
 
   try {
-    // Construit l’origin du déploiement actuel pour appeler /api/rss_fetch localement
     const host = req.headers.get('host') || process.env.VERCEL_URL;
     const origin = host?.startsWith('http') ? host : `https://${host}`;
 
-    // Récupère et normalise via notre proxy (étape B)
     const resp = await fetch(`${origin}/api/rss_fetch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -81,15 +96,12 @@ export default async function handler(req) {
         source: x.source || '',
       }));
     } else {
-      // Si le proxy échoue, on bascule en fallback silencieux
       feed = [];
     }
   } catch {
-    // Ne jamais casser l’API status
     feed = [];
   }
 
-  // Fallback visuel si aucun flux n’est dispo
   if (feed.length === 0) {
     feed = [
       { id:'demo-1', type:'auto',   title:'BMW 320d 2019 • 92 000 km — 17 900€', price:17900, url:'https://www.ebay.fr',      updatedAtISO: serverNowISO, source:'demo' },
