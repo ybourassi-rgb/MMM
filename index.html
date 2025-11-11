@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
@@ -239,7 +239,8 @@
       list.innerHTML = '<div class="item">Chargement…</div>';
 
       try {
-        const r = await fetch('/api/status', { cache: 'no-store' });
+        // 🔁 ICI le fetch est redirigé vers la nouvelle route
+        const r = await fetch('/api/market', { cache: 'no-store' });
         const data = await r.json();
         const feed = Array.isArray(data.feed) ? data.feed : [];
         list.innerHTML = '';
