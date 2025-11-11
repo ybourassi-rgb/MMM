@@ -259,3 +259,44 @@
 
     // --- Y-SCORE (API réelle)
     const $p = id => document.getElementById(id);
+    const $yrun = document.getElementById('yscore-run');
+    const $yclr = document.getElementById('yscore-clear');
+    const $ybox = document.getElementById('yscore-resp');
+    const $ytxt = document.getElementById('yscore-text');
+
+    $yrun?.addEventListener('click', async ()=>{
+      const price = parseFloat($p('price').value||0);
+      const market= parseFloat($p('market').value||0);
+      const risk  = Math.max(0, Math.min(100, parseFloat($p('risk').value||50)));
+      const liq   = Math.max(0, parseFloat($p('liquidity').value||0));
+
+      try{
+        const data = await j('/api/yscore', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            modeMMM:false,
+            items:[{ id:'custom', price, fairValue:market, volatility30dPct:100-risk, avgDailyLiquidity:liq }]
+          })
+        });
+        const top = data.results?.[0];
+        $ybox.style.display = 'block';
+        $ytxt.textContent = top ? `Y-Score ${top.yScore}/100 • Value ${top.features.value.toFixed(1)} • Momentum ${top.features.momentum.toFixed(0)} • Risque ${top.features.risk.toFixed(0)} • Liquidité ${top.features.liq.toFixed(0)}` : '—';
+      }catch(e){
+        $ybox.style.display = 'block';
+        $ytxt.textContent = e.message || 'Erreur Y-Score';
+      }
+    });
+
+    $yclr?.addEventListener('click', ()=>{
+      ['price','market','risk','liquidity'].forEach(id=> $p(id)?.value='');
+      if($ybox){ $ybox.style.display='none'; $ytxt.textContent=''; }
+    });
+  </script>
+
+  <!-- Panneau Y-Score (script + montage) -->
+  <script src="/components/yscore_panel.js"></script>
+  <script>
+    window.YScorePanel?.mount("yscore-panel");
+  </script>
+</body>
+</html>
