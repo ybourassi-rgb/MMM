@@ -14,47 +14,37 @@ function noStore() {
 // (Tu peux en ajouter/retirer à tout moment)
 const ALLOW = [
   // e-commerce / auto
-  "ebay.fr","www.ebay.fr",
-  "amazon.fr","www.amazon.fr","amzn.to",
+  "ebay.fr", "www.ebay.fr",
+  "amazon.fr", "www.amazon.fr", "amzn.to",
 
   // travel (si tu les utilises)
-  "booking.com","www.booking.com",
-  "airbnb.fr","www.airbnb.fr",
+  "booking.com", "www.booking.com",
+  "airbnb.fr", "www.airbnb.fr",
 
   // crypto news
-  "coindesk.com","www.coindesk.com",
-  "cointelegraph.com","www.cointelegraph.com","fr.cointelegraph.com",
+  "coindesk.com", "www.coindesk.com",
+  "cointelegraph.com", "www.cointelegraph.com",
 
   // presse éco/finance FR
-  "lesechos.fr","www.lesechos.fr","investir.lesechos.fr",
-  "zonebourse.com","www.zonebourse.com",
-  "boursorama.com","www.boursorama.com",
+  "lesechos.fr", "www.lesechos.fr",
+  "zonebourse.com", "www.zonebourse.com",
+  "boursorama.com", "www.boursorama.com",
 
   // finance/business EN
-  "reuters.com","www.reuters.com",
-  "cnbc.com","www.cnbc.com",
+  "reuters.com", "www.reuters.com",
+  "cnbc.com", "www.cnbc.com",
 
   // tech / startups
-  "techcrunch.com","www.techcrunch.com",
-  "theverge.com","www.theverge.com"
+  "techcrunch.com", "www.techcrunch.com",
+  "theverge.com", "www.theverge.com"
 ];
 
-// Vérifie si host correspond à la allowlist (gère sous-domaines)
-function isHostAllowed(hostname) {
-  const h = (hostname || "").toLowerCase();
-  return ALLOW.some(d => h === d || h.endsWith(`.${d}`));
-}
-
-// Normalise l'URL (force https si pas de protocole)
-function normalizeUrl(u) {
+function isAllowed(u) {
   try {
-    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
-    const url = new URL(u);
-    // refuse tout sauf http/https
-    if (!/^https?$/.test(url.protocol.replace(":",""))) throw new Error("bad_protocol");
-    return url;
-  } catch {
-    return null;
+    const h = new URL(u).hostname.toLowerCase();
+    return ALLOW.some(d => h === d || h.endsWith(`.${d}`));
+  } catch { 
+    return false; 
   }
 }
 
@@ -64,6 +54,7 @@ async function incrClick(key) {
   const restToken =
     process.env.UPSTASH_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "";
   if (!restUrl || !restToken) return; // facultatif
+
   fetch(`${restUrl}/incr/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${restToken}` },
     cache: "no-store"
@@ -72,30 +63,24 @@ async function incrClick(key) {
 
 export default async function handler(req) {
   const urlObj = new URL(req.url);
-  const raw = urlObj.searchParams.get("u");         // URL à rediriger (brute)
-  const s   = urlObj.searchParams.get("s") || "gen"; // source/type (auto/immo/crypto/finance/tech…)
+  const u = urlObj.searchParams.get("u");              // URL brute
+  const s = urlObj.searchParams.get("s") || "gen";     // catégorie (auto/immo/crypto…)
 
-  if (!raw) {
+  if (!u) 
     return new Response("Missing u", { status: 400, headers: noStore() });
-  }
-
-  const target = normalizeUrl(raw);
-  if (!target) {
-    return new Response("Bad URL", { status: 400, headers: noStore() });
-  }
-
-  if (!isHostAllowed(target.hostname)) {
+  if (!isAllowed(u)) 
     return new Response("Domain not allowed", { status: 400, headers: noStore() });
-  }
 
-  // Ajoute un subid si absent (tracking)
+  const target = new URL(u);
+
+  // Ajoute automatiquement un identifiant de tracking
   if (!target.searchParams.has("subid")) {
     target.searchParams.set("subid", `mmm-${s}-${Date.now()}`);
   }
 
-  // Comptage (non bloquant)
+  // Comptage côté Upstash (non bloquant)
   incrClick(`click:${s}:${target.hostname}`);
 
-  // Redirection 302 → annonceur / média
+  // Redirection vers l’offre
   return Response.redirect(target.toString(), 302);
 }
