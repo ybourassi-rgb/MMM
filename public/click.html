@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="robots" content="noindex" />
+  <title>Redirection…</title>
+  <script src="/affiliates.js"></script>
+</head>
+<body>
+  <p>Redirection en cours…</p>
+  <script>
+    (async () => {
+      const p = new URLSearchParams(location.search);
+      const rawUrl = p.get("url");
+      if (!rawUrl) { document.body.innerHTML = "<h3>Paramètre 'url' manquant.</h3>"; return; }
+
+      const target = window.MM_AFF.buildAffiliateUrl({
+        rawUrl,
+        dealId: p.get("dealId"),
+        userId: p.get("userId"),
+        network: p.get("net") || "direct",
+        siteId: p.get("site"),
+        subKey: p.get("sub") || "subid",
+      });
+
+      // (optionnel) ping analytics ici
+      location.replace(target);
+    })();
+  </script>
+</body>
+</html>
