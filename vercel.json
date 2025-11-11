@@ -17,6 +17,9 @@
     }
   ],
   "crons": [
-    { "path": "/api/affiliation_run?secret=@CRON_SECRET", "schedule": "*/20 * * * *" }
+    {
+      "path": "/api/affiliation_run?secret=@CRON_SECRET",
+      "schedule": "*/20 * * * *"
+    }
   ]
 }
