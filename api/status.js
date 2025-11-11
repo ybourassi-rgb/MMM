@@ -13,47 +13,100 @@ function headers() {
   };
 }
 
-export default async function handler() {
-  const hasOpenAIKey =
-    !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 10;
+// 👉 Ajoute/retire tes flux ici (tu peux étendre la liste)
+const SOURCES = [
+  'https://fr.cointelegraph.com/rss',
+  'https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml',
+  'https://www.ebay.fr/sch/i.html?_nkw=BMW+320d&_sop=10&_rss=1',
+];
 
-  // -> lit les bons noms, et accepte l'ancienne variante "REDIS" en fallback
-  const restUrl =
-    process.env.UPSTASH_REST_URL || process.env.UPSTASH_REDIS_REST_URL || '';
-  const restToken =
-    process.env.UPSTASH_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
+function guessType(urlOrSource = '') {
+  const u = urlOrSource.toLowerCase();
+  if (u.includes('ebay') || u.includes('auto') || u.includes('voiture') || u.includes('car')) return 'auto';
+  if (u.includes('immo') || u.includes('immobilier') || u.includes('realestate')) return 'immo';
+  if (u.includes('crypto') || u.includes('coin') || u.includes('btc') || u.includes('coindesk') || u.includes('cointelegraph')) return 'crypto';
+  return 'gen';
+}
+
+function extractPriceFromTitle(title = '') {
+  const m = title.replace(/\u00A0/g,' ').match(/(\d[\d\s.,’']+)\s?(€|eur|mad|dhs|usd)?/i);
+  if (!m) return null;
+  const n = m[1]
+    .replace(/[^\d.,]/g,'')       // garde chiffres . ,
+    .replace(/\.(?=\d{3}\b)/g,'') // enlève séparateurs de milliers US
+    .replace(',', '.');
+  const val = parseFloat(n);
+  return Number.isFinite(val) ? Math.round(val) : null;
+}
+
+export default async function handler(req) {
+  // Indicateurs de configuration
+  const hasOpenAIKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 10);
+
+  // Upstash (facultatif; ne bloque rien si absent)
+  const restUrl   = process.env.UPSTASH_REST_URL   || process.env.UPSTASH_REDIS_REST_URL   || '';
+  const restToken = process.env.UPSTASH_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
   const hasUpstashKV = !!(restUrl && restToken);
 
-  // 🔹 Ajouts non-cassants (pour “Marché en direct”)
+  // Horloge + date FR
   const now = new Date();
   const serverNowISO = now.toISOString();
-  const todayFr = now.toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const todayFr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  // 🔹 Petit “feed” démo/placeholder (à remplacer par tes vraies sources)
-  // Laisse vide [] si tu préfères : l’UI gère le cas "aucune opportunité".
-  const feed = [
-    // { id:'ex-1', type:'auto', title:'BMW 320d 2019 • 92 000 km', price:17900, url:'https://exemple.com/1', updatedAtISO: serverNowISO },
-    // { id:'ex-2', type:'immo', title:'Studio Gueliz • 34 m²', price:460000, url:'https://exemple.com/2', updatedAtISO: serverNowISO },
-  ];
+  let feed = [];
+
+  try {
+    // Construit l’origin du déploiement actuel pour appeler /api/rss_fetch localement
+    const host = req.headers.get('host') || process.env.VERCEL_URL;
+    const origin = host?.startsWith('http') ? host : `https://${host}`;
+
+    // Récupère et normalise via notre proxy (étape B)
+    const resp = await fetch(`${origin}/api/rss_fetch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: SOURCES }),
+      cache: 'no-store',
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      feed = items.map((x) => ({
+        id: x.id || x.url || String(Math.random()).slice(2),
+        type: guessType(x.url || x.source),
+        title: x.title || '—',
+        price: extractPriceFromTitle(x.title || ''),
+        url: x.url || '',
+        updatedAtISO: x.updatedAtISO || serverNowISO,
+        source: x.source || '',
+      }));
+    } else {
+      // Si le proxy échoue, on bascule en fallback silencieux
+      feed = [];
+    }
+  } catch {
+    // Ne jamais casser l’API status
+    feed = [];
+  }
+
+  // Fallback visuel si aucun flux n’est dispo
+  if (feed.length === 0) {
+    feed = [
+      { id:'demo-1', type:'auto',   title:'BMW 320d 2019 • 92 000 km — 17 900€', price:17900, url:'https://www.ebay.fr',      updatedAtISO: serverNowISO, source:'demo' },
+      { id:'demo-2', type:'crypto', title:'Bitcoin — signal momentum positif',   price:null,  url:'https://www.coindesk.com', updatedAtISO: serverNowISO, source:'demo' },
+    ];
+  }
 
   const body = {
-    // 🟢 Champs historiques (inchangés)
     ok: true,
     status: 'online',
     hasOpenAIKey,
     hasUpstashKV,
     env: process.env.VERCEL_ENV || 'unknown',
     ts: Date.now(),
-
-    // 🆕 Champs ajoutés (optionnels pour l’UI Marché)
-    serverNowISO, // horloge serveur (source de vérité)
-    todayFr,      // “Aujourd’hui : mardi …”
-    feed,         // tableau d’opportunités (peut rester [])
+    serverNowISO,
+    todayFr,
+    feed,
   };
 
   return new Response(JSON.stringify(body), { status: 200, headers: headers() });
