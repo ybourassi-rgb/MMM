@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Y — Tableau de bord</title>
-  <!-- build v10.4.1 (avec Marché dynamique + affiliation) -->
+  <!-- build v10.4.1 (marché dynamique + affiliation) -->
   <style>
     :root{
       --bg:#0c0f12; --panel:#12161b; --muted:#a9b3c1; --text:#e9eef6;
@@ -97,10 +97,10 @@
         <h3>Marché en direct</h3>
         <p class="p-muted">Flux synthétique des opportunités (auto, immo, business, crypto). Mise à jour en continu.</p>
         <div class="kpis">
-          <div class="kpi"><div class="k">Opportunités du jour</div><div class="v">128</div></div>
-          <div class="kpi"><div class="k">Spread moyen</div><div class="v">+6.1%</div></div>
-          <div class="kpi"><div class="k">Risque médian</div><div class="v">34/100</div></div>
-          <div class="kpi"><div class="k">Liquidité</div><div class="v">Bonne</div></div>
+          <div class="kpi"><div class="k">Opportunités du jour</div><div class="v">—</div></div>
+          <div class="kpi"><div class="k">Spread moyen</div><div class="v">—</div></div>
+          <div class="kpi"><div class="k">Risque médian</div><div class="v">—</div></div>
+          <div class="kpi"><div class="k">Liquidité</div><div class="v">—</div></div>
         </div>
         <!-- Liste dynamique -->
         <div class="list" id="market-list" style="margin-top:12px"></div>
@@ -149,7 +149,7 @@
     </div>
 
     <footer>
-      Money Motor Y • build v10.4.1 — déployé avec marché dynamique
+      Money Motor Y • build v10.4.1 — Marché dynamique
     </footer>
   </div>
 
@@ -183,9 +183,8 @@
       }
     })();
 
-    // --- CONSEIL D’INVESTISSEMENT
+    // --- CONSEIL (stream + fallback)
     const $in=document.getElementById('advice-input'),$send=document.getElementById('advice-send'),$clr=document.getElementById('advice-clear'),$ys=document.getElementById('advice-yscore'),$box=document.getElementById('advice-resp'),$txt=document.getElementById('advice-text');
-
     $send.addEventListener('click', async ()=>{
       const prompt = ($in.value||'').trim();
       if(!prompt){$box.style.display='block';$txt.innerHTML='<span class="danger">Saisis un message.</span>';return;}
@@ -202,11 +201,10 @@
         }catch(e2){$txt.innerHTML='<span class="danger">'+(e2.message||e.message||'Erreur')+'</span>';}
       }finally{$send.disabled=false;}
     });
-
     $clr.addEventListener('click',()=>{$in.value='';$box.style.display='none';$txt.textContent='';});
     $ys.addEventListener('click',()=>{$box.style.display='block';$txt.textContent='(Bientôt) Analyse Y-Score détaillée…';});
 
-    // --- Y-SCORE
+    // --- Y-SCORE (existant)
     const $p=id=>document.getElementById(id);const $yrun=document.getElementById('yscore-run');const $yclr=document.getElementById('yscore-clear');const $ybox=document.getElementById('yscore-resp');const $ytxt=document.getElementById('yscore-text');
     $yrun.addEventListener('click',async()=>{
       const price=parseFloat($p('price').value||0);const market=parseFloat($p('market').value||0);
@@ -238,28 +236,55 @@
       const affiliateHref = (rawUrl, type = 'gen') =>
         `/api/r?u=${encodeURIComponent(rawUrl)}&s=${encodeURIComponent(type||'gen')}`;
 
-      async function loadMarket() {
-        list.innerHTML = '<div class="item">Chargement…</div>';
-        try {
-          const r = await fetch('/api/status', { cache: 'no-store' });
-          const data = await r.json();
-          if (!r.ok || !data.ok) throw new Error(data.error || 'Erreur API');
-          const feed = Array.isArray(data.feed) ? data.feed : [];
-          list.innerHTML = '';
+      list.innerHTML = '<div class="item">Chargement…</div>';
 
-          if (feed.length === 0) {
-            list.appendChild(el('div', { className: 'item p-muted' }, 'Aucune opportunité disponible.'));
-            return;
+      try {
+        const r = await fetch('/api/status', { cache: 'no-store' });
+        const data = await r.json();
+        const feed = Array.isArray(data.feed) ? data.feed : [];
+        list.innerHTML = '';
+
+        if (feed.length === 0) {
+          list.appendChild(el('div', { className: 'item p-muted' }, 'Aucune opportunité disponible.'));
+          return;
+        }
+
+        for (const it of feed) {
+          const title = el('div', {}, [
+            el('strong', {}, it.title || '—'),
+            ' ',
+            el('span', { className: 'pill' }, (it.type || 'GEN').toUpperCase())
+          ]);
+          const meta = el('div', { className: 'p-muted' }, [
+            (typeof it.price === 'number' ? `Prix: ${it.price.toLocaleString('fr-FR')} • ` : ''),
+            it.updatedAtISO
+              ? `Maj: ${new Date(it.updatedAtISO).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`
+              : ''
+          ]);
+          const card = el('div', { className: 'item' }, [title, meta]);
+
+          if (it.url) {
+            const a = el('a', {
+              href: affiliateHref(it.url, it.type),
+              className: 'btn',
+              target: '_blank',
+              rel: 'nofollow sponsored noopener'
+            }, 'Voir l’offre');
+            a.style.marginTop = '8px';
+            card.appendChild(a);
           }
 
-          for (const it of feed) {
-            const title = el('div', {}, [
-              el('strong', {}, it.title || '—'),
-              ' ',
-              el('span', { className: 'pill' }, (it.type || 'GEN').toUpperCase())
-            ]);
-            const meta = el('div', { className: 'p-muted' }, [
-              (typeof it.price === 'number' ? `Prix: ${it.price.toLocaleString('fr-FR')} MAD • ` : ''),
-              it.updatedAtISO ? `Maj: ${new Date(it.updatedAtISO).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}` : ''
-            ]);
-            const card = el
+          list.appendChild(card);
+        }
+      } catch (e) {
+        list.innerHTML = '';
+        list.appendChild(el('div', { className: 'item danger' }, 'Erreur: ' + (e.message || e)));
+      }
+    })();
+  </script>
+
+  <!-- Panneau Y-Score (script + montage) -->
+  <script src="/components/yscore_panel.js"></script>
+  <script> window.YScorePanel?.mount("yscore-panel"); </script>
+</body>
+</html>
