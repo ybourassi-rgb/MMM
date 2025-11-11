@@ -40,9 +40,40 @@ export default async function handler(req) {
       return new Response("Prompt vide.", { status: 400, headers: headers() });
     }
 
+    // ✅ Date FR du jour (ex: "mardi 11 novembre 2025")
+    const todayFr = new Date().toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
+    // ✅ Réponse directe si l’utilisateur demande explicitement la date/quel jour
+    const askDateRe = /(on est quel jour|c'?est quel jour|quelle date|date actuelle|what (day|date) is it)/i;
+    if (askDateRe.test(prompt)) {
+      return new Response(`Aujourd’hui, nous sommes le ${todayFr}.`, {
+        status: 200,
+        headers: headers("text/plain; charset=utf-8"),
+      });
+    }
+
+    // ✅ System prompt : autorise explicitement l’affichage de la date fournie
+    const systemMsg = `
+Tu es Money Motor Y, conseiller d’investissement.
+Donne des réponses concises, chiffrées et actionnables : Verdict, Risques, Plan d’action.
+IMPORTANT :
+- La date exacte d’aujourd’hui est : ${todayFr}.
+- Tu as le droit d’afficher cette date telle quelle.
+- Si l’utilisateur demande la date du jour ou "on est quel jour", réponds explicitement :
+  "Aujourd’hui, nous sommes le ${todayFr}."
+- Ne dis jamais que tu ne peux pas fournir la date.
+- Utilise toujours cette date pour contextualiser tes analyses si c’est pertinent.
+`.trim();
+
     // Appel OpenAI en streaming (SSE)
     const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
+      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${OPENAI_KEY}`,
@@ -52,11 +83,7 @@ export default async function handler(req) {
         temperature: 0.6,
         stream: true,
         messages: [
-          {
-            role: "system",
-            content:
-              "Tu es Money Motor Y, conseiller d’investissement. Donne des réponses concises, chiffrées et actionnables : Verdict, Risques, Plan d’action.",
-          },
+          { role: "system", content: systemMsg },
           { role: "user", content: prompt },
         ],
       }),
@@ -106,7 +133,6 @@ export default async function handler(req) {
         function pump() {
           reader.read().then(({ value, done }) => {
             if (done) {
-              // flush
               if (buffer) {
                 forward(buffer);
                 buffer = "";
