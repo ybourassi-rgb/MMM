@@ -1,5 +1,8 @@
-// api/affiliation_stats.js
+// /api/affiliation_stats.js
 import { Redis } from "@upstash/redis";
+
+// Utilise la config Upstash (URL + TOKEN) depuis les variables d'environnement
+const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
   try {
@@ -9,58 +12,35 @@ export default async function handler(req, res) {
         .json({ ok: false, error: "Méthode non autorisée, utilise GET" });
     }
 
-    const url =
-      process.env.UPSTASH_REDIS_REST_URL ||
-      process.env.UPSTASH_REDIS_URL ||
-      process.env.UPSTASH_REST_URL;
+    // Nouveau stockage : hash "affiliate_clicks"
+    // Chaque clé = "platform:product" (ex: "amazon:B09XYZ1234")
+    const data = await redis.hgetall("affiliate_clicks");
 
-    const token =
-      process.env.UPSTASH_REDIS_REST_TOKEN ||
-      process.env.UPSTASH_REDIS_TOKEN ||
-      process.env.UPSTASH_REST_TOKEN;
+    const items = [];
 
-    // Si pas de Redis → on renvoie simplement des stats vides
-    if (!url || !token) {
-      return res.status(200).json({
-        ok: true,
-        total: 0,
-        byDomain: {},
-        message:
-          "Redis non configuré (normal si tu n'as pas encore de variables Redis)",
-      });
+    if (data) {
+      for (const [key, value] of Object.entries(data)) {
+        const [platform, product] = String(key).split(":");
+        items.push({
+          key,                           // ex: "amazon:B09XYZ1234"
+          platform: platform || "unknown",
+          product: product || "",
+          clicks: Number(value) || 0,    // nombre de clics
+        });
+      }
     }
 
-    const redis = new Redis({ url, token });
-
-    const raw = await redis.lrange("mmy:clicks", 0, 499);
-
-    const clicks = raw
-      .map((i) => {
-        try {
-          return JSON.parse(i);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    const byDomain = {};
-    for (const c of clicks) {
-      try {
-        const u = new URL(c.url);
-        const domain = u.hostname.replace(/^www\./, "");
-        if (!byDomain[domain]) byDomain[domain] = 0;
-        byDomain[domain]++;
-      } catch {}
-    }
+    // Tri par nombre de clics décroissant
+    items.sort((a, b) => b.clicks - a.clicks);
 
     return res.status(200).json({
       ok: true,
-      total: clicks.length,
-      byDomain,
+      items,
     });
   } catch (err) {
     console.error("🔥 Erreur /api/affiliation_stats:", err);
-    return res.status(500).json({ ok: false, error: err.message });
+    return res
+      .status(500)
+      .json({ ok: false, error: err.message || "Erreur interne" });
   }
 }
