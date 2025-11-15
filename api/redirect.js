@@ -1,16 +1,26 @@
 import { Redis } from "@upstash/redis";
 
+// petite fonction utilitaire pour rediriger proprement
+function safeRedirect(res, url) {
+  res.writeHead(302, { Location: url });
+  res.end();
+}
+
 export default async function handler(req, res) {
   try {
     // --- METHOD CHECK ---
     if (req.method !== "GET") {
-      return res.status(405).json({ ok: false, error: "Use GET" });
+      return res
+        .status(405)
+        .json({ ok: false, error: "Use GET" });
     }
 
     // --- URL PARAM CHECK ---
     const raw = req.query.url;
     if (!raw) {
-      return res.status(400).json({ ok: false, error: "Missing url" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Missing url" });
     }
 
     // --- TRY TO NORMALIZE URL ---
@@ -23,11 +33,13 @@ export default async function handler(req, res) {
         target = new URL(normalized).toString();
       } catch {
         // try decode first
-        target = new URL(decodeURIComponent(normalized)).toString();
+        target = new URL(
+          decodeURIComponent(normalized)
+        ).toString();
       }
     } catch (err) {
       console.error("❌ URL invalid:", err.message);
-      return res.redirect(302, "https://google.com"); // fallback safe
+      return safeRedirect(res, "https://google.com"); // fallback safe
     }
 
     // --- BUILD WITH UTM ---
@@ -74,13 +86,15 @@ export default async function handler(req, res) {
             ua: req.headers["user-agent"] || "",
           })
         )
-        .catch((err) => console.warn("⚠️ Redis push error:", err.message));
+        .catch((err) =>
+          console.warn("⚠️ Redis push error:", err.message)
+        );
     }
 
     console.log("🔀 Redirect →", finalUrl);
-    return res.redirect(302, finalUrl);
+    return safeRedirect(res, finalUrl);
   } catch (fatal) {
     console.error("🔥 FATAL REDIRECT ERROR:", fatal);
-    return res.redirect(302, "https://google.com");
+    return safeRedirect(res, "https://google.com");
   }
 }
