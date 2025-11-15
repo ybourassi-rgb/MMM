@@ -1,3 +1,6 @@
+// mmy-agent/utils/publishTelegram.js
+import buildAffiliateLink from "./buildAffiliateLink.js";
+
 export default async function publishTelegram({
   title,
   link,
@@ -13,16 +16,21 @@ export default async function publishTelegram({
     return;
   }
 
+  // 🔗 Lien affilié (ou lien normal si pas de config)
+  const finalLink = link ? buildAffiliateLink(link) : "";
+
+  const score = yscore?.globalScore ?? 0;
+
   const text =
-    `🔥 *Nouveau Deal ${category.toUpperCase()}*\n\n` +
-    `*${title}*\n\n` +
-    `${summary}\n\n` +
-    `🎯 *Y-Score :* ${yscore.globalScore}/100\n\n` +
-    `🔗 ${link}`;
+    `🔥 *Nouveau Deal ${category?.toUpperCase() || ""}*\n\n` +
+    `*${title || "Sans titre"}*\n\n` +
+    `${summary || ""}\n\n` +
+    `🎯 *Y-Score :* ${score}/100\n\n` +
+    (finalLink ? `🔗 [Ouvrir le deal](${finalLink})` : "");
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
-  console.log("📤 Envoi Telegram vers", chatId);
+  console.log("📤 Envoi Telegram vers", chatId, "avec lien :", finalLink);
 
   try {
     const res = await fetch(url, {
@@ -32,6 +40,7 @@ export default async function publishTelegram({
         chat_id: chatId,
         text,
         parse_mode: "Markdown",
+        disable_web_page_preview: false,
       }),
     });
 
