@@ -6,7 +6,7 @@ function headers() {
   return {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store, no-cache, must-revalidate",
-    "Pragma": "no-cache",
+    Pragma: "no-cache",
     "CDN-Cache-Control": "no-store",
     "Vercel-CDN-Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
@@ -42,7 +42,9 @@ async function safeFetch(url, { timeout = 6000 } = {}) {
     });
     clearTimeout(t);
     if (r.ok) return r;
-  } catch { /* noop */ }
+  } catch {
+    // noop
+  }
 
   // 2) fallback via proxy
   try {
@@ -54,7 +56,9 @@ async function safeFetch(url, { timeout = 6000 } = {}) {
     });
     clearTimeout(t);
     if (r2.ok) return r2;
-  } catch { /* noop */ }
+  } catch {
+    // noop
+  }
 
   throw new Error("fetch_failed");
 }
@@ -75,7 +79,9 @@ function parseRSS(xml, source) {
     const block = m[1];
     const pick = (tag) =>
       cleanText(
-        block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"))?.[1] ?? ""
+        block.match(
+          new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i")
+        )?.[1] ?? ""
       );
 
     const title = pick("title");
@@ -84,18 +90,21 @@ function parseRSS(xml, source) {
       cleanText(
         block.match(/<guid\b[^>]*>([\s\S]*?)<\/guid>/i)?.[1] ?? ""
       );
-    const pub =
-      pick("pubDate") ||
-      pick("dc:date") ||
-      "";
+    const pub = pick("pubDate") || pick("dc:date") || "";
 
     if (title || link) {
       items.push({
-        id: (link || title || Math.random().toString(36).slice(2)).slice(0, 128),
+        id:
+          (link || title || Math.random().toString(36).slice(2)).slice(
+            0,
+            128
+          ),
         title,
         url: link || "",
         source,
-        updatedAtISO: pub ? new Date(pub).toISOString() : new Date().toISOString(),
+        updatedAtISO: pub
+          ? new Date(pub).toISOString()
+          : new Date().toISOString(),
       });
     }
   }
@@ -106,22 +115,31 @@ function parseRSS(xml, source) {
     const block = m[1];
     const pick = (tag) =>
       cleanText(
-        block.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"))?.[1] ?? ""
+        block.match(
+          new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i")
+        )?.[1] ?? ""
       );
 
     const title = pick("title");
-    // lien dans href
     const linkHref =
-      block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i)?.[1] ?? "";
+      block.match(
+        /<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i
+      )?.[1] ?? "";
     const updated = pick("updated") || pick("published") || "";
 
     if (title || linkHref) {
       items.push({
-        id: (linkHref || title || Math.random().toString(36).slice(2)).slice(0, 128),
+        id:
+          (linkHref || title || Math.random().toString(36).slice(2)).slice(
+            0,
+            128
+          ),
         title,
         url: linkHref || "",
         source,
-        updatedAtISO: updated ? new Date(updated).toISOString() : new Date().toISOString(),
+        updatedAtISO: updated
+          ? new Date(updated).toISOString()
+          : new Date().toISOString(),
       });
     }
   }
@@ -134,9 +152,11 @@ function dedupe(items) {
   const seenUrl = new Set();
   const seenTitle = new Set();
   const out = [];
+
   for (const it of items) {
     const keyU = (it.url || "").toLowerCase();
     const keyT = (it.title || "").toLowerCase();
+
     if (keyU && !seenUrl.has(keyU)) {
       seenUrl.add(keyU);
       out.push(it);
@@ -158,6 +178,7 @@ export default async function handler(req) {
 
   try {
     let urls = [];
+
     if (req.method === "GET") {
       const { searchParams } = new URL(req.url);
       const u = searchParams.get("url");
@@ -166,20 +187,21 @@ export default async function handler(req) {
       const body = await req.json().catch(() => ({}));
       urls = Array.isArray(body?.urls) ? body.urls : [];
     } else {
-      return new Response(JSON.stringify({ ok: false, error: "Méthode non autorisée" }), {
-        status: 405,
-        headers: headers(),
-      });
+      return new Response(
+        JSON.stringify({ ok: false, error: "Méthode non autorisée" }),
+        { status: 405, headers: headers() }
+      );
     }
 
     if (!urls.length) {
-      return new Response(JSON.stringify({ ok: false, error: "Aucune URL fournie" }), {
-        status: 400,
-        headers: headers(),
-      });
+      return new Response(
+        JSON.stringify({ ok: false, error: "Aucune URL fournie" }),
+        { status: 400, headers: headers() }
+      );
     }
 
     const results = [];
+
     for (const url of urls) {
       if (!url) continue;
 
@@ -189,7 +211,6 @@ export default async function handler(req) {
         const items = parseRSS(xml, url).slice(0, 40);
         results.push(...items);
       } catch (e) {
-        // on n'arrête pas tout si une source plante
         results.push({
           id: `err-${Math.random().toString(36).slice(2)}`,
           title: `Erreur RSS: ${url}`,
@@ -201,7 +222,6 @@ export default async function handler(req) {
       }
     }
 
-    // tri + dédup
     const sorted = results.sort(
       (a, b) => new Date(b.updatedAtISO) - new Date(a.updatedAtISO)
     );
@@ -218,7 +238,10 @@ export default async function handler(req) {
     );
   } catch (e) {
     return new Response(
-      JSON.stringify({ ok: false, error: String(e?.message || "Erreur interne") }),
+      JSON.stringify({
+        ok: false,
+        error: String(e?.message || "Erreur interne"),
+      }),
       { status: 500, headers: headers() }
     );
   }
