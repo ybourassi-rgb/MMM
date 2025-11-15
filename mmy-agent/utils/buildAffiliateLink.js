@@ -1,30 +1,31 @@
 // mmy-agent/utils/buildAffiliateLink.js
 
 /**
- * Construit un lien affilié à partir d'un lien brut.
+ * Construit un lien de redirection via MMM.
  *
- * - Si AFFILIATE_TAG n'est pas défini => retourne le lien original.
- * - Sinon, ajoute un paramètre (par défaut "affid") au query string.
+ * - REDIRECT_BASE_URL doit pointer vers ton redirect, ex :
+ *   https://mmm-alpha-one.vercel.app/api/redirect
  *
- * Exemple :
- *   raw: https://exemple.com/article
- *   => https://exemple.com/article?affid=MMYDEALS
+ * - AFFILIATE_TAG permet de tagguer la source (ex : MMYDEALS1)
  */
 export default function buildAffiliateLink(rawUrl) {
-  const tag = process.env.AFFILIATE_TAG;
-  const paramName = process.env.AFFILIATE_PARAM_NAME || "affid";
+  const base = process.env.REDIRECT_BASE_URL; // ex: https://mmm-alpha-one.vercel.app/api/redirect
+  const tag = process.env.AFFILIATE_TAG || "MMYDEALS1";
+  const src = "tg"; // Telegram
 
-  if (!tag) {
-    // Pas de config d'affiliation, on retourne le lien normal
+  if (!base) {
+    // Pas de redirect configuré → lien brut
     return rawUrl;
   }
 
   try {
-    const url = new URL(rawUrl);
-    url.searchParams.set(paramName, tag);
-    return url.toString();
+    const redirectUrl = new URL(base);
+    redirectUrl.searchParams.set("url", rawUrl);
+    redirectUrl.searchParams.set("src", src);
+    redirectUrl.searchParams.set("tag", tag);
+    return redirectUrl.toString();
   } catch (err) {
-    console.error("Erreur buildAffiliateLink, URL invalide:", rawUrl, err.message);
+    console.error("Erreur buildAffiliateLink:", err.message);
     return rawUrl;
   }
 }
