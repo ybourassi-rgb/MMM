@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Money Motor Y — Tableau de bord</title>
-  <!-- build v10.4.2 (marché dynamique + affiliation Amazon) -->
+  <!-- build v10.5 — Marché dynamique + Affiliation Amazon & AliExpress -->
   <style>
     :root{
       --bg:#0c0f12; --panel:#12161b; --muted:#a9b3c1; --text:#e9eef6;
@@ -50,7 +50,7 @@
     <header>
       <div class="title">
         <h1>Money Motor Y — Tableau de bord</h1>
-        <div class="sub">IA stratégique d’investissement • <span class="pill">v10.4.2</span></div>
+        <div class="sub">IA stratégique d’investissement • <span class="pill">v10.5</span></div>
       </div>
       <div class="badges">
         <span class="badge"><span class="dot" id="status-dot"></span> <span id="status-text">État IA : En ligne</span></span>
@@ -63,6 +63,7 @@
       <div class="chip">Analyse rapide Y-Score</div>
       <div class="chip">Alertes marché</div>
       <div class="chip">Affiliation Amazon</div>
+      <div class="chip">Affiliation AliExpress</div>
     </div>
 
     <div class="grid">
@@ -106,13 +107,34 @@
           <button class="btn" id="amz-copy">Copier</button>
         </div>
         <div class="response" id="amz-resp" style="display:none">
-          <div class="title">Lien affilié tracké</div>
+          <div class="title">Lien affilié Amazon tracké</div>
           <div id="amz-link" style="word-break:break-all">—</div>
+        </div>
+      </section>
+
+      <!-- AFFILIATION ALIEXPRESS -->
+      <section class="module" id="aff-alix">
+        <h3>Affiliation AliExpress</h3>
+        <p class="p-muted">Colle une URL produit AliExpress, on génère un lien tracké via /api/track.</p>
+        <input
+          id="alix-url"
+          class="input"
+          type="text"
+          placeholder="https://www.aliexpress.com/..."
+        />
+        <div class="stack" style="margin-top:8px">
+          <button class="btn primary" id="alix-gen">Générer le lien tracké</button>
+          <button class="btn ghost" id="alix-open">Tester</button>
+          <button class="btn" id="alix-copy">Copier</button>
+        </div>
+        <div class="response" id="alix-resp" style="display:none">
+          <div class="title">Lien AliExpress tracké</div>
+          <div id="alix-link" style="word-break:break-all">—</div>
         </div>
       </section>
     </div>
 
-    <footer>Money Motor Y • build v10.4.2 — moteur dynamique + affiliation Amazon</footer>
+    <footer>Money Motor Y • build v10.5 — moteur dynamique + affiliation Amazon & AliExpress</footer>
   </div>
 
   <script>
@@ -292,6 +314,77 @@
         }
 
         const res = buildAmazonTrackedLink(raw);
+        if (res.error){
+          linkEl.innerHTML = '<span class="danger">'+res.error+'</span>';
+          currentLink = '';
+          return;
+        }
+
+        currentLink = res.trackedUrl;
+        linkEl.textContent = currentLink;
+      });
+
+      btnCopy.addEventListener('click', async ()=>{
+        if (!currentLink) return;
+        try{
+          await navigator.clipboard.writeText(currentLink);
+          btnCopy.textContent = 'Copié ✅';
+          setTimeout(()=>{ btnCopy.textContent = 'Copier'; }, 1500);
+        }catch{
+          btnCopy.textContent = 'Erreur copie ❌';
+          setTimeout(()=>{ btnCopy.textContent = 'Copier'; }, 1500);
+        }
+      });
+
+      btnOpen.addEventListener('click', ()=>{
+        if (!currentLink) return;
+        window.open(currentLink, '_blank', 'noopener,noreferrer');
+      });
+    })();
+
+    // ===== AFFILIATION ALIEXPRESS (/api/track) =====
+
+    function buildAliExpressTrackedLink(rawUrl){
+      const url = String(rawUrl).trim();
+      if (!url || !url.toLowerCase().includes('aliexpress')) {
+        return { error: 'URL AliExpress invalide.' };
+      }
+
+      // Essaie d’extraire un ID (item/123456789.html), sinon utilise l’URL complète comme identifiant
+      const m = url.match(/item\/(\d+)\.html/i);
+      const productId = m ? m[1] : url;
+
+      const trackedUrl =
+        '/api/track?platform=aliexpress'
+        + '&product=' + encodeURIComponent(productId)
+        + '&redirect=' + encodeURIComponent(url);
+
+      return { productId, trackedUrl };
+    }
+
+    (()=>{
+      const input = document.getElementById('alix-url');
+      const btnGen = document.getElementById('alix-gen');
+      const btnCopy = document.getElementById('alix-copy');
+      const btnOpen = document.getElementById('alix-open');
+      const box = document.getElementById('alix-resp');
+      const linkEl = document.getElementById('alix-link');
+
+      if (!input || !btnGen || !box || !linkEl) return;
+
+      let currentLink = '';
+
+      btnGen.addEventListener('click', ()=>{
+        const raw = (input.value || '').trim();
+        box.style.display = 'block';
+
+        if (!raw){
+          linkEl.innerHTML = '<span class="danger">Colle d’abord une URL AliExpress.</span>';
+          currentLink = '';
+          return;
+        }
+
+        const res = buildAliExpressTrackedLink(raw);
         if (res.error){
           linkEl.innerHTML = '<span class="danger">'+res.error+'</span>';
           currentLink = '';
