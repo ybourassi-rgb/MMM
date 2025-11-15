@@ -8,60 +8,53 @@ import saveLog from "./utils/saveLog.js";
 async function main() {
   console.log("🚀 MMY Agent : cycle démarré");
 
-  // 1. RÉCUPÉRATION DES FLUX
+  // --- TEST TELEGRAM AU DÉMARRAGE ---
+  await publishTelegram({
+    title: "MMY Agent opérationnel ✔️",
+    link: "",
+    summary: "Le service MMY tourne correctement sur Railway.",
+    category: "system",
+    yscore: { globalScore: 99 }
+  });
+  console.log("📤 Message de test envoyé à Telegram");
+
   const items = await fetchFeeds();
   console.log(`📡 ${items.length} éléments récupérés`);
 
   for (const item of items) {
     try {
-      // 2. RÉSUMÉ
       const summary = await summarize(item);
-
-      // 3. CLASSIFICATION
       const category = await classify(summary);
+      const yscore = await score(item.link, summary, category);
 
-      // 4. SCORING
-      const y = await score(item.link, summary, category);
-      const globalScore =
-        typeof y.globalScore === "number" ? y.globalScore : 0;
+      if (yscore.globalScore >= 75) {
+        console.log(`🔥 Deal détecté (${yscore.globalScore}) → publication`);
 
-      console.log("📊 Score reçu :", y);
-
-      // 5. SEUIL – TU PEUX AJUSTER ICI (75 recommandé)
-      if (globalScore >= 75) {
-        console.log(`🔥 Deal détecté (${globalScore}) → publication`);
-
-        // 6. ENVOI TELEGRAM
         await publishTelegram({
           title: item.title,
           link: item.link,
           summary,
           category,
-          yscore: y,
+          yscore,
         });
 
-        // 7. LOG (désactivé Redis, mais affiché console)
         await saveLog({
           title: item.title,
           category,
-          yscore: y,
+          yscore,
           link: item.link,
         });
-
       } else {
-        console.log(`🟡 Ignoré (${globalScore})`);
+        console.log(`🟡 Ignoré (${yscore.globalScore})`);
       }
-
     } catch (error) {
-      console.error("❌ Erreur sur un item :", error.message);
+      console.error("❌ Erreur sur un item :", error);
     }
   }
 
   console.log("✨ Cycle terminé");
 }
 
-
-// LANCEMENT DU PROCESSUS
 main().catch((e) => {
-  console.error("❌ Erreur globale MMY Agent :", e.message);
+  console.error("❌ Erreur globale MMY Agent :", e);
 });
