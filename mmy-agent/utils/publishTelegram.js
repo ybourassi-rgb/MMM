@@ -16,9 +16,7 @@ export default async function publishTelegram({
     return;
   }
 
-  // 🔗 Lien affilié (ou lien normal si pas de config)
   const finalLink = link ? buildAffiliateLink(link) : "";
-
   const score = yscore?.globalScore ?? 0;
 
   const text =
