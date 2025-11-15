@@ -11,9 +11,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Missing url" });
     }
 
+    // --- NORMALISATION URL ---
     let target;
     try {
       const normalized = Array.isArray(raw) ? raw[0] : raw;
+
       try {
         target = new URL(normalized).toString();
       } catch {
@@ -24,6 +26,7 @@ export default async function handler(req, res) {
       return res.redirect(302, "https://google.com");
     }
 
+    // --- UTM ---
     let finalUrl = target;
     try {
       const u = new URL(target);
@@ -35,38 +38,48 @@ export default async function handler(req, res) {
       finalUrl = target;
     }
 
-    // 🔥 UTILISE LES VRAIES VARIABLES VERCEL :
-    const url =
+    // --- UTILISE TES VRAIES VARIABLES VERCEL ---
+    const redisUrl =
       process.env.UPSTASH_REST_URL ||
       process.env.UPSTASH_REDIS_REST_URL;
 
-    const token =
+    const redisToken =
       process.env.UPSTASH_REST_TOKEN ||
       process.env.UPSTASH_REDIS_REST_TOKEN;
 
     let redis = null;
-    if (url && token) {
-      redis = new Redis({ url, token });
+
+    if (redisUrl && redisToken) {
+      redis = new Redis({
+        url: redisUrl,
+        token: redisToken,
+      });
     } else {
-      console.log("⚠️ Redis désactivé — variables manquantes");
+      console.log("⚠️ Redis désactivé - Variables manquantes");
     }
 
+    // --- PUSH CLICK ---
     if (redis) {
-      redis.lpush(
-        "mmy:clicks",
-        JSON.stringify({
-          ts: Date.now(),
-          url: finalUrl,
-          ua: req.headers["user-agent"] || "",
-        })
-      ).catch((err) => console.warn("⚠️ Redis push error:", err.message));
+      try {
+        await redis.lpush(
+          "mmy:clicks",
+          JSON.stringify({
+            ts: Date.now(),
+            url: finalUrl,
+            ua: req.headers["user-agent"] || "",
+          })
+        );
+        console.log("📦 Click enregistré !");
+      } catch (err) {
+        console.error("⚠️ Redis push error:", err.message);
+      }
     }
 
     console.log("🔀 Redirect →", finalUrl);
     return res.redirect(302, finalUrl);
 
   } catch (fatal) {
-    console.error("🔥 FATAL REDIRECT ERROR:", fatal);
+    console.error("🔥 FATAL ERROR:", fatal);
     return res.redirect(302, "https://google.com");
   }
 }
