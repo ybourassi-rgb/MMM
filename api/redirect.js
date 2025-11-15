@@ -1,13 +1,18 @@
 // api/redirect.js
-// Redirection + UTM + tracking des clics dans Upstash Redis
+// Redirection + UTM + tracking clics (sans jamais casser l'expérience utilisateur)
 
 import { Redis } from "@upstash/redis";
 
-// On récupère les variables (REST en priorité)
+// On accepte tous les noms possibles des variables Upstash
 const redisUrl =
-  process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_URL;
+  process.env.UPSTASH_REDIS_REST_URL ||
+  process.env.UPSTASH_REDIS_URL ||
+  process.env.UPSTASH_REST_URL;
+
 const redisToken =
-  process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_TOKEN;
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  process.env.UPSTASH_REDIS_TOKEN ||
+  process.env.UPSTASH_REST_TOKEN;
 
 let redis = null;
 
@@ -28,8 +33,8 @@ export default async function handler(req, res) {
   }
 
   const raw = req.query.url;
-  const src = req.query.src || "telegram";      // medium
-  const tag = req.query.tag || "MMY_DEALS";     // campaign
+  const src = req.query.src || "telegram";     // medium
+  const tag = req.query.tag || "MMY_DEALS";    // campaign
 
   if (!raw) {
     return res.status(400).json({ ok: false, error: "Missing url" });
@@ -57,19 +62,20 @@ export default async function handler(req, res) {
     const u = new URL(target);
 
     u.searchParams.set("utm_source", "MMY");
-    u.searchParams.set("utm_medium", src);     // ex: telegram
-    u.searchParams.set("utm_campaign", tag);   // ex: MMY_DEALS
+    u.searchParams.set("utm_medium", src);    // ex: telegram
+    u.searchParams.set("utm_campaign", tag);  // ex: MMY_DEALS
 
     finalUrl = u.toString();
   } catch (err) {
     console.error("Redirect build URL error:", err.message);
-    return res.status(400).json({ ok: false, error: "Invalid final URL" });
+    // Même si on a un souci avec les UTM, on redirige au moins vers le lien brut
+    return res.redirect(302, target);
   }
 
-  // 3) Tracking dans Redis (non bloquant pour l'utilisateur)
+  // 3) Tracking dans Redis (NON bloquant)
   if (redis) {
-    try {
-      await redis.lpush(
+    redis
+      .lpush(
         "mmy:clicks",
         JSON.stringify({
           ts: Date.now(),
@@ -79,11 +85,10 @@ export default async function handler(req, res) {
           tag,
           ua: req.headers["user-agent"] || "",
         })
-      );
-    } catch (err) {
-      console.error("Redirect tracking error:", err.message);
-      // on ne bloque PAS la redirection même si Redis plante
-    }
+      )
+      .catch((err) => {
+        console.error("Redirect tracking error:", err.message);
+      });
   }
 
   console.log("🔀 Redirect →", finalUrl);
