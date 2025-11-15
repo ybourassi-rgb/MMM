@@ -1,32 +1,32 @@
+import { makeAffiliate, isHaram } from "../lib/affiliations.js";
+
 export default async function handler(req, res) {
   try {
-    const { url, src } = req.query;
+    const url = decodeURIComponent(req.query.url || "");
 
     if (!url) {
-      return res.status(200).json({
-        ok: true,
-        message: "Redirect API fonctionne 🔥"
+      return res.status(400).json({ ok: false, error: "Aucun lien fourni" });
+    }
+
+    // 🚫 Filtre halal
+    if (isHaram(url)) {
+      return res.status(403).json({
+        ok: false,
+        error: "Lien interdit (finance / crédit / haram détecté)."
       });
     }
 
-    // Sécurise l’URL
-    const safeUrl = decodeURIComponent(url);
-
-    // Log minimal dans la console Vercel (pas de Redis)
-    console.log("REDIRECT CLICK :", {
-      url: safeUrl,
-      source: src || "unknown",
-      at: new Date().toISOString()
-    });
+    // ✔️ Génération du lien affilié
+    const affiliateUrl = makeAffiliate(url);
 
     // Redirection
-    return res.redirect(302, safeUrl);
+    return res.redirect(302, affiliateUrl);
 
   } catch (err) {
-    console.error("REDIRECT ERROR:", err);
     return res.status(500).json({
       ok: false,
-      error: err.message
+      error: "Erreur interne",
+      details: err.message
     });
   }
 }
