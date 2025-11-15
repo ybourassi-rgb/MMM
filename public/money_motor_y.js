@@ -1,12 +1,15 @@
 // MMM V10.4 — Statut IA + Conseiller + Affiliation Amazon
 
-// Domaine fixe de ton backend MMM
+// ================== CONFIG GLOBALE ==================
+
+// Domaine backend MMM (change-le si nécessaire)
 const API_BASE = "https://mmm-omega-five.vercel.app";
 
-// Ton tag Amazon (à adapter avec ton vrai tag)
-const AMAZON_TAG = "moneymotory-21"; // exemple
+// Ton tag Amazon (à remplacer par ton vrai tag d’affiliation)
+const AMAZON_TAG = "moneymotory-21"; // ex: "moneymotory-21"
 
-// =============== STATUT IA / CONSEILLER ===============
+
+// ================== STATUT IA / CONSEILLER ==================
 
 // --- Vérifie le statut IA ---
 async function ping() {
@@ -14,7 +17,7 @@ async function ping() {
   if (!badge) return;
 
   try {
-    const res = await fetch(`${API_BASE}/api/status`);
+    const res = await fetch(`${API_BASE}/api/status`, { cache: "no-store" });
     const data = await res.json();
     if (data.ok) {
       badge.textContent = "En ligne ✅";
@@ -45,21 +48,22 @@ async function quickAdvice(topic = "") {
   }
 }
 
-// =============== AFFILIATION AMAZON ===============
 
-// Extraction de l’ASIN depuis une URL Amazon
+// ================== AFFILIATION AMAZON ==================
+
+// 1) Extraction de l’ASIN depuis une URL Amazon
 function extractAmazonASIN(rawUrl = "") {
   const url = String(rawUrl).trim();
   if (!url) return null;
 
-  // Exemple d’URL : https://www.amazon.fr/xxx/dp/B09XYZ1234/...
+  // Exemple d'URL : https://www.amazon.fr/.../dp/B09XYZ1234/...
   const match = url.match(/\/([A-Z0-9]{10})(?:[/?]|$)/i);
   if (!match) return null;
 
   return match[1].toUpperCase();
 }
 
-// Construit le lien affilié Amazon simple
+// 2) Construit le lien affilié Amazon simple
 function buildAmazonAffiliateUrl(asin) {
   if (!asin) return null;
   return `https://www.amazon.fr/dp/${asin}?tag=${encodeURIComponent(
@@ -67,13 +71,17 @@ function buildAmazonAffiliateUrl(asin) {
   )}`;
 }
 
-// Construit le lien tracké (passage par /api/track pour compter le clic)
+// 3) Construit le lien tracké (passage par /api/track pour compter le clic)
 function buildAmazonTrackedLink(rawUrl) {
   const asin = extractAmazonASIN(rawUrl);
-  if (!asin) return { error: "ASIN introuvable dans l’URL Amazon." };
+  if (!asin) {
+    return { error: "ASIN introuvable dans l’URL Amazon." };
+  }
 
   const affiliateUrl = buildAmazonAffiliateUrl(asin);
-  if (!affiliateUrl) return { error: "Impossible de créer le lien affilié." };
+  if (!affiliateUrl) {
+    return { error: "Impossible de créer le lien affilié." };
+  }
 
   const trackedUrl =
     `${API_BASE}/api/track?` +
@@ -84,7 +92,8 @@ function buildAmazonTrackedLink(rawUrl) {
   return { asin, affiliateUrl, trackedUrl };
 }
 
-// =============== INIT UI ===============
+
+// ================== INITIALISATION UI ==================
 
 document.addEventListener("DOMContentLoaded", () => {
   // --- Statut IA ---
@@ -103,15 +112,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- Affiliation Amazon ---
+  // --- Affiliation Amazon (UI) ---
   const inputAmazon = document.querySelector("#amz-url");
   const btnAmzGen = document.querySelector("#btn-amz-gen");
   const outAmz = document.querySelector("#amz-result");
   const btnAmzCopy = document.querySelector("#amz-copy");
 
+  // Génération du lien affilié tracké
   if (btnAmzGen && inputAmazon && outAmz) {
     btnAmzGen.addEventListener("click", () => {
       outAmz.textContent = "";
+      outAmz.dataset.link = "";
 
       const rawUrl = inputAmazon.value.trim();
       if (!rawUrl) {
@@ -125,12 +136,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Affichage du lien tracké
+      // Affichage utilisateur
       outAmz.textContent = res.trackedUrl;
-      outAmz.dataset.link = res.trackedUrl; // stocké pour le bouton Copier
+      outAmz.dataset.link = res.trackedUrl;
     });
   }
 
+  // Bouton Copier
   if (btnAmzCopy && outAmz) {
     btnAmzCopy.addEventListener("click", async () => {
       const link = outAmz.dataset.link || outAmz.textContent || "";
