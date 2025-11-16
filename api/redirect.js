@@ -1,4 +1,4 @@
-// api/redirect.js
+// /api/redirect.js
 
 import { Redis } from "@upstash/redis";
 import { applyAffiliation } from "../lib/affiliations";
@@ -10,18 +10,35 @@ export default async function handler(req, res) {
       return res.status(405).json({ ok: false, error: "Use GET" });
     }
 
-    // --- Healthcheck (sans url) ---
-    const raw = req.query.url;
-    if (!raw) {
+    // --- Healthcheck (sans url / u) ---
+    const rawUrlParam = req.query.u || req.query.url;
+    if (!rawUrlParam) {
       return res
         .status(200)
         .json({ ok: true, message: "Redirect API fonctionne 🔥" });
     }
 
+    // --- Récupération source / campaign (option 1) ---
+    const source =
+      (typeof req.query.source === "string"
+        ? req.query.source
+        : Array.isArray(req.query.source)
+        ? req.query.source[0]
+        : "telegram") || "telegram";
+
+    const campaign =
+      (typeof req.query.campaign === "string"
+        ? req.query.campaign
+        : Array.isArray(req.query.campaign)
+        ? req.query.campaign[0]
+        : "MMY_DEALS") || "MMY_DEALS";
+
     // --- Normalisation de l'URL reçue ---
     let target;
     try {
-      const normalized = Array.isArray(raw) ? raw[0] : raw;
+      const normalized = Array.isArray(rawUrlParam)
+        ? rawUrlParam[0]
+        : rawUrlParam;
 
       try {
         // direct
@@ -45,6 +62,7 @@ export default async function handler(req, res) {
     };
 
     try {
+      // ⚠️ Ça reste ok même si applyAffiliation a déjà été appelé avant
       affiliationInfo = applyAffiliation(target);
     } catch (e) {
       console.warn("⚠️ applyAffiliation error:", e.message);
@@ -64,8 +82,8 @@ export default async function handler(req, res) {
     try {
       const u = new URL(urlAfterAffiliation);
       u.searchParams.set("utm_source", "MMY");
-      u.searchParams.set("utm_medium", "telegram");
-      u.searchParams.set("utm_campaign", "MMY_DEALS");
+      u.searchParams.set("utm_medium", source || "telegram");
+      u.searchParams.set("utm_campaign", campaign || "MMY_DEALS");
       finalUrl = u.toString();
     } catch (e) {
       console.warn("⚠️ Failed UTM, redirecting raw");
@@ -94,27 +112,48 @@ export default async function handler(req, res) {
 
     // --- Log du clic (statistiques) ---
     if (redis) {
-      redis
-        .lpush(
-          "mmy:clicks",
-          JSON.stringify({
-            ts: Date.now(),
-            originalUrl: target,
-            finalUrl,
-            userAgent: req.headers["user-agent"] || "",
-            ip:
-              req.headers["x-forwarded-for"] ||
-              req.socket?.remoteAddress ||
-              null,
-            affiliation: {
-              applied: affiliationInfo.applied,
-              program: affiliationInfo.program,
-              halalBlocked: affiliationInfo.halalBlocked,
-              reason: affiliationInfo.reason
-            }
-          })
-        )
-        .catch((err) => console.warn("⚠️ Redis push error:", err.message));
+      const domain = (() => {
+        try {
+          const u = new URL(finalUrl);
+          return u.hostname.replace(/^www\./i, "").toLowerCase();
+        } catch {
+          return "unknown";
+        }
+      })();
+
+      const logEntry = {
+        ts: Date.now(),
+        originalUrl: target,
+        finalUrl,
+        source,
+        campaign,
+        domain,
+        userAgent: req.headers["user-agent"] || "",
+        ip:
+          req.headers["x-forwarded-for"] ||
+          req.socket?.remoteAddress ||
+          null,
+        affiliation: {
+          applied: affiliationInfo.applied,
+          program: affiliationInfo.program,
+          halalBlocked: affiliationInfo.halalBlocked,
+          reason: affiliationInfo.reason
+        }
+      };
+
+      // Liste détaillée
+      const ops = [
+        redis.lpush("mmy:clicks", JSON.stringify(logEntry)).catch((err) =>
+          console.warn("⚠️ Redis lpush error:", err.message)
+        ),
+        // Compteurs agrégés (compatibles avec /api/logs_clicks version "click:*")
+        redis.incr("click:total").catch(() => {}),
+        redis.incr(`click:domain:${domain}`).catch(() => {}),
+        redis.incr(`click:source:${source}`).catch(() => {}),
+        redis.incr(`click:campaign:${campaign}`).catch(() => {})
+      ];
+
+      Promise.allSettled(ops).catch(() => {});
     }
 
     console.log("🔀 Redirect →", finalUrl, affiliationInfo);
