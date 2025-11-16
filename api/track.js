@@ -1,18 +1,34 @@
-import { Redis } from "@upstash/redis";
-
-const redis = Redis.fromEnv();
+// /api/track.js
+import { buildAffiliateRedirect } from "../../lib/affiliations";
 
 export default async function handler(req, res) {
-  const { platform, product, redirect } = req.query;
-
-  // Vérification des paramètres
-  if (!platform || !product || !redirect) {
-    return res.status(400).json({ error: "Missing parameters" });
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Use GET" });
   }
 
-  // Incrémenter le compteur de clics dans Upstash
-  await redis.hincrby("affiliate_clicks", `${platform}:${product}`, 1);
+  const rawUrl = req.query.url;
 
-  // Rediriger vers Amazon / AliExpress / autre
-  return res.redirect(302, redirect);
+  if (!rawUrl) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing ?url= parameter"
+    });
+  }
+
+  try {
+    const finalLink = buildAffiliateRedirect(rawUrl, {
+      source: "dashboard",
+      campaign: "dashboard-test"
+    });
+
+    return res.status(200).json({
+      ok: true,
+      link: finalLink
+    });
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: e.message
+    });
+  }
 }
