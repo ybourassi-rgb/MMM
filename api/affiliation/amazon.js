@@ -1,20 +1,36 @@
-export default function handler(req, res) {
-  const { url } = req.query;
-  const tag = process.env.AMAZON_TAG; // exemple: moneymotory-21
+// /api/affiliation/amazon.js
+import { buildAffiliateRedirect } from "../../../lib/affiliations";
 
-  // Extraction de l’ASIN (ID Amazon)
-  const asinMatch = url.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);
-
-  if (!asinMatch) {
-    return res.status(400).json({ error: "ASIN introuvable dans l’URL" });
+export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Use GET" });
   }
 
-  const asin = asinMatch[1];
+  const rawUrl = req.query.url;
 
-  const affiliatedUrl = `https://www.amazon.fr/dp/${asin}?tag=${tag}`;
+  if (!rawUrl) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing ?url= parameter"
+    });
+  }
 
-  return res.status(200).json({
-    original: url,
-    affiliated: affiliatedUrl
-  });
+  try {
+    // 1) Fabrique l'URL affiliée + halal + trackée
+    const finalLink = buildAffiliateRedirect(rawUrl, {
+      source: "dashboard",
+      campaign: "amazon-dashboard"
+    });
+
+    return res.status(200).json({
+      ok: true,
+      original: rawUrl,
+      link: finalLink
+    });
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: e.message || "internal-error"
+    });
+  }
 }
