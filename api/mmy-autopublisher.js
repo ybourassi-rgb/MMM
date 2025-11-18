@@ -39,11 +39,10 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B006JH8T3S"
 ];
 
-// 🔥 SEUILS DE QUALITÉ (tu peux les modifier)
-const MIN_RATING = 4.0;    // minimum 4/5
-const MIN_REVIEWS = 50;    // minimum 50 avis
-const MIN_YSCORE = 25;     // minimum Y-Score 25/100
-const MAX_AMAZON_DEALS = 2; // max de bons plans Amazon par run
+// MODE BOOST — plus de deals, qualité OK
+const MIN_RATING = 3.8;    // note minimum
+const MIN_REVIEWS = 20;    // avis minimum
+const MIN_YSCORE = 15;     // Y-Score minimum
 
 // ------------ UTILS ------------
 
