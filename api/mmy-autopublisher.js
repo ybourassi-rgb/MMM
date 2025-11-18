@@ -1,54 +1,131 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * MMY AutoPublisher PRO+ — OPTION C (Vercel Optimisé)
+ * MMY AutoPublisher PRO+ — OPTION C (Vercel Optimisé + BOOST)
  *
- * - Analyse tous les produits Amazon de la liste (en parallèle, super rapide)
+ * - Analyse tous les produits Amazon de la liste (en parallèle, rapide)
  * - Bon plan #1 : meilleur produit FILTRÉ (note, avis, Y-Score)
- * - Bon plan #2 : produit Amazon aléatoire (même s'il ne passe pas le filtre)
+ * - Bon plan #2 : produit Amazon aléatoire (découverte)
  * - + 1 deal AliExpress à chaque run
+ * - Textes optimisés pour maximiser les clics (mode BOOST)
  *
- * Résultat : QUALITÉ + DIVERSITÉ, compatible serverless (pas de timeout)
+ * Compatible CRON Vercel (ex: toutes les 30 min)
  */
 
 // ---------------- CONFIG PRODUITS ----------------
 
 const AMAZON_PRODUCTS = [
-  // 🔥 Cartes graphiques premium
-  "https://www.amazon.fr/dp/B08W8DGK3X",
+  // ----- HIGH TECH -----
   "https://www.amazon.fr/dp/B09G3HRMVB",
-
-  // 🔥 Écrans PC top qualité
-  "https://www.amazon.fr/dp/B07Y8M78NN",
-  "https://www.amazon.fr/dp/B08DHLTMMW",
-  "https://www.amazon.fr/dp/B09MRYHPLZ",
-
-  // 🔥 SSD / NVMe best sellers
+  "https://www.amazon.fr/dp/B08W8DGK3X",
+  "https://www.amazon.fr/dp/B0B3DQZHN8",
+  "https://www.amazon.fr/dp/B07PGL2WVS",
   "https://www.amazon.fr/dp/B09J4HLRV5",
   "https://www.amazon.fr/dp/B0BTHZ2CWH",
   "https://www.amazon.fr/dp/B09X4GXXZ3",
+  "https://www.amazon.fr/dp/B08N5WRWNW",
+  "https://www.amazon.fr/dp/B07Y8M78NN",
+  "https://www.amazon.fr/dp/B08DHLTMMW",
+  "https://www.amazon.fr/dp/B09MRYHPLZ",
+  "https://www.amazon.fr/dp/B0BLTB5B9B",
+  "https://www.amazon.fr/dp/B0B3MMMW5P",
+  "https://www.amazon.fr/dp/B096Y98M4Z",
+  "https://www.amazon.fr/dp/B07WFQVPVW",
+  "https://www.amazon.fr/dp/B08L8L9TCW",
 
-  // 🔥 Casques gaming 4,5★+
-  "https://www.amazon.fr/dp/B07Q7S7247",
-  "https://www.amazon.fr/dp/B09YHGQF4L",
-
-  // 🔥 Souris gaming best sellers
+  // ----- GAMING -----
   "https://www.amazon.fr/dp/B07GBZ4Q68",
   "https://www.amazon.fr/dp/B07YQ4XQ9P",
-
-  // 🔥 Claviers mécaniques très bien notés
+  "https://www.amazon.fr/dp/B07Q7S7247",
+  "https://www.amazon.fr/dp/B09YHGQF4L",
   "https://www.amazon.fr/dp/B082G5SPR5",
   "https://www.amazon.fr/dp/B07YDLMH6L",
+  "https://www.amazon.fr/dp/B0BM74PX44",
+  "https://www.amazon.fr/dp/B09L8XG9Y3",
+  "https://www.amazon.fr/dp/B07KQXHC64",
+  "https://www.amazon.fr/dp/B09VSFPHL9",
+  "https://www.amazon.fr/dp/B0B6QXZG9G",
+  "https://www.amazon.fr/dp/B0B7P8GF3F",
+  "https://www.amazon.fr/dp/B07K33BPV5",
+  "https://www.amazon.fr/dp/B0BWNJ6BYH",
+  "https://www.amazon.fr/dp/B09F2X3Y7H",
 
-  // 🔥 Webcam / streaming
-  "https://www.amazon.fr/dp/B006JH8T3S"
+  // ----- MAISON & CUISINE -----
+  "https://www.amazon.fr/dp/B07N2ZHF4J",
+  "https://www.amazon.fr/dp/B07T2GMBJ5",
+  "https://www.amazon.fr/dp/B08N6ZJ6L2",
+  "https://www.amazon.fr/dp/B0725GYNG6",
+  "https://www.amazon.fr/dp/B0B6G75RHT",
+  "https://www.amazon.fr/dp/B07M7N6LB3",
+  "https://www.amazon.fr/dp/B009P48JOC",
+  "https://www.amazon.fr/dp/B08SWZPVQX",
+  "https://www.amazon.fr/dp/B01M0C3D0W",
+  "https://www.amazon.fr/dp/B09NQZB8G7",
+  "https://www.amazon.fr/dp/B073V9MZ6A",
+  "https://www.amazon.fr/dp/B07Q6CPQ6S",
+  "https://www.amazon.fr/dp/B07PPDG1VW",
+  "https://www.amazon.fr/dp/B07N1HCW4B",
+  "https://www.amazon.fr/dp/B07T2GMBJ5",
+
+  // ----- BEAUTÉ & SOINS -----
+  "https://www.amazon.fr/dp/B08CVTTNNH",
+  "https://www.amazon.fr/dp/B07BJ41D3R",
+  "https://www.amazon.fr/dp/B01LTHM8LG",
+  "https://www.amazon.fr/dp/B07PPD2F3D",
+  "https://www.amazon.fr/dp/B0B1WFCQHD",
+  "https://www.amazon.fr/dp/B07H9L29N8",
+  "https://www.amazon.fr/dp/B099W51K3B",
+  "https://www.amazon.fr/dp/B07W4QJ2DT",
+  "https://www.amazon.fr/dp/B07P6LM4BW",
+  "https://www.amazon.fr/dp/B086Q24GT2",
+  "https://www.amazon.fr/dp/B097BCGQ8R",
+  "https://www.amazon.fr/dp/B08HGRQ268",
+  "https://www.amazon.fr/dp/B099KN4LTN",
+  "https://www.amazon.fr/dp/B0B9LT2MDJ",
+
+  // ----- SPORT & FITNESS -----
+  "https://www.amazon.fr/dp/B08FYZ3P3F",
+  "https://www.amazon.fr/dp/B07KPNGQBK",
+  "https://www.amazon.fr/dp/B07H4VWJRM",
+  "https://www.amazon.fr/dp/B06XKCH3VD",
+  "https://www.amazon.fr/dp/B07RBF59J8",
+  "https://www.amazon.fr/dp/B0B6BF8S72",
+  "https://www.amazon.fr/dp/B08S8WRTLY",
+  "https://www.amazon.fr/dp/B07CVTV2X9",
+  "https://www.amazon.fr/dp/B0751K39Y1",
+  "https://www.amazon.fr/dp/B07GQ1C6KJ",
+
+  // ----- BRICOLAGE & OUTILS -----
+  "https://www.amazon.fr/dp/B07M6MFXM6",
+  "https://www.amazon.fr/dp/B081TT7J12",
+  "https://www.amazon.fr/dp/B09GQD3FRB",
+  "https://www.amazon.fr/dp/B07GVDMJH8",
+  "https://www.amazon.fr/dp/B07GQWZFQS",
+  "https://www.amazon.fr/dp/B08C5J7Q8Z",
+  "https://www.amazon.fr/dp/B01N7S0IPR",
+  "https://www.amazon.fr/dp/B08CXP5LXW",
+  "https://www.amazon.fr/dp/B08FRG5J3Y",
+  "https://www.amazon.fr/dp/B08H6WQX6Z",
+  "https://www.amazon.fr/dp/B000RFDZMU",
+
+  // ----- PRODUITS À FORT CLIC (petit prix, impulse buy) -----
+  "https://www.amazon.fr/dp/B07GWZ4GQF",
+  "https://www.amazon.fr/dp/B08XLPD4PT",
+  "https://www.amazon.fr/dp/B089QHBR1Y",
+  "https://www.amazon.fr/dp/B07NPBHB7Z",
+  "https://www.amazon.fr/dp/B08LGCP4TQ",
+  "https://www.amazon.fr/dp/B07XVXQ8D8",
+  "https://www.amazon.fr/dp/B08FDN1XQY",
+  "https://www.amazon.fr/dp/B07W5VQGW8",
+  "https://www.amazon.fr/dp/B08R9LQF4Q",
+  "https://www.amazon.fr/dp/B08TWZPN7V"
 ];
 
 // ---------------- SEUILS QUALITÉ (MODE BOOST assoupli) ----------------
 
-const MIN_RATING = 3.5;  // note minimum (avant 3.8)
-const MIN_REVIEWS = 5;   // avis minimum (avant 20)
-const MIN_YSCORE = 10;   // Y-Score minimum (avant 15)
+const MIN_RATING = 3.5;  // note minimum
+const MIN_REVIEWS = 5;   // avis minimum
+const MIN_YSCORE = 10;   // Y-Score minimum
 
 // ---------------- UTILS ----------------
 
@@ -239,7 +316,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Construction des messages Amazon
+    // Construction des messages Amazon (MODE BOOST)
 
     if (mainDeal) {
       const { url, info, yscore } = mainDeal;
@@ -249,19 +326,20 @@ export default async function handler(req, res) {
           : "⭐ <i>Pas encore d'avis fiables</i>\n";
 
       const priceText = info.price
-        ? `💰 Prix : <b>${info.price}</b>\n`
-        : "💰 Prix : <i>Non disponible</i>\n";
+        ? `💰 Prix indicatif : <b>${info.price}</b> (susceptible d'évoluer)\n`
+        : "💰 Prix : <i>Non disponible (à vérifier sur Amazon)</i>\n";
 
-      const scoreText = `📊 Y-Score : <b>${yscore}/100</b>\n`;
+      const scoreText = `📊 Y-Score MMY : <b>${yscore}/100</b>\n`;
 
       const msg =
-        `🔥 <b>Bon plan Amazon #1 (sélection MMY)</b>\n` +
+        `🔥 <b>Bon plan Amazon #1 (sélection Money Motor Y)</b>\n` +
+        `⚡ <i>Offre repérée automatiquement par ton IA</i>\n\n` +
         `🛒 <b>${info.title}</b>\n\n` +
         ratingText +
         priceText +
         scoreText +
-        `👉 <a href="${url}">Voir l'offre</a>\n\n` +
-        `<i>Money Motor Y — Meilleure sélection du run</i>`;
+        `👉 <a href="${url}">Voir l'offre sur Amazon</a>\n\n` +
+        `<i>Money Motor Y — Priorité aux meilleures opportunités</i>`;
 
       messages.push(msg);
     }
@@ -271,39 +349,40 @@ export default async function handler(req, res) {
       const ratingText =
         info.rating && info.reviews
           ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
-          : "⭐ <i>Peu d'avis disponibles</i>\n";
+          : "⭐ <i>Peu d'avis disponibles, découverte potentielle</i>\n";
 
       const priceText = info.price
-        ? `💰 Prix : <b>${info.price}</b>\n`
-        : "💰 Prix : <i>Non disponible</i>\n";
+        ? `💰 Prix indicatif : <b>${info.price}</b>\n`
+        : "💰 Prix : <i>À vérifier sur la page produit</i>\n";
 
       const scoreText =
-        yscore > 0 ? `📊 Y-Score : <b>${yscore}/100</b>\n` : "";
+        yscore > 0 ? `📊 Y-Score MMY : <b>${yscore}/100</b>\n` : "";
 
       const msg =
         `🌀 <b>Bon plan Amazon #2 (découverte)</b>\n` +
+        `🎯 <i>Sélection aléatoire pour explorer de nouveaux produits</i>\n\n` +
         `🛒 <b>${info.title}</b>\n\n` +
         ratingText +
         priceText +
         scoreText +
-        `👉 <a href="${url}">Voir l'offre</a>\n\n` +
-        `<i>Money Motor Y — Découverte aléatoire</i>`;
+        `👉 <a href="${url}">Voir l'offre sur Amazon</a>\n\n` +
+        `<i>Money Motor Y — Découverte automatique, clique si ça t’inspire</i>`;
 
       messages.push(msg);
     }
 
     // 4) AliExpress (toujours envoyé)
     const aliMsg =
-      `💥 <b>Deal AliExpress</b>\n` +
-      `🔥 Offre du moment sélectionnée par Money Motor Y\n\n` +
-      `👉 <a href="${aliLink}">Voir l'offre</a>\n\n` +
-      `<i>Sélection Money Motor Y</i>`;
+      `💥 <b>Deal AliExpress du moment</b>\n` +
+      `🔥 <i>Offre trouvée automatiquement par Money Motor Y (prix souvent agressifs)</i>\n\n` +
+      `👉 <a href="${aliLink}">Voir l'offre sur AliExpress</a>\n\n` +
+      `<i>Sélection Money Motor Y — Pense à vérifier les frais de livraison et délais</i>`;
 
     // 5) Envoi Telegram (deals + AliExpress)
     for (const msg of messages) {
       const ok = await sendToTelegram(msg);
       if (ok) sentCount++;
-      // petite pause pour éviter le flood, mais courte
+      // petite pause pour éviter le flood
       await new Promise((r) => setTimeout(r, 300));
     }
     const okAli = await sendToTelegram(aliMsg);
@@ -317,7 +396,7 @@ export default async function handler(req, res) {
       aliexpress: aliLink
     });
   } catch (err) {
-    console.error("Erreur AutoPublisher PRO+ OPTION C (Vercel Optimisé):", err);
+    console.error("Erreur AutoPublisher PRO+ OPTION C (Vercel Optimisé + BOOST):", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
