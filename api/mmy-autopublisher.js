@@ -1,11 +1,11 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * 🔥 Version améliorée MMY AutoPublisher
- * Options activées :
- *  A = Messages stylés
- *  B = Mini Y-Score
- *  C = Récupération prix, promo, étoiles Amazon
+ * MMY AutoPublisher PRO
+ * - Amazon + AliExpress
+ * - Scraping hybride Amazon (JSON-LD + fallback)
+ * - Prix, réduction, étoiles, avis, Y-Score
+ * - Messages Telegram stylés
  */
 
 const AMAZON_PRODUCTS = [
@@ -16,91 +16,13 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B07PGL2WVS"
 ];
 
-// ---------------------------------------------------------------------------
-// A) AJOUTER TON TAG AMAZON
-// ---------------------------------------------------------------------------
+// ---------- UTIL ----------
+
 function withAmazonTag(url, tag) {
   if (!tag) return url;
   return url.includes("?") ? `${url}&tag=${tag}` : `${url}?tag=${tag}`;
 }
 
-// ---------------------------------------------------------------------------
-// B) MINI Y-SCORE : (simple mais efficace) 0 à 100
-// ---------------------------------------------------------------------------
-function computeYScore({ price, stars, reviews }) {
-  let score = 0;
-
-  if (!price) score += 20;
-  if (price < 20) score += 20;
-  if (price < 50) score += 10;
-
-  if (stars >= 4.5) score += 30;
-  else if (stars >= 4.0) score += 20;
-
-  if (reviews > 500) score += 20;
-  else if (reviews > 100) score += 10;
-
-  return Math.min(100, score);
-}
-
-// ---------------------------------------------------------------------------
-// C) SCRAP AMAZON : prix + promo + étoiles + reviews
-// ---------------------------------------------------------------------------
-async function scrapeAmazon(url) {
-  try {
-    const res = await fetch(url);
-    const html = await res.text();
-
-    const get = (regex) => {
-      const m = html.match(regex);
-      return m ? m[1] : null;
-    };
-
-    const price = get(/"price":"([\d.,]+)"/);
-    const stars = get(/"ratingValue":"([\d.]+)"/);
-    const reviews = get(/"reviewCount":"(\d+)"/);
-
-    return {
-      price: price ? `${price} €` : "Non disponible",
-      stars: stars ? parseFloat(stars) : 0,
-      reviews: reviews ? parseInt(reviews) : 0
-    };
-
-  } catch (e) {
-    return {
-      price: "Indispo",
-      stars: 0,
-      reviews: 0
-    };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// TELEGRAM
-// ---------------------------------------------------------------------------
-async function sendToTelegram(text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN_DEALS;
-  const chatId = process.env.TELEGRAM_CHAT_ID_DEALS;
-
-  if (!token || !chatId) return;
-
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
-  await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: false
-    })
-  });
-}
-
-// ---------------------------------------------------------------------------
-// RANDOM PICK
-// ---------------------------------------------------------------------------
 function pickRandom(arr, count) {
   const copy = [...arr];
   const result = [];
@@ -111,65 +33,92 @@ function pickRandom(arr, count) {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// MAIN HANDLER
-// ---------------------------------------------------------------------------
-export default async function handler(req, res) {
-  if (req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  }
+// ---------- SCRAPING AMAZON (HYBRIDE) ----------
 
-  const amazonTag = process.env.AMAZON_ASSOCIATE_TAG;
-  const aliLink =
-    process.env.ALIEXPRESS_AFFILIATE_LINK ||
-    "https://s.click.aliexpress.com/e/_c4k2HESt";
-
-  // --- AMAZON ---
-  const picks = pickRandom(AMAZON_PRODUCTS, 2).map((p) =>
-    withAmazonTag(p, amazonTag)
-  );
-
-  const amazonMessages = [];
-
-  for (let i = 0; i < picks.length; i++) {
-    const url = picks[i];
-    const info = await scrapeAmazon(url);
-    const yscore = computeYScore(info);
-
-    amazonMessages.push(
-      `🔥 <b>Bon plan Amazon #${i + 1}</b>\n` +
-      `⭐ <b>${info.stars} / 5</b> (${info.reviews} avis)\n` +
-      `💸 Prix : <b>${info.price}</b>\n` +
-      `📊 Y-Score : <b>${yscore}/100</b>\n\n` +
-      `👉 <a href="${url}">Voir l'offre</a>\n\n` +
-      `<i>Money Motor Y — Deals Auto Boostés</i>`
-    );
-  }
-
-  // --- ALIEXPRESS ---
-  const aliMsg =
-    `💥 <b>Deal AliExpress</b>\n` +
-    `🔥 Offre du moment\n` +
-    `👉 <a href="${aliLink}">Voir l'offre</a>\n\n` +
-    `<i>Sélection Money Motor Y</i>`;
-
-  // ENVOI
+async function scrapeAmazon(url) {
   try {
-    for (const m of amazonMessages) {
-      await sendToTelegram(m);
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-
-    await sendToTelegram(aliMsg);
-
-    return res.status(200).json({
-      ok: true,
-      sent: amazonMessages.length + 1,
-      amazon: picks,
-      aliexpress: aliLink
+    const res = await fetch(url, {
+      headers: {
+        // user-agent "humain" pour ne pas être bloqué trop vite
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"
+      }
     });
 
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
-  }
-}
+    const html = await res.text();
+
+    // 1) On cherche les blocs JSON-LD
+    const scripts = [...html.matchAll(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g
+    )];
+
+    let product = null;
+
+    for (const m of scripts) {
+      try {
+        const json = JSON.parse(m[1].trim());
+        // parfois c'est un tableau de JSON-LD
+        if (Array.isArray(json)) {
+          for (const item of json) {
+            if (item && (item["@type"] === "Product" || item.aggregateRating)) {
+              product = item;
+              break;
+            }
+          }
+        } else if (json && (json["@type"] === "Product" || json.aggregateRating)) {
+          product = json;
+        }
+        if (product) break;
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    let title = null;
+    let price = null;
+    let oldPrice = null;
+    let currency = "€";
+    let rating = 0;
+    let reviews = 0;
+
+    if (product) {
+      title = product.name || null;
+
+      // prix : plusieurs structures possibles
+      if (product.offers) {
+        if (Array.isArray(product.offers)) {
+          const offer = product.offers[0];
+          price = offer.price || offer.priceSpecification?.price || null;
+          oldPrice =
+            offer.priceSpecification?.priceCurrency === "EUR" &&
+            offer.priceSpecification?.priceBeforeDiscount
+              ? offer.priceSpecification.priceBeforeDiscount
+              : null;
+          currency = offer.priceCurrency || "€";
+        } else {
+          const offer = product.offers;
+          price = offer.price || offer.priceSpecification?.price || null;
+          oldPrice =
+            offer.priceSpecification?.priceBeforeDiscount ||
+            offer.priceSpecification?.referencePrice ||
+            null;
+          currency = offer.priceCurrency || "€";
+        }
+      }
+
+      if (product.aggregateRating) {
+        rating = parseFloat(product.aggregateRating.ratingValue || "0") || 0;
+        reviews = parseInt(product.aggregateRating.reviewCount || "0") || 0;
+      }
+    }
+
+    // 2) fallback : regex rapides si JSON-LD vide
+    if (!title) {
+      const m = html.match(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/);
+      if (m) title = m[1].trim();
+    }
+
+    if (!price) {
+      const mp = html.match(
+       
