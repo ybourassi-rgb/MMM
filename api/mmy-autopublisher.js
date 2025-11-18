@@ -1,37 +1,88 @@
 // pages/api/mmy-autopublisher.js
 
+/**
+ * 🔥 Version améliorée MMY AutoPublisher
+ * Options activées :
+ *  A = Messages stylés
+ *  B = Mini Y-Score
+ *  C = Récupération prix, promo, étoiles Amazon
+ */
+
 const AMAZON_PRODUCTS = [
-  // 🔁 Tu peux ajouter autant de produits Amazon que tu veux (sans ?tag)
   "https://www.amazon.fr/dp/B0C6JZXQ5J",
   "https://www.amazon.fr/dp/B09G3HRMVB",
   "https://www.amazon.fr/dp/B0B3DQZHN8",
   "https://www.amazon.fr/dp/B08W8DGK3X",
-  "https://www.amazon.fr/dp/B07PGL2WVS",
+  "https://www.amazon.fr/dp/B07PGL2WVS"
 ];
 
+// ---------------------------------------------------------------------------
+// A) AJOUTER TON TAG AMAZON
+// ---------------------------------------------------------------------------
 function withAmazonTag(url, tag) {
   if (!tag) return url;
   return url.includes("?") ? `${url}&tag=${tag}` : `${url}?tag=${tag}`;
 }
 
-function pickRandom(arr, count) {
-  const copy = [...arr];
-  const result = [];
-  while (copy.length && result.length < count) {
-    const idx = Math.floor(Math.random() * copy.length);
-    result.push(copy.splice(idx, 1)[0]);
-  }
-  return result;
+// ---------------------------------------------------------------------------
+// B) MINI Y-SCORE : (simple mais efficace) 0 à 100
+// ---------------------------------------------------------------------------
+function computeYScore({ price, stars, reviews }) {
+  let score = 0;
+
+  if (!price) score += 20;
+  if (price < 20) score += 20;
+  if (price < 50) score += 10;
+
+  if (stars >= 4.5) score += 30;
+  else if (stars >= 4.0) score += 20;
+
+  if (reviews > 500) score += 20;
+  else if (reviews > 100) score += 10;
+
+  return Math.min(100, score);
 }
 
+// ---------------------------------------------------------------------------
+// C) SCRAP AMAZON : prix + promo + étoiles + reviews
+// ---------------------------------------------------------------------------
+async function scrapeAmazon(url) {
+  try {
+    const res = await fetch(url);
+    const html = await res.text();
+
+    const get = (regex) => {
+      const m = html.match(regex);
+      return m ? m[1] : null;
+    };
+
+    const price = get(/"price":"([\d.,]+)"/);
+    const stars = get(/"ratingValue":"([\d.]+)"/);
+    const reviews = get(/"reviewCount":"(\d+)"/);
+
+    return {
+      price: price ? `${price} €` : "Non disponible",
+      stars: stars ? parseFloat(stars) : 0,
+      reviews: reviews ? parseInt(reviews) : 0
+    };
+
+  } catch (e) {
+    return {
+      price: "Indispo",
+      stars: 0,
+      reviews: 0
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TELEGRAM
+// ---------------------------------------------------------------------------
 async function sendToTelegram(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN_DEALS;
   const chatId = process.env.TELEGRAM_CHAT_ID_DEALS;
 
-  if (!token || !chatId) {
-    console.error("Manque TELEGRAM_BOT_TOKEN_DEALS ou TELEGRAM_CHAT_ID_DEALS");
-    return;
-  }
+  if (!token || !chatId) return;
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
@@ -42,11 +93,27 @@ async function sendToTelegram(text) {
       chat_id: chatId,
       text,
       parse_mode: "HTML",
-      disable_web_page_preview: false,
-    }),
+      disable_web_page_preview: false
+    })
   });
 }
 
+// ---------------------------------------------------------------------------
+// RANDOM PICK
+// ---------------------------------------------------------------------------
+function pickRandom(arr, count) {
+  const copy = [...arr];
+  const result = [];
+  while (copy.length && result.length < count) {
+    const idx = Math.floor(Math.random() * copy.length);
+    result.push(copy.splice(idx, 1)[0]);
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// MAIN HANDLER
+// ---------------------------------------------------------------------------
 export default async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
@@ -57,45 +124,52 @@ export default async function handler(req, res) {
     process.env.ALIEXPRESS_AFFILIATE_LINK ||
     "https://s.click.aliexpress.com/e/_c4k2HESt";
 
-  // 1) Choisir 2 produits Amazon
-  const amazonPicks = pickRandom(AMAZON_PRODUCTS, 2).map((u) =>
-    withAmazonTag(u, amazonTag)
+  // --- AMAZON ---
+  const picks = pickRandom(AMAZON_PRODUCTS, 2).map((p) =>
+    withAmazonTag(p, amazonTag)
   );
 
-  // 2) Lien AliExpress
-  const aliExpressUrl = aliLink;
+  const amazonMessages = [];
 
-  // 3) Préparation des messages
-  const messages = [];
+  for (let i = 0; i < picks.length; i++) {
+    const url = picks[i];
+    const info = await scrapeAmazon(url);
+    const yscore = computeYScore(info);
 
-  amazonPicks.forEach((url, idx) => {
-    messages.push(
-      `🔥 Bon plan Amazon #${idx + 1}\n` +
-        `👉 ${url}\n\n` +
-        `<i>Sélection Money Motor Y</i>`
+    amazonMessages.push(
+      `🔥 <b>Bon plan Amazon #${i + 1}</b>\n` +
+      `⭐ <b>${info.stars} / 5</b> (${info.reviews} avis)\n` +
+      `💸 Prix : <b>${info.price}</b>\n` +
+      `📊 Y-Score : <b>${yscore}/100</b>\n\n` +
+      `👉 <a href="${url}">Voir l'offre</a>\n\n` +
+      `<i>Money Motor Y — Deals Auto Boostés</i>`
     );
-  });
+  }
 
-  messages.push(
-    `💥 Bon plan AliExpress\n` +
-      `👉 ${aliExpressUrl}\n\n` +
-      `<i>Deals Money Motor Y</i>`
-  );
+  // --- ALIEXPRESS ---
+  const aliMsg =
+    `💥 <b>Deal AliExpress</b>\n` +
+    `🔥 Offre du moment\n` +
+    `👉 <a href="${aliLink}">Voir l'offre</a>\n\n` +
+    `<i>Sélection Money Motor Y</i>`;
 
+  // ENVOI
   try {
-    for (const msg of messages) {
-      await sendToTelegram(msg);
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // anti flood
+    for (const m of amazonMessages) {
+      await sendToTelegram(m);
+      await new Promise((r) => setTimeout(r, 1000));
     }
+
+    await sendToTelegram(aliMsg);
 
     return res.status(200).json({
       ok: true,
-      sent: messages.length,
-      amazon: amazonPicks,
-      aliexpress: aliExpressUrl,
+      sent: amazonMessages.length + 1,
+      amazon: picks,
+      aliexpress: aliLink
     });
+
   } catch (err) {
-    console.error("Erreur AutoPublisher:", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
