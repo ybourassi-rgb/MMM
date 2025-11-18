@@ -1,17 +1,17 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * Version STABLE MMY AutoPublisher
+ * MMY AutoPublisher PRO+
  * - Amazon + AliExpress
- * - Pas de JSON.parse compliqué
- * - Scraping léger avec regex + fallback
- * - Messages stylés
+ * - Scraping "safe" amélioré (prix, étoiles, avis quand dispo)
+ * - Y-Score basé sur rating + avis (+ petit bonus prix)
+ * - Entièrement protégé par try/catch (pas de crash)
  */
 
 const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B0C6JZXQ5J",
   "https://www.amazon.fr/dp/B09G3HRMVB",
-  "https://www.amazon.fr/dp/B0B3HRMVB", // tu peux changer/ajouter
+  "https://www.amazon.fr/dp/B0B3DQZHN8",
   "https://www.amazon.fr/dp/B08W8DGK3X",
   "https://www.amazon.fr/dp/B07PGL2WVS"
 ];
@@ -33,7 +33,7 @@ function pickRandom(arr, count) {
   return result;
 }
 
-// ------------ SCRAPING SIMPLE AMAZON (SAFE) ------------
+// ------------ SCRAPING AMAZON PRO+ (safe) ------------
 
 async function scrapeAmazon(url) {
   try {
@@ -44,27 +44,46 @@ async function scrapeAmazon(url) {
         "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"
       }
     });
+
     const html = await res.text();
 
-    // titre
+    // Titre
     let title = "Produit Amazon";
     const t = html.match(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/);
-    if (t) title = t[1].trim();
+    if (t) title = t[1].replace(/\s+/g, " ").trim();
 
-    // prix
+    // Prix (plusieurs patterns possibles)
     let price = null;
-    const p1 = html.match(/"price"\s*:\s*"([\d.,]+)"/);
-    if (p1) price = p1[1];
 
-    // note
+    // Pattern JSON
+    const pJson = html.match(/"price"\s*:\s*"([\d.,]+)"/);
+    if (pJson) price = pJson[1];
+
+    // Pattern visuel HTML
+    if (!price) {
+      const pSpan = html.match(/<span class="a-offscreen">([\d.,]+)\s*€<\/span>/);
+      if (pSpan) price = pSpan[1];
+    }
+
+    // Note moyenne
     let rating = 0;
-    const r1 = html.match(/"ratingValue"\s*:\s*"([\d.]+)"/);
-    if (r1) rating = parseFloat(r1[1]) || 0;
+    const rJson = html.match(/"ratingValue"\s*:\s*"([\d.]+)"/);
+    if (rJson) rating = parseFloat(rJson[1]) || 0;
 
-    // nombre d'avis
+    if (!rating) {
+      const rSpan = html.match(/<span[^>]*class="a-icon-alt"[^>]*>([\d.,]+) sur 5 étoiles<\/span>/);
+      if (rSpan) rating = parseFloat(rSpan[1].replace(",", ".")) || 0;
+    }
+
+    // Nombre d'avis
     let reviews = 0;
-    const c1 = html.match(/"reviewCount"\s*:\s*"(\d+)"/);
-    if (c1) reviews = parseInt(c1[1]) || 0;
+    const cJson = html.match(/"reviewCount"\s*:\s*"(\d+)"/);
+    if (cJson) reviews = parseInt(cJson[1]) || 0;
+
+    if (!reviews) {
+      const cSpan = html.match(/(\d[\d\s]*) évaluations?/);
+      if (cSpan) reviews = parseInt(cSpan[1].replace(/\s/g, "")) || 0;
+    }
 
     return {
       title,
@@ -73,7 +92,7 @@ async function scrapeAmazon(url) {
       reviews
     };
   } catch (e) {
-    console.error("scrapeAmazon error (safe fallback):", e);
+    console.error("scrapeAmazon PRO+ error:", e);
     return {
       title: "Produit Amazon",
       price: null,
@@ -83,19 +102,27 @@ async function scrapeAmazon(url) {
   }
 }
 
-// ------------ Y-SCORE SIMPLE (SAFE) ------------
+// ------------ Y-SCORE PRO+ ------------
 
 function computeYScore(info) {
   let score = 0;
 
-  if (info.rating >= 4.5) score += 40;
-  else if (info.rating >= 4.0) score += 30;
-  else if (info.rating >= 3.5) score += 15;
+  // Rating
+  if (info.rating >= 4.7) score += 45;
+  else if (info.rating >= 4.3) score += 35;
+  else if (info.rating >= 4.0) score += 25;
+  else if (info.rating >= 3.5) score += 10;
 
-  if (info.reviews > 500) score += 25;
-  else if (info.reviews > 100) score += 15;
+  // Avis
+  if (info.reviews > 2000) score += 30;
+  else if (info.reviews > 500) score += 20;
+  else if (info.reviews > 100) score += 10;
   else if (info.reviews > 20) score += 5;
 
+  // Bonus si on a un prix (ça veut dire produit bien fiché)
+  if (info.price) score += 5;
+
+  // Si vraiment aucune info fiable
   if (!info.rating && !info.reviews) score = 0;
 
   return Math.max(0, Math.min(100, score));
@@ -139,12 +166,14 @@ export default async function handler(req, res) {
       process.env.ALIEXPRESS_AFFILIATE_LINK ||
       "https://s.click.aliexpress.com/e/_c4k2HESt";
 
+    // 1) Choisir 2 produits Amazon
     const picks = pickRandom(AMAZON_PRODUCTS, 2).map((p) =>
       withAmazonTag(p, amazonTag)
     );
 
     const messages = [];
 
+    // 2) Pour chaque produit : scrape + score + message
     for (let i = 0; i < picks.length; i++) {
       const url = picks[i];
       const info = await scrapeAmazon(url);
@@ -173,6 +202,7 @@ export default async function handler(req, res) {
       messages.push(msg);
     }
 
+    // 3) AliExpress
     const aliMsg =
       `💥 <b>Deal AliExpress</b>\n` +
       `🔥 Offre du moment sélectionnée par Money Motor Y\n\n` +
@@ -192,7 +222,7 @@ export default async function handler(req, res) {
       aliexpress: aliLink
     });
   } catch (err) {
-    console.error("Erreur AutoPublisher STABLE:", err);
+    console.error("Erreur AutoPublisher PRO+:", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
