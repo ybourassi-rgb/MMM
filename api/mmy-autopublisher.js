@@ -9,11 +9,34 @@
  */
 
 const AMAZON_PRODUCTS = [
-  "https://www.amazon.fr/dp/B0C6JZXQ5J",
-  "https://www.amazon.fr/dp/B09G3HRMVB",
-  "https://www.amazon.fr/dp/B0B3DQZHN8",
+  // 🔥 Cartes graphiques premium
   "https://www.amazon.fr/dp/B08W8DGK3X",
-  "https://www.amazon.fr/dp/B07PGL2WVS"
+  "https://www.amazon.fr/dp/B09G3HRMVB",
+
+  // 🔥 Écrans PC top qualité
+  "https://www.amazon.fr/dp/B07Y8M78NN",
+  "https://www.amazon.fr/dp/B08DHLTMMW",
+  "https://www.amazon.fr/dp/B09MRYHPLZ",
+
+  // 🔥 SSD / NVMe best sellers
+  "https://www.amazon.fr/dp/B09J4HLRV5",
+  "https://www.amazon.fr/dp/B0BTHZ2CWH",
+  "https://www.amazon.fr/dp/B09X4GXXZ3",
+
+  // 🔥 Casques gaming 4,5★+
+  "https://www.amazon.fr/dp/B07Q7S7247",
+  "https://www.amazon.fr/dp/B09YHGQF4L",
+
+  // 🔥 Souris gaming best sellers
+  "https://www.amazon.fr/dp/B07GBZ4Q68",
+  "https://www.amazon.fr/dp/B07YQ4XQ9P",
+
+  // 🔥 Claviers mécaniques très bien notés
+  "https://www.amazon.fr/dp/B082G5SPR5",
+  "https://www.amazon.fr/dp/B07YDLMH6L",
+
+  // 🔥 Webcam / streaming
+  "https://www.amazon.fr/dp/B006JH8T3S"
 ];
 
 // 🔥 SEUILS DE QUALITÉ (tu peux les modifier)
@@ -185,14 +208,12 @@ export default async function handler(req, res) {
     const messages = [];
 
     if (eligible.length === 0) {
-      // Aucun bon plan assez bon → message d’info
       const msg =
         `⚠️ <b>Aucun bon plan Amazon suffisant trouvé pour ce run.</b>\n` +
         `Les produits analysés n'ont pas atteint le seuil de qualité (note, avis, Y-Score).\n\n` +
         `<i>Money Motor Y — Sélection stricte pour protéger ton audience.</i>`;
       messages.push(msg);
     } else {
-      // On envoie seulement les offres filtrées
       eligible.forEach((d, idx) => {
         const { url, info, yscore } = d;
 
