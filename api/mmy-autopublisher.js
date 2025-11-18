@@ -1,11 +1,11 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * MMY AutoPublisher PRO+
+ * MMY AutoPublisher PRO+ avec FILTRE
  * - Amazon + AliExpress
  * - Scraping "safe" amélioré (prix, étoiles, avis quand dispo)
- * - Y-Score basé sur rating + avis (+ petit bonus prix)
- * - Entièrement protégé par try/catch (pas de crash)
+ * - Y-Score PRO+
+ * - Filtre : on n’envoie que les bonnes offres Amazon
  */
 
 const AMAZON_PRODUCTS = [
@@ -16,21 +16,17 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B07PGL2WVS"
 ];
 
+// 🔥 SEUILS DE QUALITÉ (tu peux les modifier)
+const MIN_RATING = 4.0;    // minimum 4/5
+const MIN_REVIEWS = 50;    // minimum 50 avis
+const MIN_YSCORE = 25;     // minimum Y-Score 25/100
+const MAX_AMAZON_DEALS = 2; // max de bons plans Amazon par run
+
 // ------------ UTILS ------------
 
 function withAmazonTag(url, tag) {
   if (!tag) return url;
   return url.includes("?") ? `${url}&tag=${tag}` : `${url}?tag=${tag}`;
-}
-
-function pickRandom(arr, count) {
-  const copy = [...arr];
-  const result = [];
-  while (copy.length && result.length < count) {
-    const idx = Math.floor(Math.random() * copy.length);
-    result.push(copy.splice(idx, 1)[0]);
-  }
-  return result;
 }
 
 // ------------ SCRAPING AMAZON PRO+ (safe) ------------
@@ -52,30 +48,29 @@ async function scrapeAmazon(url) {
     const t = html.match(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/);
     if (t) title = t[1].replace(/\s+/g, " ").trim();
 
-    // Prix (plusieurs patterns possibles)
+    // Prix
     let price = null;
-
-    // Pattern JSON
     const pJson = html.match(/"price"\s*:\s*"([\d.,]+)"/);
     if (pJson) price = pJson[1];
 
-    // Pattern visuel HTML
     if (!price) {
       const pSpan = html.match(/<span class="a-offscreen">([\d.,]+)\s*€<\/span>/);
       if (pSpan) price = pSpan[1];
     }
 
-    // Note moyenne
+    // Note
     let rating = 0;
     const rJson = html.match(/"ratingValue"\s*:\s*"([\d.]+)"/);
     if (rJson) rating = parseFloat(rJson[1]) || 0;
 
     if (!rating) {
-      const rSpan = html.match(/<span[^>]*class="a-icon-alt"[^>]*>([\d.,]+) sur 5 étoiles<\/span>/);
+      const rSpan = html.match(
+        /<span[^>]*class="a-icon-alt"[^>]*>([\d.,]+) sur 5 étoiles<\/span>/
+      );
       if (rSpan) rating = parseFloat(rSpan[1].replace(",", ".")) || 0;
     }
 
-    // Nombre d'avis
+    // Avis
     let reviews = 0;
     const cJson = html.match(/"reviewCount"\s*:\s*"(\d+)"/);
     if (cJson) reviews = parseInt(cJson[1]) || 0;
@@ -119,10 +114,9 @@ function computeYScore(info) {
   else if (info.reviews > 100) score += 10;
   else if (info.reviews > 20) score += 5;
 
-  // Bonus si on a un prix (ça veut dire produit bien fiché)
+  // Bonus si on a un prix
   if (info.price) score += 5;
 
-  // Si vraiment aucune info fiable
   if (!info.rating && !info.reviews) score = 0;
 
   return Math.max(0, Math.min(100, score));
@@ -166,49 +160,74 @@ export default async function handler(req, res) {
       process.env.ALIEXPRESS_AFFILIATE_LINK ||
       "https://s.click.aliexpress.com/e/_c4k2HESt";
 
-    // 1) Choisir 2 produits Amazon
-    const picks = pickRandom(AMAZON_PRODUCTS, 2).map((p) =>
-      withAmazonTag(p, amazonTag)
-    );
+    // 1) On tag tous les produits Amazon
+    const tagged = AMAZON_PRODUCTS.map((p) => withAmazonTag(p, amazonTag));
+
+    // 2) On scrape tous les produits, puis on filtre
+    const detailed = [];
+    for (const url of tagged) {
+      const info = await scrapeAmazon(url);
+      const yscore = computeYScore(info);
+      detailed.push({ url, info, yscore });
+    }
+
+    // Filtre qualité
+    const eligible = detailed
+      .filter(
+        (d) =>
+          d.info.rating >= MIN_RATING &&
+          d.info.reviews >= MIN_REVIEWS &&
+          d.yscore >= MIN_YSCORE
+      )
+      .sort((a, b) => b.yscore - a.yscore)
+      .slice(0, MAX_AMAZON_DEALS);
 
     const messages = [];
 
-    // 2) Pour chaque produit : scrape + score + message
-    for (let i = 0; i < picks.length; i++) {
-      const url = picks[i];
-      const info = await scrapeAmazon(url);
-      const yscore = computeYScore(info);
-
-      const ratingText =
-        info.rating && info.reviews
-          ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
-          : "⭐ <i>Pas encore d'avis fiables</i>\n";
-
-      const priceText = info.price
-        ? `💰 Prix : <b>${info.price}</b>\n`
-        : "💰 Prix : <i>Non disponible</i>\n";
-
-      const scoreText = `📊 Y-Score : <b>${yscore}/100</b>\n`;
-
+    if (eligible.length === 0) {
+      // Aucun bon plan assez bon → message d’info
       const msg =
-        `🔥 <b>Bon plan Amazon #${i + 1}</b>\n` +
-        `🛒 <b>${info.title}</b>\n\n` +
-        ratingText +
-        priceText +
-        scoreText +
-        `👉 <a href="${url}">Voir l'offre</a>\n\n` +
-        `<i>Money Motor Y — Deals Auto Boostés</i>`;
-
+        `⚠️ <b>Aucun bon plan Amazon suffisant trouvé pour ce run.</b>\n` +
+        `Les produits analysés n'ont pas atteint le seuil de qualité (note, avis, Y-Score).\n\n` +
+        `<i>Money Motor Y — Sélection stricte pour protéger ton audience.</i>`;
       messages.push(msg);
+    } else {
+      // On envoie seulement les offres filtrées
+      eligible.forEach((d, idx) => {
+        const { url, info, yscore } = d;
+
+        const ratingText =
+          info.rating && info.reviews
+            ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
+            : "⭐ <i>Pas encore d'avis fiables</i>\n";
+
+        const priceText = info.price
+          ? `💰 Prix : <b>${info.price}</b>\n`
+          : "💰 Prix : <i>Non disponible</i>\n";
+
+        const scoreText = `📊 Y-Score : <b>${yscore}/100</b>\n`;
+
+        const msg =
+          `🔥 <b>Bon plan Amazon #${idx + 1}</b>\n` +
+          `🛒 <b>${info.title}</b>\n\n` +
+          ratingText +
+          priceText +
+          scoreText +
+          `👉 <a href="${url}">Voir l'offre</a>\n\n` +
+          `<i>Money Motor Y — Deals Auto Boostés</i>`;
+
+        messages.push(msg);
+      });
     }
 
-    // 3) AliExpress
+    // 3) AliExpress (toujours envoyé)
     const aliMsg =
       `💥 <b>Deal AliExpress</b>\n` +
       `🔥 Offre du moment sélectionnée par Money Motor Y\n\n` +
       `👉 <a href="${aliLink}">Voir l'offre</a>\n\n` +
       `<i>Sélection Money Motor Y</i>`;
 
+    // Envoi Telegram
     for (const msg of messages) {
       await sendToTelegram(msg);
       await new Promise((r) => setTimeout(r, 1000));
@@ -218,11 +237,12 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       sent: messages.length + 1,
-      amazon: picks,
+      amazon_checked: detailed.length,
+      amazon_eligible: eligible.length,
       aliexpress: aliLink
     });
   } catch (err) {
-    console.error("Erreur AutoPublisher PRO+:", err);
+    console.error("Erreur AutoPublisher PRO+ FILTRE:", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
