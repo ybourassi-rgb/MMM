@@ -1,13 +1,17 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * MMY AutoPublisher PRO+ avec FILTRE (MODE BOOST)
- * - Amazon + AliExpress
- * - Scraping "safe" (prix, étoiles, avis quand dispo)
- * - Y-Score PRO+
- * - Filtre : on n’envoie que les bonnes offres Amazon
- * - MODE BOOST : plus de deals, qualité correcte
+ * MMY AutoPublisher PRO+ — OPTION C
+ *
+ * - Analyse tous les produits Amazon de la liste
+ * - 1er deal : meilleur produit FILTRÉ (note, avis, Y-Score)
+ * - 2e deal : produit Amazon aléatoire (même s'il ne passe pas le filtre)
+ * - + 1 deal AliExpress à chaque run
+ *
+ * Résultat : mélange QUALITÉ + DIVERSITÉ (meilleur pour le long terme)
  */
+
+// ---------------- CONFIG PRODUITS ----------------
 
 const AMAZON_PRODUCTS = [
   // 🔥 Cartes graphiques premium
@@ -40,20 +44,26 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B006JH8T3S"
 ];
 
-// 🔥 SEUILS DE QUALITÉ — MODE BOOST
-const MIN_RATING = 3.8;   // note minimum
-const MIN_REVIEWS = 20;   // avis minimum
-const MIN_YSCORE = 15;    // Y-Score minimum
-const MAX_AMAZON_DEALS = 2; // max de bons plans Amazon par run
+// ---------------- SEUILS QUALITÉ (MODE BOOST) ----------------
 
-// ------------ UTILS ------------
+const MIN_RATING = 3.8;  // note minimum
+const MIN_REVIEWS = 20;  // avis minimum
+const MIN_YSCORE = 15;   // Y-Score minimum
+
+// ---------------- UTILS ----------------
 
 function withAmazonTag(url, tag) {
   if (!tag) return url;
   return url.includes("?") ? `${url}&tag=${tag}` : `${url}?tag=${tag}`;
 }
 
-// ------------ SCRAPING AMAZON PRO+ (safe) ------------
+function pickRandom(arr) {
+  if (!arr.length) return null;
+  const idx = Math.floor(Math.random() * arr.length);
+  return arr[idx];
+}
+
+// ---------------- SCRAPING AMAZON PRO+ (safe) ----------------
 
 async function scrapeAmazon(url) {
   try {
@@ -123,7 +133,7 @@ async function scrapeAmazon(url) {
   }
 }
 
-// ------------ Y-SCORE PRO+ ------------
+// ---------------- Y-SCORE PRO+ ----------------
 
 function computeYScore(info) {
   let score = 0;
@@ -148,7 +158,7 @@ function computeYScore(info) {
   return Math.max(0, Math.min(100, score));
 }
 
-// ------------ TELEGRAM ------------
+// ---------------- TELEGRAM ----------------
 
 async function sendToTelegram(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN_DEALS;
@@ -173,7 +183,7 @@ async function sendToTelegram(text) {
   });
 }
 
-// ------------ HANDLER ------------
+// ---------------- HANDLER ----------------
 
 export default async function handler(req, res) {
   try {
@@ -189,7 +199,7 @@ export default async function handler(req, res) {
     // 1) On tag tous les produits Amazon
     const tagged = AMAZON_PRODUCTS.map((p) => withAmazonTag(p, amazonTag));
 
-    // 2) On scrape tous les produits, puis on filtre
+    // 2) On scrape tous les produits et on calcule Y-Score
     const detailed = [];
     for (const url of tagged) {
       const info = await scrapeAmazon(url);
@@ -197,7 +207,9 @@ export default async function handler(req, res) {
       detailed.push({ url, info, yscore });
     }
 
-    // Filtre qualité (MODE BOOST)
+    // 3) Sélection OPTION C
+
+    // a) Liste des produits éligibles (bons)
     const eligible = detailed
       .filter(
         (d) =>
@@ -205,53 +217,88 @@ export default async function handler(req, res) {
           d.info.reviews >= MIN_REVIEWS &&
           d.yscore >= MIN_YSCORE
       )
-      .sort((a, b) => b.yscore - a.yscore)
-      .slice(0, MAX_AMAZON_DEALS);
+      .sort((a, b) => b.yscore - a.yscore);
 
     const messages = [];
 
-    if (eligible.length === 0) {
-      const msg =
-        `⚠️ <b>Aucun bon plan Amazon suffisant trouvé pour ce run.</b>\n` +
-        `Les produits analysés n'ont pas atteint le seuil de qualité (note, avis, Y-Score).\n\n` +
-        `<i>Money Motor Y — Sélection stricte pour protéger ton audience.</i>`;
-      messages.push(msg);
-    } else {
-      eligible.forEach((d, idx) => {
-        const { url, info, yscore } = d;
-
-        const ratingText =
-          info.rating && info.reviews
-            ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
-            : "⭐ <i>Pas encore d'avis fiables</i>\n";
-
-        const priceText = info.price
-          ? `💰 Prix : <b>${info.price}</b>\n`
-          : "💰 Prix : <i>Non disponible</i>\n";
-
-        const scoreText = `📊 Y-Score : <b>${yscore}/100</b>\n`;
-
-        const msg =
-          `🔥 <b>Bon plan Amazon #${idx + 1}</b>\n` +
-          `🛒 <b>${info.title}</b>\n\n` +
-          ratingText +
-          priceText +
-          scoreText +
-          `👉 <a href="${url}">Voir l'offre</a>\n\n` +
-          `<i>Money Motor Y — Deals Auto Boostés</i>`;
-
-        messages.push(msg);
-      });
+    // 1er message : meilleur deal filtré (si dispo)
+    let mainDeal = null;
+    if (eligible.length > 0) {
+      mainDeal = eligible[0];
     }
 
-    // 3) AliExpress (toujours envoyé)
+    // 2e message : deal aléatoire (dans tous les cas)
+    let randomDeal = pickRandom(detailed);
+
+    // Si le random est le même que le best deal, on en prend un autre si possible
+    if (mainDeal && randomDeal && randomDeal.url === mainDeal.url) {
+      const others = detailed.filter((d) => d.url !== mainDeal.url);
+      if (others.length > 0) {
+        randomDeal = pickRandom(others);
+      }
+    }
+
+    // Construction des messages Amazon
+
+    if (mainDeal) {
+      const { url, info, yscore } = mainDeal;
+      const ratingText =
+        info.rating && info.reviews
+          ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
+          : "⭐ <i>Pas encore d'avis fiables</i>\n";
+
+      const priceText = info.price
+        ? `💰 Prix : <b>${info.price}</b>\n`
+        : "💰 Prix : <i>Non disponible</i>\n";
+
+      const scoreText = `📊 Y-Score : <b>${yscore}/100</b>\n`;
+
+      const msg =
+        `🔥 <b>Bon plan Amazon #1 (sélection MMY)</b>\n` +
+        `🛒 <b>${info.title}</b>\n\n` +
+        ratingText +
+        priceText +
+        scoreText +
+        `👉 <a href="${url}">Voir l'offre</a>\n\n` +
+        `<i>Money Motor Y — Meilleure sélection du run</i>`;
+
+      messages.push(msg);
+    }
+
+    if (randomDeal) {
+      const { url, info, yscore } = randomDeal;
+      const ratingText =
+        info.rating && info.reviews
+          ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
+          : "⭐ <i>Peu d'avis disponibles</i>\n";
+
+      const priceText = info.price
+        ? `💰 Prix : <b>${info.price}</b>\n`
+        : "💰 Prix : <i>Non disponible</i>\n";
+
+      const scoreText =
+        yscore > 0 ? `📊 Y-Score : <b>${yscore}/100</b>\n` : "";
+
+      const msg =
+        `🌀 <b>Bon plan Amazon #2 (découverte)</b>\n` +
+        `🛒 <b>${info.title}</b>\n\n` +
+        ratingText +
+        priceText +
+        scoreText +
+        `👉 <a href="${url}">Voir l'offre</a>\n\n` +
+        `<i>Money Motor Y — Découverte aléatoire</i>`;
+
+      messages.push(msg);
+    }
+
+    // 4) AliExpress (toujours envoyé)
     const aliMsg =
       `💥 <b>Deal AliExpress</b>\n` +
       `🔥 Offre du moment sélectionnée par Money Motor Y\n\n` +
       `👉 <a href="${aliLink}">Voir l'offre</a>\n\n` +
       `<i>Sélection Money Motor Y</i>`;
 
-    // Envoi Telegram
+    // 5) Envoi Telegram
     for (const msg of messages) {
       await sendToTelegram(msg);
       await new Promise((r) => setTimeout(r, 1000));
@@ -260,13 +307,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      sent: messages.length + 1,
+      sent: messages.length + 1, // +1 pour AliExpress
       amazon_checked: detailed.length,
       amazon_eligible: eligible.length,
       aliexpress: aliLink
     });
   } catch (err) {
-    console.error("Erreur AutoPublisher PRO+ FILTRE (MODE BOOST):", err);
+    console.error("Erreur AutoPublisher PRO+ OPTION C:", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
