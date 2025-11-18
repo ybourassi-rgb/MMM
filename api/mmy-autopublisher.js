@@ -1,15 +1,14 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * MMY AutoPublisher PRO+ — OPTION C + DEBUG
+ * MMY AutoPublisher PRO+ — OPTION C (Vercel Optimisé)
  *
- * - Analyse tous les produits Amazon de la liste
- * - 1er deal : meilleur produit FILTRÉ (note, avis, Y-Score)
- * - 2e deal : produit Amazon aléatoire (même s'il ne passe pas le filtre)
+ * - Analyse tous les produits Amazon de la liste (en parallèle, super rapide)
+ * - Bon plan #1 : meilleur produit FILTRÉ (note, avis, Y-Score)
+ * - Bon plan #2 : produit Amazon aléatoire (même s'il ne passe pas le filtre)
  * - + 1 deal AliExpress à chaque run
- * - + 1 message DEBUG qui explique les notes, avis, Y-Score de chaque produit
  *
- * Résultat : mélange QUALITÉ + DIVERSITÉ + visibilité sur le moteur
+ * Résultat : QUALITÉ + DIVERSITÉ, compatible serverless (pas de timeout)
  */
 
 // ---------------- CONFIG PRODUITS ----------------
@@ -50,9 +49,6 @@ const AMAZON_PRODUCTS = [
 const MIN_RATING = 3.8;  // note minimum
 const MIN_REVIEWS = 20;  // avis minimum
 const MIN_YSCORE = 15;   // Y-Score minimum
-
-// Active / désactive le message debug
-const DEBUG_MODE = true;
 
 // ---------------- UTILS ----------------
 
@@ -191,4 +187,137 @@ async function sendToTelegram(text) {
 
 // ---------------- HANDLER ----------------
 
-export default async
+export default async function handler(req, res) {
+  try {
+    if (req.method !== "GET" && req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "Method not allowed" });
+    }
+
+    const amazonTag = process.env.AMAZON_ASSOCIATE_TAG;
+    const aliLink =
+      process.env.ALIEXPRESS_AFFILIATE_LINK ||
+      "https://s.click.aliexpress.com/e/_c4k2HESt";
+
+    // 1) Tag de tous les produits Amazon
+    const tagged = AMAZON_PRODUCTS.map((p) => withAmazonTag(p, amazonTag));
+
+    // 2) Scraping + Y-Score en PARALLÈLE (ultra rapide)
+    const detailed = await Promise.all(
+      tagged.map(async (url) => {
+        const info = await scrapeAmazon(url);
+        const yscore = computeYScore(info);
+        return { url, info, yscore };
+      })
+    );
+
+    // 3) Sélection OPTION C
+
+    // a) Liste des produits éligibles (bons)
+    const eligible = detailed
+      .filter(
+        (d) =>
+          d.info.rating >= MIN_RATING &&
+          d.info.reviews >= MIN_REVIEWS &&
+          d.yscore >= MIN_YSCORE
+      )
+      .sort((a, b) => b.yscore - a.yscore);
+
+    const messages = [];
+    let sentCount = 0;
+
+    // 1er message : meilleur deal filtré (si dispo)
+    let mainDeal = eligible.length > 0 ? eligible[0] : null;
+
+    // 2e message : deal aléatoire (dans tous les cas)
+    let randomDeal = pickRandom(detailed);
+
+    // Si le random est le même que le best deal, on en prend un autre si possible
+    if (mainDeal && randomDeal && randomDeal.url === mainDeal.url) {
+      const others = detailed.filter((d) => d.url !== mainDeal.url);
+      if (others.length > 0) {
+        randomDeal = pickRandom(others);
+      }
+    }
+
+    // Construction des messages Amazon
+
+    if (mainDeal) {
+      const { url, info, yscore } = mainDeal;
+      const ratingText =
+        info.rating && info.reviews
+          ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
+          : "⭐ <i>Pas encore d'avis fiables</i>\n";
+
+      const priceText = info.price
+        ? `💰 Prix : <b>${info.price}</b>\n`
+        : "💰 Prix : <i>Non disponible</i>\n";
+
+      const scoreText = `📊 Y-Score : <b>${yscore}/100</b>\n`;
+
+      const msg =
+        `🔥 <b>Bon plan Amazon #1 (sélection MMY)</b>\n` +
+        `🛒 <b>${info.title}</b>\n\n` +
+        ratingText +
+        priceText +
+        scoreText +
+        `👉 <a href="${url}">Voir l'offre</a>\n\n` +
+        `<i>Money Motor Y — Meilleure sélection du run</i>`;
+
+      messages.push(msg);
+    }
+
+    if (randomDeal) {
+      const { url, info, yscore } = randomDeal;
+      const ratingText =
+        info.rating && info.reviews
+          ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
+          : "⭐ <i>Peu d'avis disponibles</i>\n";
+
+      const priceText = info.price
+        ? `💰 Prix : <b>${info.price}</b>\n`
+        : "💰 Prix : <i>Non disponible</i>\n";
+
+      const scoreText =
+        yscore > 0 ? `📊 Y-Score : <b>${yscore}/100</b>\n` : "";
+
+      const msg =
+        `🌀 <b>Bon plan Amazon #2 (découverte)</b>\n` +
+        `🛒 <b>${info.title}</b>\n\n` +
+        ratingText +
+        priceText +
+        scoreText +
+        `👉 <a href="${url}">Voir l'offre</a>\n\n` +
+        `<i>Money Motor Y — Découverte aléatoire</i>`;
+
+      messages.push(msg);
+    }
+
+    // 4) AliExpress (toujours envoyé)
+    const aliMsg =
+      `💥 <b>Deal AliExpress</b>\n` +
+      `🔥 Offre du moment sélectionnée par Money Motor Y\n\n` +
+      `👉 <a href="${aliLink}">Voir l'offre</a>\n\n` +
+      `<i>Sélection Money Motor Y</i>`;
+
+    // 5) Envoi Telegram (deals + AliExpress)
+    for (const msg of messages) {
+      const ok = await sendToTelegram(msg);
+      if (ok) sentCount++;
+      // petite pause pour éviter le flood, mais très courte
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    const okAli = await sendToTelegram(aliMsg);
+    if (okAli) sentCount++;
+
+    return res.status(200).json({
+      ok: true,
+      sent: sentCount,
+      amazon_checked: detailed.length,
+      amazon_eligible: eligible.length,
+      aliexpress: aliLink
+    });
+  } catch (err) {
+    console.error("Erreur AutoPublisher PRO+ OPTION C (Vercel Optimisé):", err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
