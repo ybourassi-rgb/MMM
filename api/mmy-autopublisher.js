@@ -46,9 +46,9 @@ const AMAZON_PRODUCTS = [
 
 // ---------------- SEUILS QUALITÉ (MODE BOOST) ----------------
 
-const MIN_RATING = 3.8;  // note minimum
-const MIN_REVIEWS = 20;  // avis minimum
-const MIN_YSCORE = 15;   // Y-Score minimum
+const MIN_RATING = 3.5;  // note minimum
+const MIN_REVIEWS = 5;  // avis minimum
+const MIN_YSCORE = 10;   // Y-Score minimum
 
 // ---------------- UTILS ----------------
 
