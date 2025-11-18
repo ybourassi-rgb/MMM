@@ -18,8 +18,12 @@
   ],
   "crons": [
     {
-      "path": "/api/affiliation_run?secret=@CRON_SECRET",
+      "path": "/api/affiliation_run",
       "schedule": "*/20 * * * *"
+    },
+    {
+      "path": "/api/mmy-autopublisher",
+      "schedule": "*/45 * * * *"
     }
   ]
 }
