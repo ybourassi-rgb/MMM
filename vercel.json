@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/mmy-autopublisher",
-      "schedule": "*/45 * * * *"
+      "schedule": "*/30 * * * *"
     }
   ]
 }
