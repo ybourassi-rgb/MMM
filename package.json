@@ -1,12 +1,21 @@
 {
-  "name": "mmy-tiktok-generator",
+  "name": "mmm",
   "version": "1.0.0",
-  "description": "Automated TikTok video generator for Money Motor Y",
-  "main": "src/generateVideo.js",
+  "private": true,
   "scripts": {
-    "start": "node src/generateVideo.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "fluent-ffmpeg": "^2.1.2"
+    "next": "13.4.12",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "axios": "^1.5.1"
+  },
+  "devDependencies": {
+    "eslint": "8.45.0",
+    "eslint-config-next": "13.4.12"
   }
 }
