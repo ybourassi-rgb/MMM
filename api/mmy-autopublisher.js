@@ -44,11 +44,11 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B006JH8T3S"
 ];
 
-// ---------------- SEUILS QUALITÉ (MODE BOOST) ----------------
+// ---------------- SEUILS QUALITÉ (MODE BOOST assoupli) ----------------
 
-const MIN_RATING = 3.5;  // note minimum
-const MIN_REVIEWS = 5;  // avis minimum
-const MIN_YSCORE = 10;   // Y-Score minimum
+const MIN_RATING = 3.5;  // note minimum (avant 3.8)
+const MIN_REVIEWS = 5;   // avis minimum (avant 20)
+const MIN_YSCORE = 10;   // Y-Score minimum (avant 15)
 
 // ---------------- UTILS ----------------
 
@@ -303,7 +303,7 @@ export default async function handler(req, res) {
     for (const msg of messages) {
       const ok = await sendToTelegram(msg);
       if (ok) sentCount++;
-      // petite pause pour éviter le flood, mais très courte
+      // petite pause pour éviter le flood, mais courte
       await new Promise((r) => setTimeout(r, 300));
     }
     const okAli = await sendToTelegram(aliMsg);
