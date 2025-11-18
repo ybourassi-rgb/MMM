@@ -4,10 +4,12 @@
  * MMY AutoPublisher PRO+ — OPTION C + DEBUG
  *
  * - Analyse tous les produits Amazon de la liste
- * - Bon plan #1 : meilleur produit FILTRÉ (note, avis, Y-Score)
- * - Bon plan #2 : produit Amazon aléatoire (même s'il ne passe pas le filtre)
+ * - 1er deal : meilleur produit FILTRÉ (note, avis, Y-Score)
+ * - 2e deal : produit Amazon aléatoire (même s'il ne passe pas le filtre)
  * - + 1 deal AliExpress à chaque run
- * - DEBUG : si ?debug=1 dans l'URL, envoie un message récap des scores
+ * - + 1 message DEBUG qui explique les notes, avis, Y-Score de chaque produit
+ *
+ * Résultat : mélange QUALITÉ + DIVERSITÉ + visibilité sur le moteur
  */
 
 // ---------------- CONFIG PRODUITS ----------------
@@ -49,6 +51,9 @@ const MIN_RATING = 3.8;  // note minimum
 const MIN_REVIEWS = 20;  // avis minimum
 const MIN_YSCORE = 15;   // Y-Score minimum
 
+// Active / désactive le message debug
+const DEBUG_MODE = true;
+
 // ---------------- UTILS ----------------
 
 function withAmazonTag(url, tag) {
@@ -83,3 +88,107 @@ async function scrapeAmazon(url) {
 
     // Prix
     let price = null;
+    const pJson = html.match(/"price"\s*:\s*"([\d.,]+)"/);
+    if (pJson) price = pJson[1];
+
+    if (!price) {
+      const pSpan = html.match(
+        /<span class="a-offscreen">([\d.,]+)\s*€<\/span>/
+      );
+      if (pSpan) price = pSpan[1];
+    }
+
+    // Note
+    let rating = 0;
+    const rJson = html.match(/"ratingValue"\s*:\s*"([\d.]+)"/);
+    if (rJson) rating = parseFloat(rJson[1]) || 0;
+
+    if (!rating) {
+      const rSpan = html.match(
+        /<span[^>]*class="a-icon-alt"[^>]*>([\d.,]+) sur 5 étoiles<\/span>/
+      );
+      if (rSpan) rating = parseFloat(rSpan[1].replace(",", ".")) || 0;
+    }
+
+    // Avis
+    let reviews = 0;
+    const cJson = html.match(/"reviewCount"\s*:\s*"(\d+)"/);
+    if (cJson) reviews = parseInt(cJson[1]) || 0;
+
+    if (!reviews) {
+      const cSpan = html.match(/(\d[\d\s]*) évaluations?/);
+      if (cSpan) reviews = parseInt(cSpan[1].replace(/\s/g, "")) || 0;
+    }
+
+    return {
+      title,
+      price: price ? `${price} €` : null,
+      rating,
+      reviews
+    };
+  } catch (e) {
+    console.error("scrapeAmazon PRO+ error:", e);
+    return {
+      title: "Produit Amazon",
+      price: null,
+      rating: 0,
+      reviews: 0
+    };
+  }
+}
+
+// ---------------- Y-SCORE PRO+ ----------------
+
+function computeYScore(info) {
+  let score = 0;
+
+  // Rating
+  if (info.rating >= 4.7) score += 45;
+  else if (info.rating >= 4.3) score += 35;
+  else if (info.rating >= 4.0) score += 25;
+  else if (info.rating >= 3.5) score += 10;
+
+  // Avis
+  if (info.reviews > 2000) score += 30;
+  else if (info.reviews > 500) score += 20;
+  else if (info.reviews > 100) score += 10;
+  else if (info.reviews > 20) score += 5;
+
+  // Bonus si on a un prix
+  if (info.price) score += 5;
+
+  if (!info.rating && !info.reviews) score = 0;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+// ---------------- TELEGRAM ----------------
+
+async function sendToTelegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN_DEALS;
+  const chatId = process.env.TELEGRAM_CHAT_ID_DEALS;
+
+  if (!token || !chatId) {
+    console.error("Manque TELEGRAM_BOT_TOKEN_DEALS ou TELEGRAM_CHAT_ID_DEALS");
+    return false;
+  }
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: false
+    })
+  });
+
+  return true;
+}
+
+// ---------------- HANDLER ----------------
+
+export default async
