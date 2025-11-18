@@ -1,7 +1,12 @@
 {
-  "name": "alpha-one",
+  "name": "mmy-tiktok-generator",
   "version": "1.0.0",
+  "description": "Automated TikTok video generator for Money Motor Y",
+  "main": "src/generateVideo.js",
+  "scripts": {
+    "start": "node src/generateVideo.js"
+  },
   "dependencies": {
-    "@upstash/redis": "1.22.0"
+    "fluent-ffmpeg": "^2.1.2"
   }
 }
