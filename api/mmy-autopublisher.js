@@ -1,11 +1,12 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * MMY AutoPublisher PRO+ avec FILTRE
+ * MMY AutoPublisher PRO+ avec FILTRE (MODE BOOST)
  * - Amazon + AliExpress
- * - Scraping "safe" amélioré (prix, étoiles, avis quand dispo)
+ * - Scraping "safe" (prix, étoiles, avis quand dispo)
  * - Y-Score PRO+
  * - Filtre : on n’envoie que les bonnes offres Amazon
+ * - MODE BOOST : plus de deals, qualité correcte
  */
 
 const AMAZON_PRODUCTS = [
@@ -39,10 +40,11 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B006JH8T3S"
 ];
 
-// MODE BOOST — plus de deals, qualité OK
-const MIN_RATING = 3.8;    // note minimum
-const MIN_REVIEWS = 20;    // avis minimum
-const MIN_YSCORE = 15;     // Y-Score minimum
+// 🔥 SEUILS DE QUALITÉ — MODE BOOST
+const MIN_RATING = 3.8;   // note minimum
+const MIN_REVIEWS = 20;   // avis minimum
+const MIN_YSCORE = 15;    // Y-Score minimum
+const MAX_AMAZON_DEALS = 2; // max de bons plans Amazon par run
 
 // ------------ UTILS ------------
 
@@ -76,7 +78,9 @@ async function scrapeAmazon(url) {
     if (pJson) price = pJson[1];
 
     if (!price) {
-      const pSpan = html.match(/<span class="a-offscreen">([\d.,]+)\s*€<\/span>/);
+      const pSpan = html.match(
+        /<span class="a-offscreen">([\d.,]+)\s*€<\/span>/
+      );
       if (pSpan) price = pSpan[1];
     }
 
@@ -193,7 +197,7 @@ export default async function handler(req, res) {
       detailed.push({ url, info, yscore });
     }
 
-    // Filtre qualité
+    // Filtre qualité (MODE BOOST)
     const eligible = detailed
       .filter(
         (d) =>
@@ -262,7 +266,7 @@ export default async function handler(req, res) {
       aliexpress: aliLink
     });
   } catch (err) {
-    console.error("Erreur AutoPublisher PRO+ FILTRE:", err);
+    console.error("Erreur AutoPublisher PRO+ FILTRE (MODE BOOST):", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
