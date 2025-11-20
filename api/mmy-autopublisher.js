@@ -6,7 +6,7 @@
  * - Filtre les ASIN morts avant scraping
  * - Analyse tous les produits Amazon (en parallèle)
  * - Bon plan #1 : meilleur produit filtré (YSCORE + avis + note)
- * - Bon plan #2 : produit Amazon aléatoire (découverte)
+ * - Bon plan #2 : produit Amazon aléatoire (découverte, mais "propre")
  * - + 1 deal AliExpress
  * - Messages optimisés conversion : version BOOST++
  *
@@ -109,10 +109,11 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B08TWZPN7V"
 ];
 
-// Seuils Boost++
-const MIN_RATING = 3.2;
-const MIN_REVIEWS = 3;
-const MIN_YSCORE = 5;
+// Seuils Boost++ (version PRO)
+// On veut des produits sérieusement validés par les avis
+const MIN_RATING = 4.1;   // minimum 4,1 / 5
+const MIN_REVIEWS = 50;   // minimum 50 avis
+const MIN_YSCORE = 50;    // minimum 50 / 100
 
 // ---------------- UTILS ----------------
 
@@ -189,18 +190,31 @@ async function scrapeAmazon(url) {
 // ---------------- Y-SCORE ----------------
 
 function computeYScore(info) {
+  const rating = Number(info.rating) || 0;
+  const reviews = Number(info.reviews) || 0;
+  const hasPrice = !!info.price;
+
   let score = 0;
-  if (info.rating >= 4.7) score += 45;
-  else if (info.rating >= 4.3) score += 35;
-  else if (info.rating >= 4.0) score += 25;
-  else if (info.rating >= 3.5) score += 10;
 
-  if (info.reviews > 2000) score += 30;
-  else if (info.reviews > 500) score += 20;
-  else if (info.reviews > 100) score += 10;
-  else if (info.reviews > 20) score += 5;
+  // 1) Note ⭐ — max 45 pts
+  if (rating >= 4.7) score += 45;
+  else if (rating >= 4.4) score += 38;
+  else if (rating >= 4.1) score += 30;
+  else if (rating >= 3.8) score += 18;
+  else if (rating >= 3.5) score += 8;
 
-  if (info.price) score += 5;
+  // 2) Volume d'avis 👥 — max 35 pts
+  if (reviews > 2000) score += 35;
+  else if (reviews > 1000) score += 28;
+  else if (reviews > 300) score += 20;
+  else if (reviews > 100) score += 12;
+  else if (reviews > 50) score += 6;
+
+  // 3) Prix présent 💰 — max 10 pts
+  if (hasPrice) score += 10;
+
+  // 4) Malus si rating faible ou très peu d'avis
+  if (rating < 3.5 || reviews < 20) score -= 10;
 
   return Math.max(0, Math.min(100, score));
 }
@@ -258,7 +272,14 @@ export default async function handler(req, res) {
       })
     );
 
-    const eligible = detailed
+    // 2bis) On vire les produits complètement vides : 0 étoile, 0 avis, pas de prix
+    const cleaned = detailed.filter(
+      (d) =>
+        !(d.info.rating === 0 && d.info.reviews === 0 && !d.info.price)
+    );
+
+    // 3) Sélection des deals éligibles
+    const eligible = cleaned
       .filter(
         (d) =>
           d.info.rating >= MIN_RATING &&
@@ -267,8 +288,18 @@ export default async function handler(req, res) {
       )
       .sort((a, b) => b.yscore - a.yscore);
 
-    let mainDeal = eligible[0] || detailed.sort((a, b) => b.yscore - a.yscore)[0];
-    let randomDeal = pickRandom(detailed.filter((d) => d.url !== mainDeal.url));
+    let mainDeal =
+      eligible[0] || cleaned.sort((a, b) => b.yscore - a.yscore)[0];
+
+    // Pour le deal découverte, on choisit parmi des produits "corrects"
+    let randomPool = cleaned.filter(
+      (d) =>
+        d.url !== (mainDeal?.url || null) &&
+        d.info.rating >= 3.8 &&
+        d.info.reviews >= 20
+    );
+
+    let randomDeal = pickRandom(randomPool);
 
     const messages = [];
 
