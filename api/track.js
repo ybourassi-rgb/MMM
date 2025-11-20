@@ -1,15 +1,5 @@
 // pages/api/track.js
-import { Redis } from "@upstash/redis";
 import { buildAffiliateRedirect } from "../../lib/affiliations";
-
-// Client Redis (Upstash) – si pas configuré, on restera en mode "no-op"
-let redis = null;
-if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-  redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
-}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -42,17 +32,13 @@ export default async function handler(req, res) {
 
   // 🟩 MODE 2 : clic tracké → ?platform=...&product=...&redirect=...
   if (platform && redirect) {
-    const redirectUrl = decodeURIComponent(redirect);
-
-    // Incrément du compteur Redis (non bloquant)
-    if (redis) {
-      try {
-        const key = `clicks:${platform}:${product || "unknown"}`;
-        await redis.incr(key);
-      } catch (e) {
-        console.error("Redis track error:", e);
-        // on ne bloque pas la redirection pour ça
-      }
+    let redirectUrl = redirect;
+    try {
+      // si c'est encodé (https%3A%2F%2F...), on le décode
+      redirectUrl = decodeURIComponent(redirect);
+    } catch (e) {
+      console.error("decode redirect error:", e);
+      // on garde redirect brut si decodeURIComponent plante
     }
 
     // Redirection vers le lien affilié final
