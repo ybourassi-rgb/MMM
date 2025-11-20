@@ -1,5 +1,5 @@
-// pages/api/track.js
-import { buildAffiliateRedirect } from "../../lib/affiliations.js";
+// api/track.js
+import { buildAffiliateRedirect } from "../lib/affiliations.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -33,7 +33,6 @@ export default async function handler(req, res) {
   // MODE 2 — redirection affiliée
   if (platform && redirect) {
     let redirectUrl = redirect;
-
     try {
       redirectUrl = decodeURIComponent(redirect);
     } catch (e) {
