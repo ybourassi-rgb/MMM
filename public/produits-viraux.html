@@ -1,32 +1,631 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Produits Viraux – Money Motor Y</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <title>🔥 Produits Viraux TikTok & Reels – Money Motor Y</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      margin: 0;
-      padding: 40px 20px;
-      background: #050816;
-      color: #fff;
-      font-family: system-ui, sans-serif;
+    :root{
+      --bg:#050712;
+      --card:#0c0f1c;
+      --accent:#3b82f6;
+      --accent-soft:rgba(59,130,246,.15);
+      --text:#f9fafb;
+      --muted:#9ca3af;
+      --danger:#f97373;
+      --good:#22c55e;
+      --border:rgba(148,163,184,.25);
+      --radius-lg:18px;
     }
-    .box {
-      max-width: 900px;
-      margin: auto;
-      background: #0f172a;
-      padding: 30px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.15);
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+      background:radial-gradient(circle at top,#111827 0,#020617 45%,#000 100%);
+      color:var(--text);
+      min-height:100vh;
+      padding:24px 10px 40px;
+      display:flex;
+      justify-content:center;
+    }
+    .shell{width:100%;max-width:960px}
+    header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:20px;
+      gap:12px;
+    }
+    .logo{
+      font-weight:700;
+      font-size:18px;
+      letter-spacing:.03em;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .logo-badge{
+      width:26px;height:26px;
+      border-radius:999px;
+      background:conic-gradient(from 160deg,#22c55e,#3b82f6,#a855f7,#22c55e);
+      display:flex;align-items:center;justify-content:center;
+      font-size:16px;
+    }
+    .env-pill{
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(15,23,42,.75);
+      font-size:11px;
+      color:var(--muted);
+      display:flex;align-items:center;gap:6px;
+    }
+    .dot-on{width:8px;height:8px;border-radius:999px;background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.8);}
+    main{display:flex;flex-direction:column;gap:18px}
+    .hero{
+      border-radius:var(--radius-lg);
+      border:1px solid var(--border);
+      background:
+        radial-gradient(circle at 0 0,rgba(59,130,246,.25),transparent 55%),
+        radial-gradient(circle at 100% 100%,rgba(34,197,94,.18),transparent 55%),
+        var(--card);
+      padding:18px 18px 20px;
+    }
+    .hero-title{
+      font-size:22px;
+      line-height:1.25;
+      margin-bottom:6px;
+      display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+    }
+    .hero-title span.fire{font-size:26px}
+    .hero-sub{
+      font-size:13px;
+      color:var(--muted);
+      max-width:520px;
+    }
+    .hero-cta-row{
+      margin-top:14px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .btn-primary{
+      border:none;
+      border-radius:999px;
+      padding:9px 18px;
+      background:linear-gradient(135deg,#2563eb,#4f46e5);
+      color:#fff;
+      font-size:13px;
+      font-weight:600;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      cursor:pointer;
+      box-shadow:0 10px 30px rgba(37,99,235,.45);
+      transition:transform .1s ease,box-shadow .1s ease;
+    }
+    .btn-primary:hover{transform:translateY(-1px);box-shadow:0 14px 40px rgba(37,99,235,.55);}
+    .btn-ghost{
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(15,23,42,.85);
+      color:var(--muted);
+      padding:8px 14px;
+      font-size:12px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+    }
+    .pill-small{
+      border-radius:999px;
+      padding:3px 9px;
+      border:1px solid var(--border);
+      font-size:11px;
+      color:var(--muted);
+      background:rgba(15,23,42,.7);
+    }
+
+    .layout{
+      display:grid;
+      grid-template-columns:minmax(0,2.1fr) minmax(0,1.3fr);
+      gap:16px;
+      align-items:flex-start;
+    }
+    @media (max-width:840px){
+      .layout{grid-template-columns:1fr}
+      body{padding:18px 10px 30px}
+    }
+    .card{
+      border-radius:var(--radius-lg);
+      background:var(--card);
+      border:1px solid var(--border);
+      padding:14px 14px 16px;
+    }
+    .card h2{
+      font-size:15px;
+      margin-bottom:6px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card h2 span.icon{font-size:18px}
+    .card p.desc{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:10px;
+    }
+    .field{margin-bottom:10px;}
+    .field label{
+      display:flex;
+      justify-content:space-between;
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:4px;
+    }
+    .field label span.main{color:#e5e7eb;font-weight:500;}
+    input[type="text"],
+    input[type="url"],
+    select,
+    textarea{
+      width:100%;
+      background:#020617;
+      color:var(--text);
+      border-radius:10px;
+      border:1px solid var(--border);
+      padding:7px 9px;
+      font-size:13px;
+      outline:none;
+    }
+    textarea{min-height:170px;resize:vertical;line-height:1.5;}
+    input:focus,textarea:focus,select:focus{
+      border-color:var(--accent);
+      box-shadow:0 0 0 1px rgba(59,130,246,.3);
+    }
+    .row{display:flex;gap:8px;flex-wrap:wrap;}
+    .row > *{flex:1;}
+    .btn-small{
+      padding:7px 11px;
+      border-radius:999px;
+      background:rgba(15,23,42,.9);
+      border:1px solid var(--border);
+      color:var(--muted);
+      font-size:11px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .badge{
+      border-radius:999px;
+      padding:2px 8px;
+      font-size:11px;
+      border:1px solid rgba(148,163,184,.4);
+      color:var(--muted);
+    }
+    .badge.good{color:var(--good);border-color:rgba(34,197,94,.6);}
+    .badge.danger{color:var(--danger);border-color:rgba(248,113,113,.7);}
+    .output-box{
+      border-radius:12px;
+      background:#020617;
+      border:1px dashed rgba(148,163,184,.6);
+      padding:10px 10px;
+      font-size:12px;
+      margin-top:8px;
+      word-break:break-word;
+    }
+    .output-box strong{color:#e5e7eb;}
+    .muted{color:var(--muted);font-size:12px;}
+    .status-line{
+      margin-top:6px;
+      font-size:11px;
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .status-dot{
+      width:7px;height:7px;border-radius:999px;
+      background:var(--accent);
+      box-shadow:0 0 0 4px var(--accent-soft);
+    }
+    .status-dot.bad{background:var(--danger);box-shadow:0 0 0 4px rgba(248,113,113,.2);}
+    .hooks-list{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      margin-top:8px;
+      font-size:12px;
+    }
+    .hook-pill{
+      padding:7px 9px;
+      border-radius:10px;
+      border:1px solid rgba(148,163,184,.4);
+      background:#020617;
+      cursor:pointer;
+    }
+    .hook-pill:hover{border-color:var(--accent);}
+    .tag-angle{
+      font-size:10px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      color:var(--muted);
     }
   </style>
 </head>
-
 <body>
-  <div class="box">
-    <h1>🔥 Produits Viraux TikTok & Reels</h1>
-    <p>Si tu vois cette page, c’est que <b>produits-viraux.html</b> fonctionne 👍</p>
-  </div>
-</body>
-</html>
+<div class="shell">
+  <header>
+    <div class="logo">
+      <div class="logo-badge">Y</div>
+      Money Motor Y — <span style="opacity:.8">Produits viraux</span>
+    </div>
+    <div class="env-pill">
+      <span class="dot-on"></span>
+      IA & Affiliation actives
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-title">
+        <span class="fire">🔥</span>
+        <span>Produits Viraux TikTok & Reels</span>
+      </div>
+      <p class="hero-sub">
+        Colle un lien produit, Money Motor Y génère le <strong>lien affilié</strong> + un
+        <strong>script TikTok/Reels complet</strong> (hook, structure, appel à l’action) optimisé pour le viral.
+      </p>
+      <div class="hero-cta-row">
+        <button id="cta-start" class="btn-primary">
+          Lancer une idée de vidéo maintenant
+          <span>🚀</span>
+        </button>
+        <button id="cta-copy" class="btn-ghost">
+          Copier l’URL de cette machine <span>🔗</span>
+        </button>
+        <span class="pill-small">
+          Objectif : passer à 6 chiffres via TikTok & affiliation 💸
+        </span>
+      </div>
+    </section>
+
+    <!-- 2 COLONNES -->
+    <section class="layout">
+      <!-- COLONNE GAUCHE : FORM & SCRIPT -->
+      <article class="card">
+        <h2><span class="icon">🎯</span>Machine à script TikTok & lien affilié</h2>
+        <p class="desc">
+          Étapes : (1) colle ton lien produit, (2) choisis l’angle, (3) Money Motor Y génère ton script + lien affilié.
+        </p>
+
+        <div class="field">
+          <label>
+            <span class="main">Lien produit (Amazon, AliExpress ou autre)</span>
+            <span class="muted">Obligatoire</span>
+          </label>
+          <input id="input-url" type="url" placeholder="https://www.aliexpress.com/... ou https://www.amazon.fr/..." autocomplete="off" />
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label><span class="main">Nom / promesse produit</span>
+              <span class="muted">Optionnel (sinon je devine depuis le lien)</span>
+            </label>
+            <input id="input-name" type="text" placeholder="Ex : Brosse magique anti-poils pour canapé" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label><span class="main">Angle de la vidéo</span></label>
+            <select id="input-angle">
+              <option value="probleme">Problème / douleur + solution</option>
+              <option value="avant-apres">Avant / Après choc visuel</option>
+              <option value="astuce">Astuce secrète / hack malin</option>
+              <option value="temoignage">Témoignage client rapide</option>
+              <option value="curiosite">Curiosité / “tu connais ça ?”</option>
+            </select>
+          </div>
+          <div class="field">
+            <label><span class="main">Durée cible</span></label>
+            <select id="input-duration">
+              <option value="15">≈ 15 s (ultra punchy)</option>
+              <option value="25" selected>≈ 25 s (équilibré)</option>
+              <option value="40">≈ 40 s (plus détaillé)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label><span class="main">Style de langage</span></label>
+            <select id="input-tone">
+              <option value="street">Street / TikTok FR</option>
+              <option value="neutre" selected>Neutre / simple</option>
+              <option value="pro">Plus professionnel</option>
+            </select>
+          </div>
+          <div class="field">
+            <label><span class="main">Ciblage</span></label>
+            <select id="input-target">
+              <option value="large" selected>Audience large</option>
+              <option value="parents">Parents / famille</option>
+              <option value="maison">Maison / déco / ménage</option>
+              <option value="beaute">Beauté / bien-être</option>
+              <option value="gadgets">Gadgets / geeks</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>
+            <span class="main">Douleur / bénéfice principal (optionnel)</span>
+          </label>
+          <input id="input-benefit" type="text" placeholder="Ex : marre des poils d’animaux sur le canapé / gagne du temps, plus propre..." />
+        </div>
+
+        <div class="row" style="margin-top:6px;margin-bottom:6px;">
+          <button id="btn-generate" class="btn-primary" style="flex:1;">
+            Générer le script + lien affilié ⚡
+          </button>
+          <button id="btn-random" class="btn-small" type="button">
+            Idée d’angle aléatoire 🎲
+          </button>
+        </div>
+
+        <div id="status" class="status-line">
+          <span class="status-dot"></span>
+          <span>En attente : colle un lien produit et clique sur “Générer”.</span>
+        </div>
+
+        <div style="margin-top:12px;">
+          <label class="muted" style="display:flex;justify-content:space-between;align-items:center;">
+            <span><strong>Script TikTok / Reels généré</strong></span>
+            <button id="btn-copy-script" class="btn-small" type="button">Copier le script 📋</button>
+          </label>
+          <textarea id="output-script" placeholder="Le script apparaîtra ici." spellcheck="false"></textarea>
+        </div>
+
+        <div style="margin-top:8px;">
+          <label class="muted" style="display:flex;justify-content:space-between;align-items:center;">
+            <span><strong>Lien affilié final</strong> (à mettre en bio / description)</span>
+            <button id="btn-copy-link" class="btn-small" type="button">Copier le lien affilié 🔗</button>
+          </label>
+          <div id="output-link" class="output-box">
+            <span class="muted">Aucun lien généré pour l’instant.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- COLONNE DROITE : HOOKS & TIPS -->
+      <aside class="card">
+        <h2><span class="icon">⚡</span>Hooks viraux suggérés</h2>
+        <p class="desc">
+          Clique sur un hook pour le coller au début de ton script.  
+          Utilise-les comme “ouverture” ultra rapide dans les 1ères secondes.
+        </p>
+
+        <div id="hooks" class="hooks-list"></div>
+
+        <div style="margin-top:10px;">
+          <p class="muted">
+            Astuces :
+          </p>
+          <ul class="muted" style="margin-top:4px;font-size:11px;line-height:1.5;padding-left:18px;">
+            <li>Tourne la scène <strong>la plus choquante dès la première seconde</strong>.</li>
+            <li>Ajoute sous-titres + bruitages TikTok / CapCut.</li>
+            <li>Teste plusieurs hooks pour le même produit (A/B test créatif).</li>
+          </ul>
+        </div>
+      </aside>
+    </section>
+  </main>
+</div>
+
+<script>
+  // --------- Mini utilitaires ----------
+  function $(id){return document.getElementById(id);}
+
+  function setStatus(text, ok=true){
+    const st = $("status");
+    const dot = st.querySelector(".status-dot");
+    st.querySelector("span:last-child").textContent = text;
+    if(ok){
+      dot.classList.remove("bad");
+    }else{
+      dot.classList.add("bad");
+    }
+  }
+
+  function copyText(text){
+    if(!text) return;
+    navigator.clipboard?.writeText(text).catch(()=>{});
+  }
+
+  function parseProductNameFromUrl(url){
+    try{
+      const u = new URL(url);
+      // Amazon slug après /dp/ ou /gp/ ou /product/
+      const path = u.pathname || "";
+      const pieces = path.split("/").filter(Boolean);
+      const words = pieces
+        .filter(p=>!/^dp$|^gp$|^product$|^ref$/i.test(p) && !/^[A-Z0-9]{8,}$/.test(p))
+        .pop() || "";
+      if(words){
+        return decodeURIComponent(words.replace(/[-_]+/g," ")).trim();
+      }
+      return u.hostname.replace(/^www\./,"");
+    }catch{
+      return "";
+    }
+  }
+
+  function detectPlatform(url){
+    try{
+      const host = new URL(url).hostname.toLowerCase();
+      if(host.includes("amazon.")) return "amazon";
+      if(host.includes("aliexpress.")) return "aliexpress";
+      return "autre";
+    }catch{return "autre";}
+  }
+
+  // --------- Hooks viraux ----------
+  const HOOKS_BASE = [
+    { angle:"probleme", txt:"Si tu galères encore avec __PROBLEME__, regarde ça 3 secondes." },
+    { angle:"avant-apres", txt:"Je te montre un avant / après qui va te choquer 👇" },
+    { angle:"astuce", txt:"Personne ne t’a jamais montré ce hack pour __CIBLE__." },
+    { angle:"temoignage", txt:"J’étais sceptique, mais ce truc a changé mon quotidien en 7 jours." },
+    { angle:"curiosite", txt:"T’as déjà vu ce genre d’objet sur TikTok ? Attends de voir comment ça marche." },
+    { angle:"probleme", txt:"Marre de __PROBLEME__ ? Regarde bien ce qui suit." },
+    { angle:"astuce", txt:"3 secondes pour te montrer comment je gagne du temps tous les jours avec ça." },
+    { angle:"curiosite", txt:"Tu vas vouloir ça chez toi après cette vidéo." }
+  ];
+
+  function renderHooks(){
+    const container = $("hooks");
+    container.innerHTML = "";
+    HOOKS_BASE.forEach((h,i)=>{
+      const div = document.createElement("div");
+      div.className = "hook-pill";
+      div.dataset.index = i;
+      div.innerHTML = `
+        <div class="tag-angle">${h.angle.toUpperCase()}</div>
+        <div>${h.txt}</div>
+      `;
+      div.addEventListener("click", ()=>{
+        const ta = $("output-script");
+        const current = ta.value.trim();
+        const text = h.txt.replace("__PROBLEME__","ton problème").replace("__CIBLE__","ton audience");
+        ta.value = (current ? text + "\\n\\n" + current : text + "\\n\\n");
+        ta.scrollTop = 0;
+      });
+      container.appendChild(div);
+    });
+  }
+
+  // --------- Génération de script local (sans IA) ----------
+  function buildScript({productName, angle, duration, tone, target, benefit, affLink}){
+    const lines = [];
+    const durText = duration <= 18 ? "en 15 secondes" : duration <= 30 ? "en moins de 30 secondes" : "rapidement";
+
+    // HOOK
+    let hook;
+    switch(angle){
+      case "probleme":
+        hook = `Marre de ${benefit || "ce problème"} ? Regarde bien ce qui suit.`;
+        break;
+      case "avant-apres":
+        hook = `Regarde bien l’avant / après avec ${productName || "ce produit"}, tu vas être choqué.`;
+        break;
+      case "astuce":
+        hook = `Je te montre un hack que personne n’utilise pour ${benefit || "te simplifier la vie"}.`;
+        break;
+      case "temoignage":
+        hook = `J’étais sceptique, mais ${productName || "ce truc"} a complètement changé mon quotidien.`;
+        break;
+      case "curiosite":
+      default:
+        hook = `Tu connais ${productName || "ce genre d’objet"} ? Attends de voir comment ça marche.`;
+    }
+
+    // Adaptation ton
+    function styleSent(text){
+      if(tone === "street"){
+        return text
+          .replace("tu vas","t’vas")
+          .replace("tu","t’")
+          .replace("ne ","")
+          + " 🔥";
+      }
+      if(tone === "pro"){
+        return text.replace("tu","vous").replace("t’","vous ");
+      }
+      return text;
+    }
+
+    lines.push("HOOK (0-3s)");
+    lines.push(styleSent(hook));
+    lines.push("");
+
+    // Présentation
+    const targetText = ({
+      large:"tout le monde",
+      parents:"les parents",
+      maison:"ceux qui veulent une maison propre",
+      beaute:"ceux qui veulent prendre soin d’eux",
+      gadgets:"ceux qui adorent les gadgets"
+    })[target] || "beaucoup de gens";
+
+    lines.push("PRÉSENTATION (3-8s)");
+    lines.push(styleSent(`Voici ${productName || "ce produit"} : il est parfait pour ${targetText}.`));
+    if(benefit){
+      lines.push(styleSent(`Son gros avantage : ${benefit}.`));
+    }
+    lines.push("");
+
+    // Démo
+    lines.push(`DÉMONSTRATION VISUELLE (${durText})`);
+    lines.push("- Montre le produit en gros plan.");
+    lines.push("- Montre comment on l’utilise en 1 ou 2 gestes max.");
+    lines.push("- Filmer dans une vraie situation (salon, cuisine, salle de bain…).");
+    lines.push("");
+
+    // Preuve / rassurance
+    lines.push("PREUVE / RASSURANCE (dernieres secondes)");
+    lines.push("- Affiche rapidement 1 ou 2 avis / étoiles (même stylisés).");
+    lines.push("- Montre le résultat final (avant/après, gain de temps, propreté…).");
+    lines.push("");
+
+    // Call to action
+    const ctaBase = affLink
+      ? `Le lien est dans ma bio / description, clique dessus pour voir ${productName || "le produit"} et profiter de l’offre.`
+      : `Cherche “${productName || "le nom du produit"}” et clique sur le premier lien fiable pour profiter de l’offre.`;
+
+    lines.push("APPEL À L’ACTION (fin)");
+    lines.push(styleSent(ctaBase));
+    lines.push("");
+    lines.push("Remarque : pense à ajouter sous-titres + musique dynamique + cuts rapides.");
+
+    return lines.join("\\n");
+  }
+
+  // --------- Génération de lien affilié via /api/track ----------
+  async function generateAffiliateLink(rawUrl){
+    try{
+      const res = await fetch(`/api/track?url=${encodeURIComponent(rawUrl)}`);
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const data = await res.json();
+      if(data && data.ok && data.link){
+        return { ok:true, link:data.link, raw:data };
+      }
+      return { ok:false, link:rawUrl, raw:data };
+    }catch(e){
+      console.warn("Affiliate error:",e);
+      return { ok:false, link:rawUrl, error:String(e) };
+    }
+  }
+
+  // --------- Gestion des événements ----------
+  window.addEventListener("DOMContentLoaded", ()=>{
+    renderHooks();
+
+    $("cta-start").addEventListener("click", ()=>{
+      $("input-url").focus();
+      setStatus("OK, colle ton lien produit puis clique sur Générer ⚡", true);
+    });
+
+    $("cta-copy").addEventListener("click", ()=>{
+      copyText(window.location.href);
+      setStatus("URL de la machine copiée dans le presse-papiers ✅", true);
+    });
+
+    $("btn-copy-script").addEventListener("click", ()=>{
+      copyText($("output-script").value);
+      setStatus("Script copié ✅", true);
+    });
+
+    $("btn-copy-link").addEventListener("click", ()=>{
+      copyText($("output-link").innerText.trim());
+      setStatus("Lien affilié copié ✅", true
