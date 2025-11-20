@@ -2,57 +2,103 @@
 
 export default function ProduitsViraux() {
   return (
-    <div
+    <main
       style={{
         minHeight: "100vh",
-        background: "#050810",
-        color: "#f5f5f5",
-        padding: "24px 16px",
+        padding: "40px 16px",
+        background: "#050816",
+        color: "#f9fafb",
         fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
-      <div style={{ maxWidth: 960, margin: "0 auto" }}>
-        <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
-          🔥 Produits viraux
+      <div
+        style={{
+          maxWidth: 960,
+          margin: "0 auto",
+          borderRadius: 16,
+          border: "1px solid rgba(148, 163, 184, 0.35)",
+          background:
+            "radial-gradient(circle at top, rgba(59,130,246,0.18), transparent 55%), #020617",
+          boxShadow:
+            "0 18px 45px rgba(15,23,42,0.9), 0 0 0 1px rgba(15,23,42,0.9)",
+          padding: "28px 22px 26px",
+        }}
+      >
+        <p
+          style={{
+            fontSize: 13,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "#38bdf8",
+            marginBottom: 6,
+          }}
+        >
+          Money Motor Y • Lab
+        </p>
+
+        <h1
+          style={{
+            fontSize: 26,
+            margin: 0,
+            marginBottom: 10,
+          }}
+        >
+          🔥 Produits viraux TikTok & Reels
         </h1>
-        <p style={{ opacity: 0.8, marginBottom: "1.5rem" }}>
-          Espace dédié pour repérer, analyser et suivre les produits les plus
-          viraux pour TikTok & l’affiliation (Amazon / AliExpress, etc.).
+
+        <p
+          style={{
+            margin: 0,
+            marginBottom: 22,
+            color: "#cbd5f5",
+            fontSize: 15,
+            lineHeight: 1.55,
+          }}
+        >
+          Cette page servira à lister les{" "}
+          <strong>produits les plus viraux</strong> à pousser sur TikTok,
+          Reels et Shorts, reliés à ton système d’affiliation Money Motor Y.
         </p>
 
         <div
           style={{
+            padding: "14px 14px 13px",
             borderRadius: 12,
-            border: "1px solid rgba(255,255,255,0.08)",
-            padding: "16px",
+            border: "1px dashed rgba(148, 163, 184, 0.7)",
             background:
-              "radial-gradient(circle at top, rgba(88,101,242,0.18), transparent 55%) #050810",
+              "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(15,23,42,0.75))",
           }}
         >
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.75rem" }}>
-            🚧 En cours de construction
-          </h2>
-          <p style={{ opacity: 0.9, marginBottom: "0.75rem" }}>
-            La page est bien activée ✅. On va maintenant lui ajouter :
+          <p
+            style={{
+              margin: 0,
+              fontSize: 14,
+              lineHeight: 1.5,
+              color: "#e5e7eb",
+            }}
+          >
+            ✅ Si tu vois cette page, c’est que la route{" "}
+            <code style={{ color: "#a5b4fc" }}>/produits-viraux</code> est bien
+            active.
+            <br />
+            Ensuite, on branchera ici :
           </p>
-          <ul style={{ paddingLeft: "1.2rem", opacity: 0.9 }}>
-            <li>un listing de produits viraux (AliExpress / Amazon)</li>
-            <li>un bouton pour générer un script TikTok auto</li>
-            <li>un bouton pour générer ton lien affilié tracké</li>
+
+          <ul
+            style={{
+              marginTop: 10,
+              marginBottom: 0,
+              paddingLeft: 20,
+              fontSize: 14,
+              color: "#cbd5f5",
+            }}
+          >
+            <li>Le générateur de produits viraux (API / TikTok / Amazon / AliExpress)</li>
+            <li>Les scores Y-Score (rentabilité, risque, viralité)</li>
+            <li>Les liens trackés /api/track déjà en place</li>
           </ul>
         </div>
-
-        <p style={{ marginTop: "1.5rem" }}>
-          👉 En attendant, tu peux continuer à utiliser le{" "}
-          <a
-            href="/"
-            style={{ color: "#58a6ff", textDecoration: "underline" }}
-          >
-            tableau de bord Money Motor Y
-          </a>
-          .
-        </p>
       </div>
-    </div>
+    </main>
   );
 }
