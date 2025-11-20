@@ -1,7 +1,17 @@
 // pages/api/mmy-tiktok-from-link.js
 
-// On reste en Edge pour être compatible avec le reste de ton API
 export const config = { runtime: "edge" };
+
+// petit helper pour lire les env en Edge sans crasher
+const getEnv = (name) => {
+  try {
+    // process peut être absent en Edge selon l’environnement
+    if (typeof process === "undefined" || !process.env) return undefined;
+    return process.env[name];
+  } catch {
+    return undefined;
+  }
+};
 
 export default async function handler(req) {
   if (req.method !== "POST") {
@@ -15,14 +25,33 @@ export default async function handler(req) {
   }
 
   try {
+    const envCandidates = [
+      "OPENAI_API_KEY",
+      "MoneyMotorY",
+      "MMM_Vercel_Key",
+    ];
+
     const OPENAI_KEY =
-      process.env.OPENAI_API_KEY ||
-      process.env.MoneyMotorY ||
-      process.env.MMM_Vercel_Key;
+      getEnv("OPENAI_API_KEY") ||
+      getEnv("MoneyMotorY") ||
+      getEnv("MMM_Vercel_Key");
 
     if (!OPENAI_KEY) {
+      // petit debug pour comprendre côté Vercel quelles variables sont vues
+      const debug = {
+        hasProcess: typeof process !== "undefined",
+        seenEnv: envCandidates.reduce((acc, key) => {
+          acc[key] = !!getEnv(key);
+          return acc;
+        }, {}),
+      };
+
       return new Response(
-        JSON.stringify({ ok: false, error: "Clé OpenAI manquante." }),
+        JSON.stringify({
+          ok: false,
+          error: "Clé OpenAI manquante côté Edge.",
+          debug,
+        }),
         {
           status: 500,
           headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -104,7 +133,6 @@ Contraintes :
     try {
       json = JSON.parse(raw);
     } catch {
-      // Si le modèle a ajouté du texte autour, on essaye d’extraire le JSON
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) throw new Error("Réponse OpenAI non parsable en JSON.");
       json = JSON.parse(match[0]);
