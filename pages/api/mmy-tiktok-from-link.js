@@ -1,72 +1,77 @@
+import axios from "axios";
+
 /**
- * API MMY — Générateur de script TikTok à partir d’un lien Amazon/AliExpress
+ * Route API : /api/mmy-tiktok-from-link
+ *
+ * ❗Objectif :
+ * - Recevoir un lien Amazon + image
+ * - Générer automatiquement un script TikTok format JSON
+ * - Retourner un plan vidéo prêt à être utilisé par ton bot TikTok
  */
 
-import { OPENAI_API_KEY } from "../../lib/env";
-
-export const config = { runtime: "edge" };
-
-export default async function handler(req) {
+export default async function handler(req, res) {
   try {
-    const { searchParams } = new URL(req.url);
-    const url = searchParams.get("url");
-
-    if (!url) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Missing ?url=" }),
-        { status: 400 }
-      );
+    if (req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "Méthode non autorisée" });
     }
 
-    if (!OPENAI_API_KEY) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Missing OPENAI_API_KEY" }),
-        { status: 500 }
-      );
+    const { productUrl, imageUrl } = req.body;
+
+    if (!productUrl) {
+      return res.status(400).json({ ok: false, error: "productUrl manquant" });
     }
 
-    // Appel OpenAI : génère un script TikTok EN TEXTE SIMPLE
-    const prompt = `
-      Génère un script TikTok viral pour ce produit :
-      URL : ${url}
+    // Hook suggestions
+    const hooks = [
+      "🔥 Tu connais ce produit Amazon ?",
+      "Ce gadget explose en tendance 🤯",
+      "Ils ont laissé ce truc à ce prix… 😳",
+      "C’est clairement sous-coté…",
+      "Impossible de passer à côté 😅",
+    ];
+    const hook = hooks[Math.floor(Math.random() * hooks.length)];
 
-      Donne :
-      - un HOOK très fort (2 secondes)
-      - 3 phrases simples pour la voix off
-      - un CTA dynamique
+    // Génération des écrans simples (style no-face)
+    const overlayScreens = [
+      hook,
+      "Montre le produit sans visage 👀",
+      "Zoom 1-2x sur la partie la plus intéressante",
+      "Fin : 'Lien en bio pour voir le prix 🔥'",
+    ];
 
-      Réponds en JSON :
-      {
-        "hook": "...",
-        "lines": ["...", "...", "..."],
-        "cta": "..."
-      }
-    `.trim();
+    // Hashtags
+    const hashtags = [
+      "#amazonfinds",
+      "#bonsplans",
+      "#tiktokmademebuyit",
+      "#gadget",
+      "#deals",
+      "#astuces",
+    ];
 
-    const res = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`
+    const description =
+      `🔥 Trouvaille Amazon du moment\n👇 Lien en bio pour voir le prix\n` +
+      hashtags.join(" ");
+
+    const result = {
+      ok: true,
+      from: "MMY TikTok Generator",
+      productUrl,
+      imageUrl: imageUrl || null,
+      script: {
+        style: "A_UNBOXING_NO_FACE",
+        hook,
+        overlayScreens,
+        suggestedMusic: "Son tendance TikTok (sped up / drill / afro)",
+        tiktokDescription: description,
       },
-      body: JSON.stringify({
-        model: "gpt-5-mini",
-        input: prompt
-      })
-    });
+    };
 
-    const data = await res.json();
-    let text = data.output_text || "";
-
-    return new Response(
-      JSON.stringify({ ok: true, script: JSON.parse(text) }),
-      { status: 200 }
-    );
-
+    return res.status(200).json(result);
   } catch (err) {
-    return new Response(
-      JSON.stringify({ ok: false, error: err.message }),
-      { status: 500 }
-    );
+    return res.status(500).json({
+      ok: false,
+      error: err.message || "Erreur interne",
+    });
   }
 }
