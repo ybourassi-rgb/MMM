@@ -142,6 +142,42 @@ function pickRandom(arr) {
   return arr[idx];
 }
 
+// Extraction simple de l'ASIN depuis une URL Amazon
+function extractASIN(url) {
+  const m = url.match(/\/dp\/([A-Z0-9]{8,10})/i);
+  return m ? m[1] : null;
+}
+
+// Vérifie si l'ASIN pointe vers une vraie page produit Amazon
+async function isValidAmazonASIN(asin) {
+  try {
+    const testUrl = `https://www.amazon.fr/dp/${asin}`;
+    const res = await fetch(testUrl, { method: "GET" });
+
+    // Si la page ne répond pas 200 → on considère invalide
+    if (res.status !== 200) return false;
+
+    const html = await res.text();
+
+    // Messages typiques d'Amazon quand la page n'existe plus
+    if (
+      html.includes(
+        "L'adresse Web que vous avez saisie n’est pas une page fonctionnelle"
+      ) ||
+      html.includes(
+        "L'adresse Web que vous avez saisie n'est pas une page fonctionnelle de notre site"
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error("isValidAmazonASIN error:", e);
+    return false;
+  }
+}
+
 // ---------------- SCRAPING AMAZON PRO+ (safe) ----------------
 
 async function scrapeAmazon(url) {
@@ -277,8 +313,34 @@ export default async function handler(req, res) {
       process.env.ALIEXPRESS_AFFILIATE_LINK ||
       "https://s.click.aliexpress.com/e/_c4k2HESt";
 
-    // 1) Tag de tous les produits Amazon
-    const tagged = AMAZON_PRODUCTS.map((p) => withAmazonTag(p, amazonTag));
+    // 1) Filtrage des ASIN morts + tag de tous les produits Amazon
+    const checkedTagged = await Promise.all(
+      AMAZON_PRODUCTS.map(async (rawUrl) => {
+        const asin = extractASIN(rawUrl);
+        if (!asin) {
+          console.log("⚠️ Impossible d'extraire l'ASIN :", rawUrl);
+          return null;
+        }
+
+        const valid = await isValidAmazonASIN(asin);
+        if (!valid) {
+          console.log("❌ ASIN mort ou invalide, ignoré :", asin, rawUrl);
+          return null;
+        }
+
+        return withAmazonTag(rawUrl, amazonTag);
+      })
+    );
+
+    let tagged = checkedTagged.filter(Boolean);
+
+    // Sécurité : si jamais tout est filtré, on garde la liste brute pour ne pas casser le run
+    if (tagged.length === 0) {
+      console.log(
+        "⚠️ Aucun ASIN validé, fallback sur la liste complète non filtrée."
+      );
+      tagged = AMAZON_PRODUCTS.map((p) => withAmazonTag(p, amazonTag));
+    }
 
     // 2) Scraping + Y-Score en PARALLÈLE (ultra rapide)
     const detailed = await Promise.all(
