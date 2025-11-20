@@ -1,33 +1,51 @@
-import Link from "next/link";
+import Head from "next/head";
 
 export default function Home() {
   return (
-    <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h1>🚀 Money Motor Y — Dashboard</h1>
-      <p>Bienvenue dans ton tableau de bord MMM.</p>
+    <>
+      <Head>
+        <title>Money Motor Y – Dashboard</title>
+        <meta name="description" content="Analyse intelligente, affiliation, TikTok automation" />
+      </Head>
 
-      <h2>📌 Navigation rapide</h2>
-      <ul style={{ lineHeight: "2rem" }}>
-        <li>
-          <Link href="/produits-viraux">🔥 Produits viraux automatiques</Link>
-        </li>
-        <li>
-          <Link href="/tiktok-from-link">🎥 Générateur TikTok (Beta)</Link>
-        </li>
-        <li>
-          <Link href="/affiliation">💰 Génération de liens affiliés</Link>
-        </li>
-        <li>
-          <Link href="/market">📈 Marché en direct</Link>
-        </li>
-        <li>
-          <Link href="/status">🛠️ Status & logs</Link>
-        </li>
-      </ul>
+      <div style={{
+        padding: "2rem",
+        maxWidth: 800,
+        margin: "0 auto",
+        color: "white",
+        fontFamily: "sans-serif"
+      }}>
+        <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>
+          👋 Bienvenue sur Money Motor Y
+        </h1>
 
-      <p style={{ marginTop: "2rem", opacity: 0.6 }}>
-        Version alpha — MMM powered by Money Motor Y
-      </p>
-    </div>
+        <p style={{ opacity: 0.8, marginBottom: "2rem" }}>
+          Choisis une fonctionnalité ci-dessous :
+        </p>
+
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          <li style={{ marginBottom: "1rem" }}>
+            <a href="/produits-viraux"
+               style={{ color: "#4AB3FF", textDecoration: "none", fontSize: "1.2rem" }}>
+              🔥 Produits viraux (AliExpress + Amazon)
+            </a>
+          </li>
+
+          <li style={{ marginBottom: "1rem" }}>
+            <a href="/api/track?url=https://www.amazon.fr"
+               style={{ color: "#4AB3FF", textDecoration: "none", fontSize: "1.2rem" }}>
+              🔗 Générateur de liens affiliés
+            </a>
+          </li>
+
+          <li style={{ marginBottom: "1rem" }}>
+            <a href="/api/mmy-tiktok-from-link"
+               style={{ color: "#4AB3FF", textDecoration: "none", fontSize: "1.2rem" }}>
+              🎬 Générateur TikTok (depuis un lien)
+            </a>
+          </li>
+        </ul>
+      </div>
+    </>
   );
 }
