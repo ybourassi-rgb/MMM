@@ -1,14 +1,17 @@
 // pages/api/track.js
 import { buildAffiliateRedirect } from "../../lib/affiliations";
 
-export default async function handler(req, res) {
-  if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Use GET" });
-  }
+export const config = { runtime: "edge" };
 
-  const { url, platform, product, redirect } = req.query;
+export default async function handler(req) {
+  const { searchParams } = new URL(req.url);
 
-  // 🟦 MODE 1 : génération de lien affilié → ?url=...
+  const url = searchParams.get("url");
+  const platform = searchParams.get("platform");
+  const product = searchParams.get("product");
+  const redirect = searchParams.get("redirect");
+
+  // MODE 1 — Génération du lien affilié
   if (url) {
     try {
       const finalLink = buildAffiliateRedirect(url, {
@@ -16,39 +19,49 @@ export default async function handler(req, res) {
         campaign: "amazon-dashboard",
       });
 
-      return res.status(200).json({
-        ok: true,
-        link: finalLink, // ton composant lit data.link
-        original: url,
-      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          link: finalLink,
+          original: url,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        }
+      );
     } catch (e) {
-      console.error("track generate error:", e);
-      return res.status(500).json({
-        ok: false,
-        error: e.message || "internal-error",
-      });
+      return new Response(
+        JSON.stringify({ ok: false, error: e.message || "internal-error" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        }
+      );
     }
   }
 
-  // 🟩 MODE 2 : clic tracké → ?platform=...&product=...&redirect=...
+  // MODE 2 — Redirection affiliée
   if (platform && redirect) {
     let redirectUrl = redirect;
     try {
-      // si c'est encodé (https%3A%2F%2F...), on le décode
       redirectUrl = decodeURIComponent(redirect);
-    } catch (e) {
-      console.error("decode redirect error:", e);
-      // on garde redirect brut si decodeURIComponent plante
-    }
+    } catch {}
 
-    // Redirection vers le lien affilié final
-    res.writeHead(302, { Location: redirectUrl });
-    return res.end();
+    return new Response(null, {
+      status: 302,
+      headers: { Location: redirectUrl },
+    });
   }
 
-  // Si aucun des 2 modes ne matche
-  return res.status(400).json({
-    ok: false,
-    error: "Missing ?url= or ?platform=&redirect= parameters",
-  });
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      error: "Missing ?url= or ?platform=&redirect= parameters",
+    }),
+    {
+      status: 400,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    }
+  );
 }
