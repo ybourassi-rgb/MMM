@@ -6,7 +6,7 @@
  * - Filtre les ASIN morts avant scraping
  * - Analyse tous les produits Amazon (en parallèle)
  * - Bon plan #1 : meilleur produit filtré (YSCORE + avis + note)
- * - Bon plan #2 : produit Amazon aléatoire (découverte, mais "propre")
+ * - Bon plan #2 : produit Amazon "découverte" mais propre
  * - + 1 deal AliExpress
  * - Messages optimisés conversion : version BOOST++
  *
@@ -110,7 +110,6 @@ const AMAZON_PRODUCTS = [
 ];
 
 // Seuils Boost++ (version PRO)
-// On veut des produits sérieusement validés par les avis
 const MIN_RATING = 4.1;   // minimum 4,1 / 5
 const MIN_REVIEWS = 50;   // minimum 50 avis
 const MIN_YSCORE = 50;    // minimum 50 / 100
@@ -291,57 +290,66 @@ export default async function handler(req, res) {
     let mainDeal =
       eligible[0] || cleaned.sort((a, b) => b.yscore - a.yscore)[0];
 
-    // Pour le deal découverte, on choisit parmi des produits "corrects"
-    let randomPool = cleaned.filter(
-      (d) =>
-        d.url !== (mainDeal?.url || null) &&
-        d.info.rating >= 3.8 &&
-        d.info.reviews >= 20
-    );
-
-    let randomDeal = pickRandom(randomPool);
-
     const messages = [];
 
-    // Psyline dynamique
-    const psy = (s) =>
-      s >= 80
-        ? "🥇 <i>Un des meilleurs deals du moment.</i>\n"
-        : s >= 60
-        ? "✅ <i>Bon équilibre qualité/avis/prix.</i>\n"
-        : "🧐 <i>Produits à vérifier par toi-même.</i>\n";
-
-    // ----------- MESSAGE AMAZON #1 -----------
+    // Si aucun mainDeal (cas extrême), on envoie juste AliExpress
     if (mainDeal) {
-      const { url, info, yscore } = mainDeal;
+      // Psyline dynamique
+      const psy = (s) =>
+        s >= 80
+          ? "🥇 <i>Un des meilleurs deals du moment.</i>\n"
+          : s >= 60
+          ? "✅ <i>Bon équilibre qualité/avis/prix.</i>\n"
+          : "🧐 <i>Produits à vérifier par toi-même.</i>\n";
 
-      messages.push(
-        `🚨 <b>BON PLAN AMAZON #1</b>\n` +
-          `⚡ <i>Sélection Money Motor Y : meilleur rapport note/avis/potentiel.</i>\n\n` +
-          `🛒 <b>${info.title}</b>\n\n` +
-          `⭐ ${info.rating.toFixed(1)} / 5 (${info.reviews} avis)\n` +
-          `💰 Prix : ${info.price || "<i>À vérifier</i>"}\n` +
-          `📊 Score : <b>${yscore}/100</b>\n` +
-          psy(yscore) +
-          `👉 <b>Voir l’offre :</b>\n<a href="${url}">${url}</a>\n\n` +
-          `<i>Si tu passes par ce lien avant d’acheter, tu soutiens Money Motor Y ❤️</i>`
+      // ----------- MESSAGE AMAZON #1 -----------
+      {
+        const { url, info, yscore } = mainDeal;
+
+        messages.push(
+          `🚨 <b>BON PLAN AMAZON #1</b>\n` +
+            `⚡ <i>Sélection Money Motor Y : meilleur rapport note/avis/potentiel.</i>\n\n` +
+            `🛒 <b>${info.title}</b>\n\n` +
+            `⭐ ${info.rating.toFixed(1)} / 5 (${info.reviews} avis)\n` +
+            `💰 Prix : ${info.price || "<i>À vérifier</i>"}\n` +
+            `📊 Score : <b>${yscore}/100</b>\n` +
+            psy(yscore) +
+            `👉 <b>Voir l’offre :</b>\n<a href="${url}">${url}</a>\n\n` +
+            `<i>Si tu passes par ce lien avant d’acheter, tu soutiens Money Motor Y ❤️</i>`
+        );
+      }
+
+      // ----------- MESSAGE AMAZON #2 (Découverte) -----------
+      // 1) On essaie de prendre un autre "bon plan" parmi les éligibles
+      let randomPool = eligible.filter(
+        (d) => d.url !== (mainDeal?.url || null)
       );
-    }
 
-    // ----------- MESSAGE AMAZON #2 -----------
-    if (randomDeal) {
-      const { url, info, yscore } = randomDeal;
+      // 2) Si pas de second bon plan, on élargit à des produits "corrects"
+      if (!randomPool.length) {
+        randomPool = cleaned.filter(
+          (d) =>
+            d.url !== (mainDeal?.url || null) &&
+            d.info.rating >= 3.5 &&
+            d.info.reviews >= 10
+        );
+      }
 
-      messages.push(
-        `🌀 <b>AMAZON #2 — Découverte</b>\n` +
-          `🎯 <i>Pépites potentielles détectées automatiquement.</i>\n\n` +
-          `🛒 <b>${info.title}</b>\n\n` +
-          `⭐ ${info.rating.toFixed(1)} / 5 (${info.reviews} avis)\n` +
-          `💰 Prix : ${info.price || "<i>À vérifier</i>"}\n` +
-          `📊 Score : <b>${yscore}/100</b>\n` +
-          psy(yscore) +
-          `👉 <b>Voir l’offre :</b>\n<a href="${url}">${url}</a>\n\n`
-      );
+      const randomDeal = pickRandom(randomPool);
+
+      if (randomDeal) {
+        const { url, info, yscore } = randomDeal;
+
+        messages.push(
+          `🌀 <b>AMAZON #2 — Découverte</b>\n` +
+            `🎯 <i>Pépites potentielles détectées automatiquement.</i>\n\n` +
+            `🛒 <b>${info.title}</b>\n\n` +
+            `⭐ ${info.rating.toFixed(1)} / 5 (${info.reviews} avis)\n` +
+            `💰 Prix : ${info.price || "<i>À vérifier</i>"}\n` +
+            `📊 Score : <b>${yscore}/100</b>\n` +
+            `👉 <b>Voir l’offre :</b>\n<a href="${url}">${url}</a>\n\n`
+        );
+      }
     }
 
     // ----------- MESSAGE ALIEXPRESS -----------
