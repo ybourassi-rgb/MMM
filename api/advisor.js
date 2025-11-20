@@ -1,13 +1,11 @@
-// /api/advisor.js
-export const config = { runtime: "edge" };
+// pages/api/advisor.js
 
-export default async function handler(req) {
+export default async function handler(req, res) {
   // Autoriser uniquement POST
   if (req.method !== "POST") {
-    return new Response(
-      JSON.stringify({ ok: false, error: "Méthode non autorisée" }),
-      { status: 405 }
-    );
+    return res
+      .status(405)
+      .json({ ok: false, error: "Méthode non autorisée" });
   }
 
   try {
@@ -18,24 +16,23 @@ export default async function handler(req) {
       process.env.MMM_Vercel_Key;
 
     if (!OPENAI_KEY) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Clé API OpenAI manquante." }),
-        { status: 500 }
-      );
+      return res
+        .status(500)
+        .json({ ok: false, error: "Clé API OpenAI manquante." });
     }
 
-    // Lecture du body JSON
-    const body = await req.json().catch(() => ({}));
+    // Lecture du body JSON (Next remplit déjà req.body)
+    const body =
+      typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
     const prompt = (body.prompt || "").trim();
 
     if (!prompt) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Prompt vide." }),
-        { status: 400 }
-      );
+      return res
+        .status(400)
+        .json({ ok: false, error: "Prompt vide." });
     }
 
-    // Appel OpenAI
+    // Appel OpenAI (via fetch)
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -65,20 +62,13 @@ export default async function handler(req) {
     const reply =
       data?.choices?.[0]?.message?.content?.trim() || "Aucune réponse.";
 
-    return new Response(JSON.stringify({ ok: true, reply }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store",
-      },
-    });
+    res
+      .status(200)
+      .setHeader("Cache-Control", "no-store")
+      .json({ ok: true, reply });
   } catch (e) {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: e?.message || "Erreur interne",
-      }),
-      { status: 500 }
-    );
+    res
+      .status(500)
+      .json({ ok: false, error: e?.message || "Erreur interne" });
   }
 }
