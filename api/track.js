@@ -1,17 +1,14 @@
 // pages/api/track.js
 import { buildAffiliateRedirect } from "../../lib/affiliations";
 
-export const config = { runtime: "edge" };
+export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Use GET" });
+  }
 
-export default async function handler(req) {
-  const { searchParams } = new URL(req.url);
+  const { url, platform, product, redirect } = req.query;
 
-  const url = searchParams.get("url");
-  const platform = searchParams.get("platform");
-  const product = searchParams.get("product");
-  const redirect = searchParams.get("redirect");
-
-  // MODE 1 — Génération du lien affilié
+  // MODE 1 — génération de lien affilié
   if (url) {
     try {
       const finalLink = buildAffiliateRedirect(url, {
@@ -19,49 +16,33 @@ export default async function handler(req) {
         campaign: "amazon-dashboard",
       });
 
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          link: finalLink,
-          original: url,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        }
-      );
+      return res.status(200).json({
+        ok: true,
+        link: finalLink,
+        original: url,
+      });
     } catch (e) {
-      return new Response(
-        JSON.stringify({ ok: false, error: e.message || "internal-error" }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        }
-      );
+      console.error("track generate error:", e);
+      return res.status(500).json({
+        ok: false,
+        error: e.message || "internal-error",
+      });
     }
   }
 
-  // MODE 2 — Redirection affiliée
+  // MODE 2 — redirection affiliée
   if (platform && redirect) {
     let redirectUrl = redirect;
     try {
       redirectUrl = decodeURIComponent(redirect);
     } catch {}
 
-    return new Response(null, {
-      status: 302,
-      headers: { Location: redirectUrl },
-    });
+    res.writeHead(302, { Location: redirectUrl });
+    return res.end();
   }
 
-  return new Response(
-    JSON.stringify({
-      ok: false,
-      error: "Missing ?url= or ?platform=&redirect= parameters",
-    }),
-    {
-      status: 400,
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    }
-  );
+  return res.status(400).json({
+    ok: false,
+    error: "Missing ?url= or ?platform=&redirect=",
+  });
 }
