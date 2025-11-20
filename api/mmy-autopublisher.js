@@ -3,7 +3,8 @@
 /**
  * MMY AutoPublisher PRO+ — OPTION C (Vercel Optimisé + BOOST++)
  *
- * - Filtre les ASIN morts avant scraping
+ * - Utilise Rainforest API pour les données Amazon (fiable)
+ * - Filtre les ASIN morts avant appel API
  * - Analyse tous les produits Amazon (en parallèle)
  * - Bon plan #1 : meilleur produit filtré (YSCORE + avis + note)
  * - Bon plan #2 : produit Amazon "découverte" (moins strict, mais jamais totalement vide)
@@ -150,40 +151,62 @@ async function isValidAmazonASIN(asin) {
   }
 }
 
-// ---------------- SCRAPING AMAZON ----------------
+// ---------------- SCRAPING AMAZON (via Rainforest API) ----------------
 
 async function scrapeAmazon(url) {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-        "Accept-Language": "fr-FR,fr;q=0.9"
-      }
-    });
+  const apiKey = process.env.RAINFOREST_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing RAINFOREST_API_KEY env var");
+  }
 
-    const html = await res.text();
+  const asin = extractASIN(url);
 
-    let title = html.match(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/);
-    title = title ? title[1].trim() : "Produit Amazon";
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    type: "product",
+    amazon_domain: "amazon.fr"
+  });
 
-    let price = html.match(/<span class="a-offscreen">([\d.,]+)\s*€<\/span>/);
-    price = price ? price[1] + " €" : null;
+  if (asin) {
+    params.append("asin", asin);
+  } else {
+    params.append("url", url);
+  }
 
-    let rating =
-      html.match(/"ratingValue"\s*:\s*"([\d.]+)"/) ||
-      html.match(/([\d.,]+) sur 5 étoiles/);
-    rating = rating ? parseFloat(rating[1].replace(",", ".")) : 0;
+  const apiUrl = `https://api.rainforestapi.com/request?${params.toString()}`;
 
-    let reviews =
-      html.match(/"reviewCount"\s*:\s*"(\d+)"/) ||
-      html.match(/(\d[\d\s]*) évaluations/);
-    reviews = reviews ? parseInt(reviews[1].replace(/\s/g, "")) : 0;
-
-    return { title, price, rating, reviews };
-  } catch {
+  const res = await fetch(apiUrl);
+  if (!res.ok) {
+    console.error("Rainforest API HTTP error:", res.status);
     return { title: "Produit Amazon", price: null, rating: 0, reviews: 0 };
   }
+
+  const data = await res.json();
+  const p = data.product || {};
+
+  const title = p.title || "Produit Amazon";
+
+  // Prix : on essaie d'abord le buybox, sinon prix générique
+  const priceValue =
+    p.buybox_winner?.price?.value ??
+    p.price?.value ??
+    null;
+
+  const price =
+    typeof priceValue === "number"
+      ? `${priceValue.toFixed(2).replace(".", ",")} €`
+      : null;
+
+  const rating = typeof p.rating === "number" ? p.rating : 0;
+
+  const reviews =
+    typeof p.ratings_total === "number"
+      ? p.ratings_total
+      : typeof p.reviews_total === "number"
+      ? p.reviews_total
+      : 0;
+
+  return { title, price, rating, reviews };
 }
 
 // ---------------- Y-SCORE ----------------
@@ -263,7 +286,7 @@ export default async function handler(req, res) {
     if (!tagged.length)
       tagged = AMAZON_PRODUCTS.map((u) => withAmazonTag(u, amazonTag));
 
-    // 2) Scraping
+    // 2) Scraping via Rainforest
     const detailed = await Promise.all(
       tagged.map(async (url) => {
         const info = await scrapeAmazon(url);
@@ -277,19 +300,11 @@ export default async function handler(req, res) {
         !(d.info.rating === 0 && d.info.reviews === 0 && !d.info.price)
     );
 
-    // S'il reste moins de 1 produit "nettoyé", on envoie juste AliExpress
-    if (cleaned.length === 0) {
-      const aliMsg =
-        `💥 <b>Deal AliExpress du moment</b>\n` +
-        `🔥 <i>Sélection Money Motor Y : fort potentiel petit prix.</i>\n\n` +
-        `👉 <b>Voir l’offre :</b>\n<a href="${aliLink}">${aliLink}</a>\n\n` +
-        `<i>Vérifie toujours les frais et délais avant d’acheter.</i>`;
-      await sendToTelegram(aliMsg);
-      return res.status(200).json({ ok: true, message: "AliExpress uniquement (aucun produit Amazon propre)" });
-    }
+    // Si vraiment tout est vide, on garde quand même detailed
+    const baseList = cleaned.length ? cleaned : detailed;
 
     // 3) Sélection des deals éligibles (bons plans sérieux)
-    const eligible = cleaned
+    const eligible = baseList
       .filter(
         (d) =>
           d.info.rating >= MIN_RATING &&
@@ -298,9 +313,9 @@ export default async function handler(req, res) {
       )
       .sort((a, b) => b.yscore - a.yscore);
 
-    // mainDeal = meilleur plan (sinon le meilleur produit "cleaned")
+    // mainDeal = meilleur plan (sinon le meilleur produit de baseList)
     let mainDeal =
-      eligible[0] || cleaned.sort((a, b) => b.yscore - a.yscore)[0];
+      eligible[0] || baseList.sort((a, b) => b.yscore - a.yscore)[0] || null;
 
     const messages = [];
 
@@ -336,9 +351,9 @@ export default async function handler(req, res) {
         (d) => d.url !== (mainDeal?.url || null)
       );
 
-      // 2) Si pas de second bon plan, on élargit à n'importe quel autre produit "cleaned"
+      // 2) Si pas de second bon plan, on élargit à n'importe quel autre produit de baseList
       if (!randomPool.length) {
-        randomPool = cleaned.filter(
+        randomPool = baseList.filter(
           (d) => d.url !== (mainDeal?.url || null)
         );
       }
