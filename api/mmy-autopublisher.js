@@ -6,7 +6,7 @@
  * - Filtre les ASIN morts avant scraping
  * - Analyse tous les produits Amazon (en parallèle)
  * - Bon plan #1 : meilleur produit filtré (YSCORE + avis + note)
- * - Bon plan #2 : produit Amazon "découverte" mais propre
+ * - Bon plan #2 : produit Amazon "découverte" (moins strict, mais jamais totalement vide)
  * - + 1 deal AliExpress
  * - Messages optimisés conversion : version BOOST++
  *
@@ -277,7 +277,18 @@ export default async function handler(req, res) {
         !(d.info.rating === 0 && d.info.reviews === 0 && !d.info.price)
     );
 
-    // 3) Sélection des deals éligibles
+    // S'il reste moins de 1 produit "nettoyé", on envoie juste AliExpress
+    if (cleaned.length === 0) {
+      const aliMsg =
+        `💥 <b>Deal AliExpress du moment</b>\n` +
+        `🔥 <i>Sélection Money Motor Y : fort potentiel petit prix.</i>\n\n` +
+        `👉 <b>Voir l’offre :</b>\n<a href="${aliLink}">${aliLink}</a>\n\n` +
+        `<i>Vérifie toujours les frais et délais avant d’acheter.</i>`;
+      await sendToTelegram(aliMsg);
+      return res.status(200).json({ ok: true, message: "AliExpress uniquement (aucun produit Amazon propre)" });
+    }
+
+    // 3) Sélection des deals éligibles (bons plans sérieux)
     const eligible = cleaned
       .filter(
         (d) =>
@@ -287,12 +298,12 @@ export default async function handler(req, res) {
       )
       .sort((a, b) => b.yscore - a.yscore);
 
+    // mainDeal = meilleur plan (sinon le meilleur produit "cleaned")
     let mainDeal =
       eligible[0] || cleaned.sort((a, b) => b.yscore - a.yscore)[0];
 
     const messages = [];
 
-    // Si aucun mainDeal (cas extrême), on envoie juste AliExpress
     if (mainDeal) {
       // Psyline dynamique
       const psy = (s) =>
@@ -325,13 +336,10 @@ export default async function handler(req, res) {
         (d) => d.url !== (mainDeal?.url || null)
       );
 
-      // 2) Si pas de second bon plan, on élargit à des produits "corrects"
+      // 2) Si pas de second bon plan, on élargit à n'importe quel autre produit "cleaned"
       if (!randomPool.length) {
         randomPool = cleaned.filter(
-          (d) =>
-            d.url !== (mainDeal?.url || null) &&
-            d.info.rating >= 3.5 &&
-            d.info.reviews >= 10
+          (d) => d.url !== (mainDeal?.url || null)
         );
       }
 
