@@ -1,5 +1,5 @@
 // pages/api/track.js
-import { buildAffiliateRedirect } from "../../lib/affiliations";
+import { buildAffiliateRedirect } from "../../lib/affiliations.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -8,7 +8,7 @@ export default async function handler(req, res) {
 
   const { url, platform, product, redirect } = req.query;
 
-  // MODE 1 — génération de lien affilié
+  // MODE 1 — génération du lien affilié
   if (url) {
     try {
       const finalLink = buildAffiliateRedirect(url, {
@@ -33,9 +33,12 @@ export default async function handler(req, res) {
   // MODE 2 — redirection affiliée
   if (platform && redirect) {
     let redirectUrl = redirect;
+
     try {
       redirectUrl = decodeURIComponent(redirect);
-    } catch {}
+    } catch (e) {
+      console.error("decode redirect error:", e);
+    }
 
     res.writeHead(302, { Location: redirectUrl });
     return res.end();
