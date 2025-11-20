@@ -1,22 +1,21 @@
 // pages/api/mmy-autopublisher.js
 
 /**
- * MMY AutoPublisher PRO+ — OPTION C (Vercel Optimisé + BOOST + Deal #1 forcé)
+ * MMY AutoPublisher PRO+ — OPTION C (Vercel Optimisé + BOOST++)
  *
- * - Analyse tous les produits Amazon de la liste (en parallèle, rapide)
- * - Bon plan #1 : meilleur produit FILTRÉ (note, avis, Y-Score)
- *   → si aucun produit ne passe le filtre, on prend quand même le meilleur Y-Score
+ * - Filtre les ASIN morts avant scraping
+ * - Analyse tous les produits Amazon (en parallèle)
+ * - Bon plan #1 : meilleur produit filtré (YSCORE + avis + note)
  * - Bon plan #2 : produit Amazon aléatoire (découverte)
- * - + 1 deal AliExpress à chaque run
- * - Textes optimisés pour maximiser les clics (mode BOOST)
+ * - + 1 deal AliExpress
+ * - Messages optimisés conversion : version BOOST++
  *
- * Compatible CRON Vercel (ex: toutes les 30 min)
+ * Compatible CRON Vercel (toutes les 30 min conseillé)
  */
 
 // ---------------- CONFIG PRODUITS ----------------
 
 const AMAZON_PRODUCTS = [
-  // ----- HIGH TECH -----
   "https://www.amazon.fr/dp/B09G3HRMVB",
   "https://www.amazon.fr/dp/B08W8DGK3X",
   "https://www.amazon.fr/dp/B0B3DQZHN8",
@@ -33,8 +32,6 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B096Y98M4Z",
   "https://www.amazon.fr/dp/B07WFQVPVW",
   "https://www.amazon.fr/dp/B08L8L9TCW",
-
-  // ----- GAMING -----
   "https://www.amazon.fr/dp/B07GBZ4Q68",
   "https://www.amazon.fr/dp/B07YQ4XQ9P",
   "https://www.amazon.fr/dp/B07Q7S7247",
@@ -50,8 +47,6 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B07K33BPV5",
   "https://www.amazon.fr/dp/B0BWNJ6BYH",
   "https://www.amazon.fr/dp/B09F2X3Y7H",
-
-  // ----- MAISON & CUISINE -----
   "https://www.amazon.fr/dp/B07N2ZHF4J",
   "https://www.amazon.fr/dp/B07T2GMBJ5",
   "https://www.amazon.fr/dp/B08N6ZJ6L2",
@@ -67,8 +62,6 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B07PPDG1VW",
   "https://www.amazon.fr/dp/B07N1HCW4B",
   "https://www.amazon.fr/dp/B07T2GMBJ5",
-
-  // ----- BEAUTÉ & SOINS -----
   "https://www.amazon.fr/dp/B08CVTTNNH",
   "https://www.amazon.fr/dp/B07BJ41D3R",
   "https://www.amazon.fr/dp/B01LTHM8LG",
@@ -83,8 +76,6 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B08HGRQ268",
   "https://www.amazon.fr/dp/B099KN4LTN",
   "https://www.amazon.fr/dp/B0B9LT2MDJ",
-
-  // ----- SPORT & FITNESS -----
   "https://www.amazon.fr/dp/B08FYZ3P3F",
   "https://www.amazon.fr/dp/B07KPNGQBK",
   "https://www.amazon.fr/dp/B07H4VWJRM",
@@ -95,8 +86,6 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B07CVTV2X9",
   "https://www.amazon.fr/dp/B0751K39Y1",
   "https://www.amazon.fr/dp/B07GQ1C6KJ",
-
-  // ----- BRICOLAGE & OUTILS -----
   "https://www.amazon.fr/dp/B07M6MFXM6",
   "https://www.amazon.fr/dp/B081TT7J12",
   "https://www.amazon.fr/dp/B09GQD3FRB",
@@ -108,8 +97,6 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B08FRG5J3Y",
   "https://www.amazon.fr/dp/B08H6WQX6Z",
   "https://www.amazon.fr/dp/B000RFDZMU",
-
-  // ----- PRODUITS À FORT CLIC (petit prix, impulse buy) -----
   "https://www.amazon.fr/dp/B07GWZ4GQF",
   "https://www.amazon.fr/dp/B08XLPD4PT",
   "https://www.amazon.fr/dp/B089QHBR1Y",
@@ -122,12 +109,10 @@ const AMAZON_PRODUCTS = [
   "https://www.amazon.fr/dp/B08TWZPN7V"
 ];
 
-// ---------------- SEUILS QUALITÉ (MODE BOOST assoupli) ----------------
-// Option C : on garde un filtre, mais on ne bloque jamais le Deal #1
-
-const MIN_RATING = 3.2;  // note minimum
-const MIN_REVIEWS = 3;   // avis minimum
-const MIN_YSCORE = 5;    // Y-Score minimum
+// Seuils Boost++
+const MIN_RATING = 3.2;
+const MIN_REVIEWS = 3;
+const MIN_YSCORE = 5;
 
 // ---------------- UTILS ----------------
 
@@ -138,137 +123,84 @@ function withAmazonTag(url, tag) {
 
 function pickRandom(arr) {
   if (!arr.length) return null;
-  const idx = Math.floor(Math.random() * arr.length);
-  return arr[idx];
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// Extraction simple de l'ASIN depuis une URL Amazon
 function extractASIN(url) {
   const m = url.match(/\/dp\/([A-Z0-9]{8,10})/i);
   return m ? m[1] : null;
 }
 
-// Vérifie si l'ASIN pointe vers une vraie page produit Amazon
 async function isValidAmazonASIN(asin) {
   try {
     const testUrl = `https://www.amazon.fr/dp/${asin}`;
-    const res = await fetch(testUrl, { method: "GET" });
-
-    // Si la page ne répond pas 200 → on considère invalide
+    const res = await fetch(testUrl);
     if (res.status !== 200) return false;
 
     const html = await res.text();
-
-    // Messages typiques d'Amazon quand la page n'existe plus
     if (
-      html.includes(
-        "L'adresse Web que vous avez saisie n’est pas une page fonctionnelle"
-      ) ||
-      html.includes(
-        "L'adresse Web que vous avez saisie n'est pas une page fonctionnelle de notre site"
-      )
-    ) {
+      html.includes("n’est pas une page fonctionnelle") ||
+      html.includes("n'est pas une page fonctionnelle")
+    )
       return false;
-    }
 
     return true;
-  } catch (e) {
-    console.error("isValidAmazonASIN error:", e);
+  } catch {
     return false;
   }
 }
 
-// ---------------- SCRAPING AMAZON PRO+ (safe) ----------------
+// ---------------- SCRAPING AMAZON ----------------
 
 async function scrapeAmazon(url) {
   try {
     const res = await fetch(url, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        "Accept-Language": "fr-FR,fr;q=0.9"
       }
     });
 
     const html = await res.text();
 
-    // Titre
-    let title = "Produit Amazon";
-    const t = html.match(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/);
-    if (t) title = t[1].replace(/\s+/g, " ").trim();
+    let title = html.match(/<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/);
+    title = title ? title[1].trim() : "Produit Amazon";
 
-    // Prix
-    let price = null;
-    const pJson = html.match(/"price"\s*:\s*"([\d.,]+)"/);
-    if (pJson) price = pJson[1];
+    let price = html.match(/<span class="a-offscreen">([\d.,]+)\s*€<\/span>/);
+    price = price ? price[1] + " €" : null;
 
-    if (!price) {
-      const pSpan = html.match(
-        /<span class="a-offscreen">([\d.,]+)\s*€<\/span>/
-      );
-      if (pSpan) price = pSpan[1];
-    }
+    let rating =
+      html.match(/"ratingValue"\s*:\s*"([\d.]+)"/) ||
+      html.match(/([\d.,]+) sur 5 étoiles/);
+    rating = rating ? parseFloat(rating[1].replace(",", ".")) : 0;
 
-    // Note
-    let rating = 0;
-    const rJson = html.match(/"ratingValue"\s*:\s*"([\d.]+)"/);
-    if (rJson) rating = parseFloat(rJson[1]) || 0;
+    let reviews =
+      html.match(/"reviewCount"\s*:\s*"(\d+)"/) ||
+      html.match(/(\d[\d\s]*) évaluations/);
+    reviews = reviews ? parseInt(reviews[1].replace(/\s/g, "")) : 0;
 
-    if (!rating) {
-      const rSpan = html.match(
-        /<span[^>]*class="a-icon-alt"[^>]*>([\d.,]+) sur 5 étoiles<\/span>/
-      );
-      if (rSpan) rating = parseFloat(rSpan[1].replace(",", ".")) || 0;
-    }
-
-    // Avis
-    let reviews = 0;
-    const cJson = html.match(/"reviewCount"\s*:\s*"(\d+)"/);
-    if (cJson) reviews = parseInt(cJson[1]) || 0;
-
-    if (!reviews) {
-      const cSpan = html.match(/(\d[\d\s]*) évaluations?/);
-      if (cSpan) reviews = parseInt(cSpan[1].replace(/\s/g, "")) || 0;
-    }
-
-    return {
-      title,
-      price: price ? `${price} €` : null,
-      rating,
-      reviews
-    };
-  } catch (e) {
-    console.error("scrapeAmazon PRO+ error:", e);
-    return {
-      title: "Produit Amazon",
-      price: null,
-      rating: 0,
-      reviews: 0
-    };
+    return { title, price, rating, reviews };
+  } catch {
+    return { title: "Produit Amazon", price: null, rating: 0, reviews: 0 };
   }
 }
 
-// ---------------- Y-SCORE PRO+ ----------------
+// ---------------- Y-SCORE ----------------
 
 function computeYScore(info) {
   let score = 0;
-
-  // Rating
   if (info.rating >= 4.7) score += 45;
   else if (info.rating >= 4.3) score += 35;
   else if (info.rating >= 4.0) score += 25;
   else if (info.rating >= 3.5) score += 10;
 
-  // Avis
   if (info.reviews > 2000) score += 30;
   else if (info.reviews > 500) score += 20;
   else if (info.reviews > 100) score += 10;
   else if (info.reviews > 20) score += 5;
 
-  // Bonus si on a un prix
   if (info.price) score += 5;
-
-  if (!info.rating && !info.reviews) score = 0;
 
   return Math.max(0, Math.min(100, score));
 }
@@ -279,14 +211,9 @@ async function sendToTelegram(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN_DEALS;
   const chatId = process.env.TELEGRAM_CHAT_ID_DEALS;
 
-  if (!token || !chatId) {
-    console.error("Manque TELEGRAM_BOT_TOKEN_DEALS ou TELEGRAM_CHAT_ID_DEALS");
-    return false;
-  }
+  if (!token || !chatId) return false;
 
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
-  await fetch(url, {
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -304,56 +231,33 @@ async function sendToTelegram(text) {
 
 export default async function handler(req, res) {
   try {
-    if (req.method !== "GET" && req.method !== "POST") {
-      return res.status(405).json({ ok: false, error: "Method not allowed" });
-    }
-
     const amazonTag = process.env.AMAZON_ASSOCIATE_TAG;
     const aliLink =
       process.env.ALIEXPRESS_AFFILIATE_LINK ||
-      "https://s.click.aliexpress.com/e/_c4k2HESt";
+      "https://s.click.aliexpress.com/e/_c3evi6xr";
 
-    // 1) Filtrage des ASIN morts + tag de tous les produits Amazon
-    const checkedTagged = await Promise.all(
-      AMAZON_PRODUCTS.map(async (rawUrl) => {
-        const asin = extractASIN(rawUrl);
-        if (!asin) {
-          console.log("⚠️ Impossible d'extraire l'ASIN :", rawUrl);
-          return null;
-        }
-
+    // 1) Filtrage ASIN morts
+    const checked = await Promise.all(
+      AMAZON_PRODUCTS.map(async (url) => {
+        const asin = extractASIN(url);
+        if (!asin) return null;
         const valid = await isValidAmazonASIN(asin);
-        if (!valid) {
-          console.log("❌ ASIN mort ou invalide, ignoré :", asin, rawUrl);
-          return null;
-        }
-
-        return withAmazonTag(rawUrl, amazonTag);
+        return valid ? withAmazonTag(url, amazonTag) : null;
       })
     );
 
-    let tagged = checkedTagged.filter(Boolean);
+    let tagged = checked.filter(Boolean);
+    if (!tagged.length)
+      tagged = AMAZON_PRODUCTS.map((u) => withAmazonTag(u, amazonTag));
 
-    // Sécurité : si jamais tout est filtré, on garde la liste brute pour ne pas casser le run
-    if (tagged.length === 0) {
-      console.log(
-        "⚠️ Aucun ASIN validé, fallback sur la liste complète non filtrée."
-      );
-      tagged = AMAZON_PRODUCTS.map((p) => withAmazonTag(p, amazonTag));
-    }
-
-    // 2) Scraping + Y-Score en PARALLÈLE (ultra rapide)
+    // 2) Scraping
     const detailed = await Promise.all(
       tagged.map(async (url) => {
         const info = await scrapeAmazon(url);
-        const yscore = computeYScore(info);
-        return { url, info, yscore };
+        return { url, info, yscore: computeYScore(info) };
       })
     );
 
-    // 3) Sélection OPTION C
-
-    // a) Liste des produits éligibles (bons selon filtre)
     const eligible = detailed
       .filter(
         (d) =>
@@ -363,115 +267,68 @@ export default async function handler(req, res) {
       )
       .sort((a, b) => b.yscore - a.yscore);
 
+    let mainDeal = eligible[0] || detailed.sort((a, b) => b.yscore - a.yscore)[0];
+    let randomDeal = pickRandom(detailed.filter((d) => d.url !== mainDeal.url));
+
     const messages = [];
-    let sentCount = 0;
 
-    // 1er message : meilleur deal filtré SI dispo, sinon meilleur Y-Score global
-    let mainDeal = null;
+    // Psyline dynamique
+    const psy = (s) =>
+      s >= 80
+        ? "🥇 <i>Un des meilleurs deals du moment.</i>\n"
+        : s >= 60
+        ? "✅ <i>Bon équilibre qualité/avis/prix.</i>\n"
+        : "🧐 <i>Produits à vérifier par toi-même.</i>\n";
 
-    if (eligible.length > 0) {
-      mainDeal = eligible[0];
-    } else {
-      // Aucun produit ne passe le filtre → on prend le meilleur Y-Score parmi tous
-      const sortedAll = [...detailed].sort((a, b) => b.yscore - a.yscore);
-      mainDeal = sortedAll[0] || null;
-    }
-
-    // 2e message : deal aléatoire (dans tous les cas)
-    let randomDeal = pickRandom(detailed);
-
-    // Si le random est le même que le best deal, on en prend un autre si possible
-    if (mainDeal && randomDeal && randomDeal.url === mainDeal.url) {
-      const others = detailed.filter((d) => d.url !== mainDeal.url);
-      if (others.length > 0) {
-        randomDeal = pickRandom(others);
-      }
-    }
-
-    // Construction des messages Amazon (MODE BOOST)
-
+    // ----------- MESSAGE AMAZON #1 -----------
     if (mainDeal) {
       const { url, info, yscore } = mainDeal;
-      const ratingText =
-        info.rating && info.reviews
-          ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
-          : "⭐ <i>Peu d'avis disponibles</i>\n";
 
-      const priceText = info.price
-        ? `💰 Prix indicatif : <b>${info.price}</b> (peut évoluer)\n`
-        : "💰 Prix : <i>À vérifier directement sur Amazon</i>\n";
-
-      const scoreText =
-        yscore > 0 ? `📊 Y-Score MMY : <b>${yscore}/100</b>\n` : "";
-
-      const msg =
-        `🔥 <b>Bon plan Amazon #1 (sélection Money Motor Y)</b>\n` +
-        `⚡ <i>Meilleur produit détecté automatiquement sur ce run</i>\n\n` +
-        `🛒 <b>${info.title}</b>\n\n` +
-        ratingText +
-        priceText +
-        scoreText +
-        `👉 <a href="${url}">Voir l'offre sur Amazon</a>\n\n` +
-        `<i>Money Motor Y — Priorité aux meilleures opportunités</i>`;
-
-      messages.push(msg);
+      messages.push(
+        `🚨 <b>BON PLAN AMAZON #1</b>\n` +
+          `⚡ <i>Sélection Money Motor Y : meilleur rapport note/avis/potentiel.</i>\n\n` +
+          `🛒 <b>${info.title}</b>\n\n` +
+          `⭐ ${info.rating.toFixed(1)} / 5 (${info.reviews} avis)\n` +
+          `💰 Prix : ${info.price || "<i>À vérifier</i>"}\n` +
+          `📊 Score : <b>${yscore}/100</b>\n` +
+          psy(yscore) +
+          `👉 <b>Voir l’offre :</b>\n<a href="${url}">${url}</a>\n\n` +
+          `<i>Si tu passes par ce lien avant d’acheter, tu soutiens Money Motor Y ❤️</i>`
+      );
     }
 
+    // ----------- MESSAGE AMAZON #2 -----------
     if (randomDeal) {
       const { url, info, yscore } = randomDeal;
-      const ratingText =
-        info.rating && info.reviews
-          ? `⭐ <b>${info.rating.toFixed(1)} / 5</b> (${info.reviews} avis)\n`
-          : "⭐ <i>Découverte avec peu d'avis (à explorer)</i>\n";
 
-      const priceText = info.price
-        ? `💰 Prix indicatif : <b>${info.price}</b>\n`
-        : "💰 Prix : <i>Non affiché, à vérifier</i>\n";
-
-      const scoreText =
-        yscore > 0 ? `📊 Y-Score MMY : <b>${yscore}/100</b>\n` : "";
-
-      const msg =
-        `🌀 <b>Bon plan Amazon #2 (découverte)</b>\n` +
-        `🎯 <i>Sélection aléatoire pour trouver des pépites</i>\n\n` +
-        `🛒 <b>${info.title}</b>\n\n` +
-        ratingText +
-        priceText +
-        scoreText +
-        `👉 <a href="${url}">Voir l'offre sur Amazon</a>\n\n` +
-        `<i>Money Motor Y — Découverte automatique</i>`;
-
-      messages.push(msg);
+      messages.push(
+        `🌀 <b>AMAZON #2 — Découverte</b>\n` +
+          `🎯 <i>Pépites potentielles détectées automatiquement.</i>\n\n` +
+          `🛒 <b>${info.title}</b>\n\n` +
+          `⭐ ${info.rating.toFixed(1)} / 5 (${info.reviews} avis)\n` +
+          `💰 Prix : ${info.price || "<i>À vérifier</i>"}\n` +
+          `📊 Score : <b>${yscore}/100</b>\n` +
+          psy(yscore) +
+          `👉 <b>Voir l’offre :</b>\n<a href="${url}">${url}</a>\n\n`
+      );
     }
 
-    // 4) AliExpress (toujours envoyé)
+    // ----------- MESSAGE ALIEXPRESS -----------
     const aliMsg =
       `💥 <b>Deal AliExpress du moment</b>\n` +
-      `🔥 <i>Offre trouvée automatiquement par Money Motor Y</i>\n\n` +
-      `👉 <a href="${aliLink}">Voir l'offre sur AliExpress</a>\n\n` +
-      `<i>Sélection Money Motor Y — Vérifie toujours les frais et délais</i>`;
+      `🔥 <i>Sélection Money Motor Y : fort potentiel petit prix.</i>\n\n` +
+      `👉 <b>Voir l’offre :</b>\n<a href="${aliLink}">${aliLink}</a>\n\n` +
+      `<i>Vérifie toujours les frais et délais avant d’acheter.</i>`;
 
-    // 5) Envoi Telegram (deals + AliExpress)
-    for (const msg of messages) {
-      const ok = await sendToTelegram(msg);
-      if (ok) sentCount++;
-      await new Promise((r) => setTimeout(r, 300));
-    }
-    const okAli = await sendToTelegram(aliMsg);
-    if (okAli) sentCount++;
+    // Envoi Telegram
+    for (const m of messages) await sendToTelegram(m);
+    await sendToTelegram(aliMsg);
 
-    return res.status(200).json({
-      ok: true,
-      sent: sentCount,
-      amazon_checked: detailed.length,
-      amazon_eligible: eligible.length,
-      aliexpress: aliLink
-    });
+    return res
+      .status(200)
+      .json({ ok: true, message: "Deals envoyés sur Telegram" });
   } catch (err) {
-    console.error(
-      "Erreur AutoPublisher PRO+ OPTION C (Vercel Optimisé + BOOST + Deal forcé):",
-      err
-    );
+    console.error("AutoPublisher error:", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 }
