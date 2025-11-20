@@ -1,94 +1,81 @@
-// api/mmy-tiktok-from-link.js
-// Génère un plan de vidéo TikTok à partir d’un lien produit (Amazon, AliExpress, etc.)
+export const config = {
+  runtime: "edge",
+};
 
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-export default async function handler(req, res) {
-  // On n’accepte que POST
-  if (req.method !== "POST") {
-    return res
-      .status(405)
-      .json({ ok: false, error: "Use POST with JSON body" });
-  }
-
-  // Lecture du body
-  let body;
+export default async function handler(req) {
   try {
-    body =
-      typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-  } catch (e) {
-    return res.status(400).json({ ok: false, error: "Invalid JSON body" });
-  }
+    if (req.method !== "POST") {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Use POST with JSON body" }),
+        { status: 405 }
+      );
+    }
 
-  const { productUrl, extraInfo } = body;
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Invalid JSON body" }),
+        { status: 400 }
+      );
+    }
 
-  if (!productUrl) {
-    return res
-      .status(400)
-      .json({ ok: false, error: "Field 'productUrl' is required" });
-  }
+    const { productUrl, extraInfo } = body;
 
-  const prompt = `
-Tu es un expert TikTok qui crée des vidéos d'affiliation.
-Génère un plan de vidéo au format JSON **SANS INDICATIONS TECHNIQUES** (pas de "VO", pas de timings, pas de "gros plan", etc.).
+    if (!productUrl) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "productUrl is required" }),
+        { status: 400 }
+      );
+    }
 
-Données :
-- Lien produit : ${productUrl}
-- Contexte / infos en plus (optionnel) : ${extraInfo || "aucun"}
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
 
-Règles :
-- Style : unboxing / test produit SANS visage
-- Durée cible : 25-40 secondes
-- Ton : simple, dynamique, concret
-- Le texte doit être directement utilisable pour une voix off.
+    const prompt = `
+Tu es un expert TikTok qui crée des vidéos pour l’affiliation.
+Génère un script clair, sans indications techniques (pas de VO, pas de plans), utilisable en voix off.
 
-Format JSON STRICT :
+Lien produit : ${productUrl}
+Infos supplémentaires : ${extraInfo || "aucune"}
+
+Format JSON obligatoire :
 {
-  "hook": "Phrase d'accroche très courte",
-  "scenes": [
-    "Texte continu de voix off pour la scène 1",
-    "Texte continu de voix off pour la scène 2",
-    "Texte continu de voix off pour la scène 3"
-  ],
-  "cta": "Phrase finale pour inciter à cliquer sur le lien en bio"
+  "hook": "...',
+  "scenes": ["...", "...", "..."],
+  "cta": "..."
 }
-  `.trim();
+    `.trim();
 
-  try {
     const response = await client.responses.create({
       model: "gpt-5-mini",
       input: prompt,
     });
 
     const raw = response.output_text;
-    let data;
+    let script;
 
     try {
-      data = JSON.parse(raw);
-    } catch (e) {
-      // Si le modèle renvoie un texte pas 100% JSON, on renvoie brut
-      return res.status(200).json({
-        ok: true,
-        mode: "raw",
-        raw,
-      });
+      script = JSON.parse(raw);
+    } catch {
+      return new Response(
+        JSON.stringify({ ok: true, mode: "raw", raw }),
+        { status: 200 }
+      );
     }
 
-    return res.status(200).json({
-      ok: true,
-      mode: "json",
-      script: data,
-      productUrl,
-    });
+    return new Response(
+      JSON.stringify({ ok: true, mode: "json", script }),
+      { status: 200 }
+    );
   } catch (err) {
-    console.error("mmy-tiktok-from-link error:", err);
-    return res.status(500).json({
-      ok: false,
-      error: err.message || "Unknown error",
-    });
+    return new Response(
+      JSON.stringify({ ok: false, error: err.message }),
+      { status: 500 }
+    );
   }
 }
