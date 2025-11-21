@@ -1,119 +1,79 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>MMM — Deals en Scroll</title>
-
-<style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MMM — Deals en Scroll</title>
+  <style>
     body {
-        margin: 0;
-        background: #000;
-        color: #fff;
-        font-family: Arial, sans-serif;
-        overflow: hidden;
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
     }
-
     .container {
-        height: 100vh;
-        overflow-y: scroll;
-        scroll-snap-type: y mandatory;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
     }
-
-    .card {
-        height: 100vh;
-        scroll-snap-align: start;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        padding: 20px;
-        text-align: center;
-        border-bottom: 2px solid #111;
-    }
-
     img {
-        max-width: 80%;
-        border-radius: 10px;
-        margin-bottom: 20px;
+      max-width: 80%;
+      border-radius: 10px;
+      margin-bottom: 20px;
     }
-
     .title {
-        font-size: 22px;
-        font-weight: bold;
-        margin-bottom: 10px;
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 10px;
     }
-
     .price {
-        font-size: 20px;
-        color: #00ff90;
-        margin-bottom: 20px;
+      font-size: 20px;
+      color: #00ff90;
+      margin-bottom: 20px;
     }
-
     .btn {
-        padding: 12px 22px;
-        background: #00ff90;
-        color: #000;
-        font-weight: bold;
-        border-radius: 8px;
-        text-decoration: none;
+      padding: 12px 22px;
+      background: #00ff90;
+      color: #000;
+      font-weight: bold;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-block;
     }
-</style>
-
+  </style>
 </head>
 <body>
 
-<div class="container" id="feed">
-    <div class="card">
-        <div>Chargement des meilleurs deals… 🔄</div>
-    </div>
+<div class="container" id="card">
+  <div>Chargement du deal… 🔄</div>
 </div>
 
 <script>
-async function loadDeals() {
-    const feed = document.getElementById("feed");
+async function loadDeal() {
+  try {
+    const res = await fetch('/deals/casque.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
 
-    feed.innerHTML = ""; // On efface l'écran
-
-    // temp: 3 deals de démo (plus tard -> API MMM)
-    const deals = [
-      {
-        title: "Casque Sennheiser HD 350BT",
-        price: "74€",
-        img: "https://m.media-amazon.com/images/I/71Z9b8rZ2sL._AC_SL1500_.jpg",
-        link: "https://www.amazon.fr/dp/B07Q7S7247?tag=moneymotor21-21"
-      },
-      {
-        title: "Montre connectée Xiaomi",
-        price: "39€",
-        img: "https://m.media-amazon.com/images/I/61pE5pVjZKL._AC_SL1500_.jpg",
-        link: "#"
-      },
-      {
-        title: "Écouteurs Bluetooth Pro",
-        price: "19€",
-        img: "https://m.media-amazon.com/images/I/51oOuzpTtXL._AC_.jpg",
-        link: "#"
-      }
-    ];
-
-    deals.forEach(d => {
-        const card = document.createElement("div");
-        card.className = "card";
-
-        card.innerHTML = `
-            <img src="${d.img}">
-            <div class="title">${d.title}</div>
-            <div class="price">${d.price}</div>
-            <a class="btn" href="${d.link}" target="_blank">Voir l'offre</a>
-        `;
-
-        feed.appendChild(card);
-    });
+    const card = document.getElementById('card');
+    card.innerHTML = `
+      ${data.image ? `<img src="${data.image}" alt="${data.title}">` : ''}
+      <div class="title">${data.title || 'Deal'}</div>
+      <div class="price">${data.price || ''}</div>
+      ${data.link ? `<a class="btn" href="${data.link}" target="_blank">Voir l'offre</a>` : ''}
+    `;
+  } catch (e) {
+    console.error(e);
+    document.getElementById('card').innerHTML =
+      "<div>Impossible de charger le deal 😅</div>";
+  }
 }
 
-loadDeals();
+loadDeal();
 </script>
 
 </body>
