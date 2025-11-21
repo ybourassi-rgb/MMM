@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>MMM — Deals en Scroll</title>
+
+<style>
+    body {
+        margin: 0;
+        background: #000;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        overflow: hidden;
+    }
+
+    .container {
+        height: 100vh;
+        overflow-y: scroll;
+        scroll-snap-type: y mandatory;
+    }
+
+    .card {
+        height: 100vh;
+        scroll-snap-align: start;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        text-align: center;
+        border-bottom: 2px solid #111;
+    }
+
+    img {
+        max-width: 80%;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .title {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .price {
+        font-size: 20px;
+        color: #00ff90;
+        margin-bottom: 20px;
+    }
+
+    .btn {
+        padding: 12px 22px;
+        background: #00ff90;
+        color: #000;
+        font-weight: bold;
+        border-radius: 8px;
+        text-decoration: none;
+    }
+</style>
+
+</head>
+<body>
+
+<div class="container" id="feed">
+    <div class="card">
+        <div>Chargement des meilleurs deals… 🔄</div>
+    </div>
+</div>
+
+<script>
+async function loadDeals() {
+    const feed = document.getElementById("feed");
+
+    feed.innerHTML = ""; // On efface l'écran
+
+    // temp: 3 deals de démo (plus tard -> API MMM)
+    const deals = [
+      {
+        title: "Casque Sennheiser HD 350BT",
+        price: "74€",
+        img: "https://m.media-amazon.com/images/I/71Z9b8rZ2sL._AC_SL1500_.jpg",
+        link: "https://www.amazon.fr/dp/B07Q7S7247?tag=moneymotor21-21"
+      },
+      {
+        title: "Montre connectée Xiaomi",
+        price: "39€",
+        img: "https://m.media-amazon.com/images/I/61pE5pVjZKL._AC_SL1500_.jpg",
+        link: "#"
+      },
+      {
+        title: "Écouteurs Bluetooth Pro",
+        price: "19€",
+        img: "https://m.media-amazon.com/images/I/51oOuzpTtXL._AC_.jpg",
+        link: "#"
+      }
+    ];
+
+    deals.forEach(d => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+            <img src="${d.img}">
+            <div class="title">${d.title}</div>
+            <div class="price">${d.price}</div>
+            <a class="btn" href="${d.link}" target="_blank">Voir l'offre</a>
+        `;
+
+        feed.appendChild(card);
+    });
+}
+
+loadDeals();
+</script>
+
+</body>
+</html>
