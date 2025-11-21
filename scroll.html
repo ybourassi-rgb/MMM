@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>MoneyMotorDeals - Casque</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #000;
+      color: #fff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .wrapper {
+      width: 100%;
+      max-width: 480px;
+      padding: 24px 16px 40px;
+    }
+    .logo {
+      text-align: center;
+      letter-spacing: 0.15em;
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: #101010;
+      border-radius: 28px;
+      padding: 20px 20px 28px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+    }
+    .image-box {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 24px;
+      background: #050505;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 22px;
+      overflow: hidden;
+      position: relative;
+    }
+    .image-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .image-placeholder {
+      color: #666;
+      font-size: 14px;
+    }
+    .title {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+    .price {
+      font-size: 26px;
+      font-weight: 700;
+      color: #00ff6a;
+      margin-bottom: 22px;
+    }
+    .btn {
+      width: 100%;
+      border: none;
+      background: #00ff6a;
+      color: #000;
+      font-weight: 700;
+      font-size: 17px;
+      padding: 14px 0;
+      border-radius: 999px;
+      cursor: pointer;
+      outline: none;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+      box-shadow: 0 10px 30px rgba(0, 255, 106, 0.45);
+    }
+    .btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 4px 16px rgba(0, 255, 106, 0.35);
+      background: #00e65f;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="logo">MONEYMOTORDEALS</div>
+
+    <div class="card">
+      <div class="image-box">
+        <!-- image produit -->
+        <img id="product-img" alt="Produit" style="display:none;" />
+        <div id="image-placeholder" class="image-placeholder">
+          Aucune image trouvée
+        </div>
+      </div>
+
+      <div id="title" class="title">...</div>
+      <div id="price" class="price">...</div>
+
+      <a id="cta" class="btn" href="#" target="_blank" rel="noopener noreferrer">
+        Voir l'offre
+      </a>
+    </div>
+  </div>
+
+  <script>
+    async function loadDeal() {
+      try {
+        // ton JSON : public/deals/casque.json
+        const res = await fetch("/deals/casque.json");
+        const deal = await res.json();
+
+        const titleEl = document.getElementById("title");
+        const priceEl = document.getElementById("price");
+        const ctaEl = document.getElementById("cta");
+        const imgEl = document.getElementById("product-img");
+        const placeholderEl = document.getElementById("image-placeholder");
+
+        titleEl.textContent = deal.title || "Produit";
+        priceEl.textContent = deal.price || "";
+
+        if (deal.url) {
+          ctaEl.href = deal.url;
+        } else {
+          ctaEl.href = "#";
+        }
+
+        let imageUrl = deal.image || "";
+
+        // Si pas d'image dans le JSON, on va en chercher une via notre API
+        if (!imageUrl && deal.title) {
+          try {
+            const imgRes = await fetch(
+              "/api/google-image?q=" + encodeURIComponent(deal.title)
+            );
+            const imgData = await imgRes.json();
+            if (imgData && imgData.ok && imgData.image) {
+              imageUrl = imgData.image;
+            }
+          } catch (e) {
+            console.warn("Erreur fetch google-image:", e);
+          }
+        }
+
+        if (imageUrl) {
+          imgEl.src = imageUrl;
+          imgEl.style.display = "block";
+          placeholderEl.style.display = "none";
+        } else {
+          imgEl.style.display = "none";
+          placeholderEl.style.display = "block";
+          placeholderEl.textContent = "Aucune image trouvée";
+        }
+      } catch (err) {
+        console.error("Erreur loadDeal:", err);
+        // en cas de gros souci, on laisse juste le texte du titre/prix
+      }
+    }
+
+    loadDeal();
+  </script>
+</body>
+</html>
