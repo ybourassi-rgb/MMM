@@ -1,69 +1,72 @@
-<script>
-async function fetchGoogleImage(query) {
-  try {
-    const res = await fetch("/api/googleimage?q=" + encodeURIComponent(query));
-    const data = await res.json();
-    if (data.ok && data.image) {
-      return data.image;
-    }
-    return null;
-  } catch (e) {
-    console.error("Erreur API image:", e);
-    return null;
-  }
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deals - MMM</title>
+<link rel="stylesheet" href="/mmm.css" />
+
+<style>
+body {
+  background: black;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 20px;
 }
 
+#deal-image {
+  width: 90%;
+  max-width: 350px;
+  height: 350px;
+  border-radius: 20px;
+  object-fit: cover;
+  background: #111;
+  display: flex;
+  margin: auto;
+}
+
+button {
+  background: #00ff8c;
+  color: black;
+  padding: 15px 25px;
+  border-radius: 12px;
+  font-size: 24px;
+  margin-top: 20px;
+  border: none;
+}
+</style>
+
+</head>
+<body>
+
+<h2 id="title">Chargement…</h2>
+<img id="deal-image" src="" alt="Image produit" />
+<h1 id="price"></h1>
+<a id="buy-btn" target="_blank">
+  <button>Voir l'offre</button>
+</a>
+
+<script>
 async function loadDeal() {
-  try {
-    // 1) Charger le deal statique
-    const res = await fetch("/deals/casque.json");
-    const deal = await res.json();
+  const res = await fetch("/public/deals/casque.json");
+  const data = await res.json();
 
-    // 2) Titre & prix
-    const titleEl = document.getElementById("title");
-    const priceEl = document.getElementById("price");
-    if (titleEl) titleEl.innerText = deal.title || "Produit mystère";
-    if (priceEl) priceEl.innerText = deal.price || "";
+  document.getElementById("title").textContent = data.title;
+  document.getElementById("price").textContent = data.price;
+  document.getElementById("buy-btn").href = data.url;
 
-    // 3) Image
-    const imgEl = document.getElementById("product-img");
-    const noImgEl = document.getElementById("no-image");
+  // ESSAI IMAGE GOOGLE
+  let googleUrl = `/api/google_image?query=${encodeURIComponent(data.title)}`;
+  let googleRes = await fetch(googleUrl);
+  let googleData = await googleRes.json();
 
-    let imageUrl = deal.image || "";
-
-    // Si pas d'image dans le JSON → on tente Google
-    if (!imageUrl && deal.title) {
-      imageUrl = await fetchGoogleImage(deal.title);
-    }
-
-    if (imageUrl && imgEl) {
-      imgEl.src = imageUrl;
-      imgEl.alt = deal.title || "Produit";
-
-      if (noImgEl) {
-        noImgEl.style.display = "none";
-      }
-    } else {
-      // Pas d'image trouvée
-      if (imgEl) {
-        imgEl.removeAttribute("src");
-        imgEl.alt = "";
-      }
-      if (noImgEl) {
-        noImgEl.style.display = "flex";
-        noImgEl.innerText = "Aucune image trouvée";
-      }
-    }
-
-    // 4) Bouton CTA
-    const btn = document.getElementById("cta");
-    if (btn && deal.url) {
-      btn.href = deal.url;
-    }
-  } catch (e) {
-    console.error("Erreur loadDeal:", e);
-  }
+  document.getElementById("deal-image").src =
+    googleData?.image || data.image || "";
 }
 
 loadDeal();
 </script>
+
+</body>
+</html>
