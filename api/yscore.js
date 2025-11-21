@@ -1,7 +1,7 @@
 // API Y-Score pour MMM / MMY
 // Route Vercel: POST https://mmm-alpha-one.vercel.app/api/yscore
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ ok: false, error: "Use POST" });
     return;
@@ -87,4 +87,4 @@ Réponds UNIQUEMENT avec un JSON de la forme:
     console.error("Erreur API Y-Score:", err);
     res.status(500).json({ ok: false, error: "yscore_internal_error" });
   }
-};
+}
