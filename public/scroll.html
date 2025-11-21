@@ -1,17 +1,17 @@
-<div id="title"></div>
-<div id="price"></div>
-<img id="product-img" />
-
 <script>
-async function fetchImage(title) {
-    const res = await fetch(`/api/googleImage?q=${encodeURIComponent(title)}`);
-    const data = await res.json();
-    return data.image;
+async function fetchGoogleImage(title) {
+    try {
+        const res = await fetch(`/api/google-image?q=${encodeURIComponent(title)}`);
+        const data = await res.json();
+        return data.image || null;
+    } catch {
+        return null;
+    }
 }
 
 async function showDeal() {
-    const response = await fetch("/deals/casque.json");
-    const deal = await response.json();
+    const res = await fetch("/deals/casque.json");
+    const deal = await res.json();
 
     document.getElementById("title").innerText = deal.title;
     document.getElementById("price").innerText = deal.price;
@@ -19,7 +19,7 @@ async function showDeal() {
     let imageUrl = deal.image;
 
     if (!imageUrl) {
-        imageUrl = await fetchImage(deal.title);
+        imageUrl = await fetchGoogleImage(deal.title);
     }
 
     const img = document.getElementById("product-img");
@@ -27,8 +27,7 @@ async function showDeal() {
     if (imageUrl) {
         img.src = imageUrl;
     } else {
-        img.src = "";
-        img.alt = "Aucune image trouvée";
+        img.innerText = "Aucune image trouvée";
     }
 }
 
