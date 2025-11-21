@@ -1,3 +1,5 @@
+// api/google_image.js
+
 export default async function handler(req, res) {
   const { q } = req.query;
 
@@ -29,6 +31,7 @@ export default async function handler(req, res) {
       image: data.items[0].link,
     });
   } catch (err) {
+    console.error("Google API error:", err);
     return res.status(500).json({ ok: false, error: "google_api_error" });
   }
 }
