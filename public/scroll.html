@@ -1,18 +1,9 @@
 <script>
-const GOOGLE_KEY = "<?= process.env.GOOGLE_SEARCH_KEY ?>";
-const GOOGLE_CX  = "<?= process.env.GOOGLE_SEARCH_CX ?>";
-
 async function fetchGoogleImage(query) {
     try {
-        const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_KEY}&cx=${GOOGLE_CX}&searchType=image&q=${encodeURIComponent(query)}`;
-        const res = await fetch(url);
+        const res = await fetch(`/api/google-image?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-
-        if (!data.items || data.items.length === 0) {
-            return null;
-        }
-
-        return data.items[0].link; // première image
+        return data.image || null;
     } catch {
         return null;
     }
@@ -27,11 +18,9 @@ async function showDeal() {
 
     let imageUrl = deal.image;
 
+    // si l'image du JSON ne marche pas → Google
     if (!imageUrl) {
-        const googleImage = await fetchGoogleImage(deal.title);
-        if (googleImage) {
-            imageUrl = googleImage;
-        }
+        imageUrl = await fetchGoogleImage(deal.title);
     }
 
     const img = document.getElementById("product-img");
@@ -40,7 +29,7 @@ async function showDeal() {
         img.src = imageUrl;
     } else {
         img.src = "";
-        img.innerText = "Aucune image trouvée";
+        img.alt = "Aucune image trouvée";
     }
 }
 
