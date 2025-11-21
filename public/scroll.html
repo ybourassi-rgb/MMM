@@ -1,83 +1,36 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MoneyMotorDeals - Deal du jour</title>
-  <style>
-    body {
-      background: #000;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
-    }
-    .card {
-      background: #111;
-      border-radius: 20px;
-      padding: 20px;
-      margin: 20px auto;
-      width: 90%;
-      max-width: 500px;
-    }
-    #product-img {
-      width: 100%;
-      max-height: 300px;
-      object-fit: contain;
-      border-radius: 12px;
-      background: #000;
-    }
-    .price {
-      font-size: 22px;
-      color: #00ff7f;
-    }
-    .btn {
-      background: #00ff7f;
-      color: #000;
-      padding: 15px 25px;
-      border-radius: 12px;
-      text-decoration: none;
-      display: inline-block;
-      margin-top: 20px;
-      font-size: 18px;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <h2>MONEYMOTORDEALS</h2>
+<div id="title"></div>
+<div id="price"></div>
+<img id="product-img" />
 
-  <div class="card">
-    <img id="product-img" src="" alt="Produit" />
-    <h2 id="title"></h2>
-    <p id="price" class="price"></p>
-    <a id="offer-link" href="#" class="btn">Voir l'offre</a>
-  </div>
+<script>
+async function fetchImage(title) {
+    const res = await fetch(`/api/googleImage?q=${encodeURIComponent(title)}`);
+    const data = await res.json();
+    return data.image;
+}
 
-  <script>
-    async function showDeal() {
-      try {
-        const res = await fetch("/deals/casque.json");
-        const deal = await res.json();
+async function showDeal() {
+    const response = await fetch("/deals/casque.json");
+    const deal = await response.json();
 
-        document.getElementById("title").innerText = deal.title || "";
-        document.getElementById("price").innerText = deal.price || "";
-        document.getElementById("offer-link").href = deal.url || "#";
+    document.getElementById("title").innerText = deal.title;
+    document.getElementById("price").innerText = deal.price;
 
-        const img = document.getElementById("product-img");
-        if (deal.image) {
-          img.src = deal.image;
-        } else {
-          // aucun lien image dans le JSON
-          img.style.display = "none";
-        }
-      } catch (e) {
-        console.error("Erreur chargement deal:", e);
-      }
+    let imageUrl = deal.image;
+
+    if (!imageUrl) {
+        imageUrl = await fetchImage(deal.title);
     }
 
-    showDeal();
-  </script>
-</body>
-</html>
+    const img = document.getElementById("product-img");
+
+    if (imageUrl) {
+        img.src = imageUrl;
+    } else {
+        img.src = "";
+        img.alt = "Aucune image trouvée";
+    }
+}
+
+showDeal();
+</script>
