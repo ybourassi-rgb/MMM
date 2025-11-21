@@ -1,80 +1,135 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MMM — Deals en Scroll</title>
+  <meta charset="utf-8" />
+  <title>MoneyMotorDeals - Produit</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
+      height: 100%;
       background: #000;
       color: #fff;
-      font-family: Arial, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      text-align: center;
+    }
+
+    .product-image {
+      width: 260px;
+      height: 260px;
+      background: #111;
+      border-radius: 18px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       overflow: hidden;
     }
-    .container {
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 20px;
+
+    .product-image img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
     }
-    img {
-      max-width: 80%;
-      border-radius: 10px;
-      margin-bottom: 20px;
+
+    h1 {
+      font-size: 1.6rem;
+      margin: 0 0 8px;
     }
-    .title {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
+
     .price {
-      font-size: 20px;
-      color: #00ff90;
-      margin-bottom: 20px;
+      font-size: 1.4rem;
+      color: #00ff7f;
+      margin-bottom: 24px;
     }
+
     .btn {
-      padding: 12px 22px;
-      background: #00ff90;
-      color: #000;
-      font-weight: bold;
-      border-radius: 8px;
-      text-decoration: none;
       display: inline-block;
+      padding: 14px 32px;
+      border-radius: 999px;
+      background: #00ff7f;
+      color: #000;
+      font-weight: 700;
+      text-decoration: none;
     }
   </style>
 </head>
 <body>
+  <div class="card">
+    <div class="product-image" id="image-container">
+      <span id="image-fallback">Chargement...</span>
+    </div>
+    <h1 id="title">Produit</h1>
+    <div class="price" id="price"></div>
+    <a id="link" class="btn" target="_blank" rel="noopener noreferrer">
+      Voir l'offre
+    </a>
+  </div>
 
-<div class="container" id="card">
-  <div>Chargement du deal… 🔄</div>
-</div>
+  <script>
+    async function fetchDeal() {
+      // Ton JSON statique : /public/deals/casque.json -> /deals/casque.json
+      const res = await fetch("/deals/casque.json");
+      if (!res.ok) throw new Error("deal json error");
+      return res.json();
+    }
 
-<script>
-async function loadDeal() {
-  try {
-    const res = await fetch('/deals/casque.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    async function fetchImage(query) {
+      try {
+        const res = await fetch(
+          "/api/google-image?q=" + encodeURIComponent(query)
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.ok) return null;
+        return data.imageUrl || null;
+      } catch (e) {
+        console.error("image error", e);
+        return null;
+      }
+    }
 
-    const card = document.getElementById('card');
-    card.innerHTML = `
-      ${data.image ? `<img src="${data.image}" alt="${data.title}">` : ''}
-      <div class="title">${data.title || 'Deal'}</div>
-      <div class="price">${data.price || ''}</div>
-      ${data.link ? `<a class="btn" href="${data.link}" target="_blank">Voir l'offre</a>` : ''}
-    `;
-  } catch (e) {
-    console.error(e);
-    document.getElementById('card').innerHTML =
-      "<div>Impossible de charger le deal 😅</div>";
-  }
-}
+    async function init() {
+      try {
+        const deal = await fetchDeal();
 
-loadDeal();
-</script>
+        const titleEl = document.getElementById("title");
+        const priceEl = document.getElementById("price");
+        const linkEl = document.getElementById("link");
+        const imageContainer = document.getElementById("image-container");
+        const fallback = document.getElementById("image-fallback");
 
+        titleEl.textContent = deal.title || "Produit";
+        priceEl.textContent = deal.price || "";
+        linkEl.href = deal.url || "#";
+
+        const imgUrl = await fetchImage(deal.title || "");
+        if (imgUrl) {
+          const img = document.createElement("img");
+          img.src = imgUrl;
+          img.alt = deal.title || "Produit";
+          imageContainer.innerHTML = "";
+          imageContainer.appendChild(img);
+        } else {
+          fallback.textContent = "Aucune image trouvée";
+        }
+      } catch (e) {
+        console.error(e);
+        document.body.innerHTML =
+          "<p style='color:white;text-align:center'>Erreur de chargement.</p>";
+      }
+    }
+
+    init();
+  </script>
 </body>
 </html>
