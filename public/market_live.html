@@ -18,7 +18,7 @@
     </div>
   </div>
 
-  <!-- Zone debug visible (tu pourras l’enlever après) -->
+  <!-- Zone debug visible (on l’enlèvera après) -->
   <div id="debug" style="padding:8px;font-family:monospace;"></div>
 
   <!-- Ici on injecte les cards -->
@@ -38,19 +38,18 @@
 
         debug("✅ Module chargé.");
 
-        // ✅ 1) Charger les vrais flux marché
-        // ⚠️ Remplace /api/market par TA route réelle si différente
         debug("📡 Récupération des flux marché…");
         const data = await fetch("/api/market").then(r => r.json());
 
-        // 🔍 Debug pour voir la vraie structure
         debug("🧾 Réponse brute: " + JSON.stringify(data).slice(0, 300) + "...");
 
-        // ✅ 2) Normalisation robuste pour garantir un tableau
+        // ✅ Normalisation robuste (ajout de feed)
         let items = [];
 
         if (Array.isArray(data)) {
           items = data;
+        } else if (Array.isArray(data.feed)) {
+          items = data.feed;                 // ✅ TON CAS
         } else if (Array.isArray(data.items)) {
           items = data.items;
         } else if (Array.isArray(data.results)) {
@@ -58,23 +57,19 @@
         } else if (Array.isArray(data.articles)) {
           items = data.articles;
         } else if (data.items && typeof data.items === "object") {
-          // si items est un objet {0:{...},1:{...}}
           items = Object.values(data.items);
         } else if (data.data && Array.isArray(data.data)) {
           items = data.data;
         }
 
-        // ✅ Sécurité finale
         if (!Array.isArray(items)) items = [];
 
         if (items.length === 0) {
           debug("⚠️ Aucun item trouvé dans les flux (après normalisation).");
-          return; // stop pour éviter map sur vide / objet
+          return;
         }
 
         debug(`✅ ${items.length} item(s) reçus.`);
-
-        // ✅ 3) Render
         await renderMarket(items, getBestImage);
         debug("🎉 Cards affichées.");
 
@@ -87,19 +82,18 @@
       const container = document.getElementById("market-container");
       container.innerHTML = "";
 
-      // 🔥 Parallélisation pour aller plus vite
       const results = await Promise.all(
         items.map(async (item) => {
           const q = item.title || item.name || item.model || "Opportunité";
           const type = item.type || "product";
-          const url = item.url || item.link || null;
+          const url = item.url || item.link || item.id || null;
 
           const img = await getBestImage({ q, type, url });
-          return { item, img, q, type };
+          return { item, img, q, type, url };
         })
       );
 
-      for (const { item, img, q, type } of results) {
+      for (const { item, img, q, type, url } of results) {
         const card = document.createElement("div");
         card.className = "card";
 
@@ -112,6 +106,7 @@
           <b>${q}</b><br/>
           <small>${type}</small>
           ${img.source === "ai-fallback" ? "<div class='small'>Illustration IA</div>" : ""}
+          ${url ? `<div style="margin-top:6px;"><a class="btn" href="${url}" target="_blank">Voir la source</a></div>` : ""}
         `;
 
         container.appendChild(card);
