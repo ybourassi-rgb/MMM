@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Marché en direct • MMM V10.3</title>
   <link rel="stylesheet" href="/mmm.css">
+
+  <!-- ✅ Style filtre actif -->
+  <style>
+    .active-filter {
+      background: #111 !important;
+      color: #fff !important;
+      border: 1px solid #111 !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -21,10 +30,8 @@
   <!-- Zone debug (auto-cachée si DEBUG=false) -->
   <div id="debug" style="padding:8px;font-family:monospace;"></div>
 
-  <!-- ✅ Filtres -->
-  <div id="filters" style="padding:8px; display:flex; gap:6px; flex-wrap:wrap;">
-    <button class="btn" data-filter="all">Tout</button>
-  </div>
+  <!-- ✅ Filtres améliorés (générés en JS) -->
+  <div id="filters" style="padding:8px; display:flex; gap:6px; flex-wrap:wrap;"></div>
 
   <!-- Ici on injecte les cards -->
   <div id="market-container" class="grid" style="margin-top:12px;"></div>
@@ -97,7 +104,7 @@
         // ✅ Initialise cache courant = tout
         RESULTS_CACHE = ALL_RESULTS;
 
-        // ✅ construit filtres
+        // ✅ construit filtres améliorés
         buildFilters(ALL_RESULTS);
 
         // ✅ Render 1ère page
@@ -117,23 +124,45 @@
       document.getElementById("pagination-zone").innerHTML = "";
     }
 
+    // ✅ Étape 4: filtres avec compteur + actif + scrollTop
     function buildFilters(results) {
       const filtersDiv = document.getElementById("filters");
-      filtersDiv.innerHTML = `<button class="btn" data-filter="all">Tout</button>`;
+      filtersDiv.innerHTML = "";
 
-      const types = [...new Set(results.map(r => r.type).filter(Boolean))];
+      // Compter par type
+      const counts = results.reduce((acc, r) => {
+        const t = r.type || "product";
+        acc[t] = (acc[t] || 0) + 1;
+        return acc;
+      }, {});
 
+      const types = Object.keys(counts);
+
+      // Bouton "Tout"
+      const allBtn = document.createElement("button");
+      allBtn.className = "btn filter-btn active-filter";
+      allBtn.dataset.filter = "all";
+      allBtn.textContent = `Tout (${results.length})`;
+      filtersDiv.appendChild(allBtn);
+
+      // Boutons par type
       for (const t of types) {
         const btn = document.createElement("button");
-        btn.className = "btn";
+        btn.className = "btn filter-btn";
         btn.dataset.filter = t;
-        btn.textContent = t;
+        btn.textContent = `${t} (${counts[t]})`;
         filtersDiv.appendChild(btn);
       }
 
-      filtersDiv.querySelectorAll("button").forEach(btn => {
+      // Click handlers
+      filtersDiv.querySelectorAll(".filter-btn").forEach(btn => {
         btn.onclick = () => {
           const filter = btn.dataset.filter;
+
+          // Active state
+          filtersDiv.querySelectorAll(".filter-btn")
+            .forEach(b => b.classList.remove("active-filter"));
+          btn.classList.add("active-filter");
 
           RESULTS_CACHE = (filter === "all")
             ? ALL_RESULTS
@@ -142,6 +171,9 @@
           PAGE = 1;
           clearMarket();
           renderPage();
+
+          // Remonter en haut (mobile friendly)
+          window.scrollTo({ top: 0, behavior: "smooth" });
         };
       });
     }
