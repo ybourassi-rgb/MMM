@@ -43,16 +43,36 @@
         debug("📡 Récupération des flux marché…");
         const data = await fetch("/api/market").then(r => r.json());
 
-        // ✅ 2) Normaliser les items selon ton JSON
-        // Si ta route renvoie { items: [...] } => ok
-        // Si ta route renvoie directement [...] => ok
-        const items = data.items || data || [];
+        // 🔍 Debug pour voir la vraie structure
+        debug("🧾 Réponse brute: " + JSON.stringify(data).slice(0, 300) + "...");
 
-        if (!items.length) {
-          debug("⚠️ Aucun item trouvé dans les flux.");
-        } else {
-          debug(`✅ ${items.length} item(s) reçus.`);
+        // ✅ 2) Normalisation robuste pour garantir un tableau
+        let items = [];
+
+        if (Array.isArray(data)) {
+          items = data;
+        } else if (Array.isArray(data.items)) {
+          items = data.items;
+        } else if (Array.isArray(data.results)) {
+          items = data.results;
+        } else if (Array.isArray(data.articles)) {
+          items = data.articles;
+        } else if (data.items && typeof data.items === "object") {
+          // si items est un objet {0:{...},1:{...}}
+          items = Object.values(data.items);
+        } else if (data.data && Array.isArray(data.data)) {
+          items = data.data;
         }
+
+        // ✅ Sécurité finale
+        if (!Array.isArray(items)) items = [];
+
+        if (items.length === 0) {
+          debug("⚠️ Aucun item trouvé dans les flux (après normalisation).");
+          return; // stop pour éviter map sur vide / objet
+        }
+
+        debug(`✅ ${items.length} item(s) reçus.`);
 
         // ✅ 3) Render
         await renderMarket(items, getBestImage);
