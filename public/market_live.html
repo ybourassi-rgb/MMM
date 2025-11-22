@@ -24,22 +24,27 @@
   <!-- Ici on injecte les cards -->
   <div id="market-container" class="grid" style="margin-top:12px;"></div>
 
-  <script type="module">
-    // ✅ Étape 1 : Debug ON/OFF
-    const DEBUG = false; // <-- mets true si tu veux afficher les logs
+  <!-- Zone bouton pagination -->
+  <div id="pagination-zone" style="text-align:center;margin:12px 0;"></div>
 
+  <script type="module">
+    // ✅ Debug ON/OFF
+    const DEBUG = false; // mets true si tu veux les logs
     const debug = (msg) => {
       if (!DEBUG) return;
       const el = document.getElementById("debug");
       el.style.display = "block";
       el.innerHTML += msg + "<br/>";
     };
-
-    // Si DEBUG=false -> on cache le bloc debug
     if (!DEBUG) {
       const el = document.getElementById("debug");
       if (el) el.style.display = "none";
     }
+
+    // ✅ Pagination params
+    let PAGE = 1;
+    const PAGE_SIZE = 10;
+    let RESULTS_CACHE = []; // on garde les résultats prêts
 
     async function main() {
       try {
@@ -49,11 +54,10 @@
         const { getBestImage } = mod;
 
         debug("✅ Module chargé.");
-
         debug("📡 Récupération des flux marché…");
-        const data = await fetch("/api/market").then(r => r.json());
 
-        debug("🧾 Réponse brute: " + JSON.stringify(data).slice(0, 300) + "...");
+        const data = await fetch("/api/market").then(r => r.json());
+        debug("🧾 Réponse brute: " + JSON.stringify(data).slice(0, 200) + "...");
 
         // ✅ Normalisation robuste (ajout de feed)
         let items = [];
@@ -61,7 +65,7 @@
         if (Array.isArray(data)) {
           items = data;
         } else if (Array.isArray(data.feed)) {
-          items = data.feed;                 // ✅ TON CAS
+          items = data.feed;
         } else if (Array.isArray(data.items)) {
           items = data.items;
         } else if (Array.isArray(data.results)) {
@@ -75,37 +79,43 @@
         }
 
         if (!Array.isArray(items)) items = [];
-
         if (items.length === 0) {
-          debug("⚠️ Aucun item trouvé dans les flux (après normalisation).");
+          debug("⚠️ Aucun item trouvé dans les flux.");
           return;
         }
 
         debug(`✅ ${items.length} item(s) reçus.`);
-        await renderMarket(items, getBestImage);
-        debug("🎉 Cards affichées.");
+
+        // ✅ Prépare images + infos en parallèle une seule fois
+        RESULTS_CACHE = await Promise.all(
+          items.map(async (item) => {
+            const q = item.title || item.name || item.model || "Opportunité";
+            const type = item.type || "product";
+            const url = item.url || item.link || item.id || null;
+
+            const img = await getBestImage({ q, type, url });
+            return { item, img, q, type, url };
+          })
+        );
+
+        // ✅ Render 1ère page
+        renderPage();
+
+        debug("🎉 Cards affichées (page 1).");
 
       } catch (e) {
         debug("❌ Erreur: " + e.message);
       }
     }
 
-    async function renderMarket(items, getBestImage) {
+    function renderPage() {
       const container = document.getElementById("market-container");
-      container.innerHTML = "";
+      const paginationZone = document.getElementById("pagination-zone");
 
-      const results = await Promise.all(
-        items.map(async (item) => {
-          const q = item.title || item.name || item.model || "Opportunité";
-          const type = item.type || "product";
-          const url = item.url || item.link || item.id || null;
+      const start = (PAGE - 1) * PAGE_SIZE;
+      const slice = RESULTS_CACHE.slice(start, start + PAGE_SIZE);
 
-          const img = await getBestImage({ q, type, url });
-          return { item, img, q, type, url };
-        })
-      );
-
-      for (const { item, img, q, type, url } of results) {
+      for (const { img, q, type, url } of slice) {
         const card = document.createElement("div");
         card.className = "card";
 
@@ -122,6 +132,19 @@
         `;
 
         container.appendChild(card);
+      }
+
+      // ✅ Bouton Charger plus
+      paginationZone.innerHTML = "";
+      if (PAGE * PAGE_SIZE < RESULTS_CACHE.length) {
+        const btn = document.createElement("button");
+        btn.className = "btn";
+        btn.textContent = "Charger plus";
+        btn.onclick = () => {
+          PAGE++;
+          renderPage();
+        };
+        paginationZone.appendChild(btn);
       }
     }
 
