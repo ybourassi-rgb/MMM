@@ -17,9 +17,8 @@ function headers() {
 
 // ---------- Utils ----------
 const UA =
-  "Mozilla/5.0 (compatible; MMM-RSSBot/1.0; +https://example.com/bot)";
+  "Mozilla/5.0 (compatible; MMM-RSSBot/1.1; +https://example.com/bot)";
 
-// r.jina.ai permet de bypass des restrictions côté serveur distant
 function proxyWrap(url) {
   const u = url.replace(/^https?:\/\//, "");
   return `https://r.jina.ai/http://${u}`;
@@ -31,8 +30,7 @@ function abortAfter(ms) {
   return { ctrl, t };
 }
 
-async function safeFetch(url, { timeout = 6000 } = {}) {
-  // 1) tentative directe
+async function safeFetch(url, { timeout = 6500 } = {}) {
   try {
     const { ctrl, t } = abortAfter(timeout);
     const r = await fetch(url, {
@@ -42,11 +40,8 @@ async function safeFetch(url, { timeout = 6000 } = {}) {
     });
     clearTimeout(t);
     if (r.ok) return r;
-  } catch {
-    // noop
-  }
+  } catch {}
 
-  // 2) fallback via proxy
   try {
     const { ctrl, t } = abortAfter(timeout);
     const r2 = await fetch(proxyWrap(url), {
@@ -56,55 +51,89 @@ async function safeFetch(url, { timeout = 6000 } = {}) {
     });
     clearTimeout(t);
     if (r2.ok) return r2;
-  } catch {
-    // noop
-  }
+  } catch {}
 
   throw new Error("fetch_failed");
 }
 
-// Décode CDATA et trim
 function cleanText(s = "") {
   return s.replace(/<!\[CDATA\[(.*?)\]\]>/gis, "$1").trim();
 }
 
-// ---------- Parsing RSS/Atom ----------
-function parseRSS(xml, source) {
+// essaie plusieurs champs date
+function toISODate(...candidates) {
+  for (const c of candidates) {
+    if (!c) continue;
+    const d = new Date(c);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+// extrait un domaine propre
+function domainOf(url="") {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    return url.replace(/^https?:\/\//, "").split("/")[0];
+  }
+}
+
+// ---------- Parsing RSS / Atom enrichi ----------
+function parseRSS(xml, sourceUrl) {
   const items = [];
+  const sourceDomain = domainOf(sourceUrl);
+
+  // helper
+  const pickFrom = (block, tag) =>
+    cleanText(
+      block.match(
+        new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i")
+      )?.[1] ?? ""
+    );
 
   // RSS 2.0: <item>
   const reItem = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
   let m;
   while ((m = reItem.exec(xml))) {
     const block = m[1];
-    const pick = (tag) =>
-      cleanText(
-        block.match(
-          new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i")
-        )?.[1] ?? ""
-      );
 
-    const title = pick("title");
+    const title = pickFrom(block, "title");
     const link =
-      pick("link") ||
-      cleanText(
-        block.match(/<guid\b[^>]*>([\s\S]*?)<\/guid>/i)?.[1] ?? ""
-      );
-    const pub = pick("pubDate") || pick("dc:date") || "";
+      pickFrom(block, "link") ||
+      cleanText(block.match(/<guid\b[^>]*>([\s\S]*?)<\/guid>/i)?.[1] ?? "");
+
+    const pubDate = pickFrom(block, "pubDate");
+    const dcDate = pickFrom(block, "dc:date");
+
+    // description / content
+    const description =
+      pickFrom(block, "description") ||
+      pickFrom(block, "content:encoded");
+
+    // images possibles
+    const mediaContent =
+      block.match(/<media:content\b[^>]*url=["']([^"']+)["']/i)?.[1] ?? "";
+    const mediaThumb =
+      block.match(/<media:thumbnail\b[^>]*url=["']([^"']+)["']/i)?.[1] ?? "";
+    const enclosure =
+      block.match(/<enclosure\b[^>]*url=["']([^"']+)["']/i)?.[1] ?? "";
+    const imgInDesc =
+      description.match(/<img\b[^>]*src=["']([^"']+)["']/i)?.[1] ?? "";
+
+    const image = mediaContent || mediaThumb || enclosure || imgInDesc || "";
 
     if (title || link) {
       items.push({
-        id:
-          (link || title || Math.random().toString(36).slice(2)).slice(
-            0,
-            128
-          ),
+        id: (link || title || Math.random().toString(36).slice(2)).slice(0, 128),
         title,
         url: link || "",
-        source,
-        updatedAtISO: pub
-          ? new Date(pub).toISOString()
-          : new Date().toISOString(),
+        source: sourceDomain,
+        sourceUrl,
+        summary: cleanText(description).replace(/<[^>]+>/g, "").slice(0, 280),
+        image,
+        updatedAtISO: toISODate(pubDate, dcDate),
       });
     }
   }
@@ -113,33 +142,32 @@ function parseRSS(xml, source) {
   const reEntry = /<entry\b[^>]*>([\s\S]*?)<\/entry>/gi;
   while ((m = reEntry.exec(xml))) {
     const block = m[1];
-    const pick = (tag) =>
-      cleanText(
-        block.match(
-          new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i")
-        )?.[1] ?? ""
-      );
 
-    const title = pick("title");
+    const title = pickFrom(block, "title");
     const linkHref =
-      block.match(
-        /<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i
-      )?.[1] ?? "";
-    const updated = pick("updated") || pick("published") || "";
+      block.match(/<link\b[^>]*href=["']([^"']+)["'][^>]*\/?>/i)?.[1] ?? "";
+
+    const updated = pickFrom(block, "updated");
+    const published = pickFrom(block, "published");
+    const summary = pickFrom(block, "summary") || pickFrom(block, "content");
+
+    // images Atom possibles
+    const mediaContent =
+      block.match(/<media:content\b[^>]*url=["']([^"']+)["']/i)?.[1] ?? "";
+    const imgInSummary =
+      summary.match(/<img\b[^>]*src=["']([^"']+)["']/i)?.[1] ?? "";
+    const image = mediaContent || imgInSummary || "";
 
     if (title || linkHref) {
       items.push({
-        id:
-          (linkHref || title || Math.random().toString(36).slice(2)).slice(
-            0,
-            128
-          ),
+        id: (linkHref || title || Math.random().toString(36).slice(2)).slice(0, 128),
         title,
         url: linkHref || "",
-        source,
-        updatedAtISO: updated
-          ? new Date(updated).toISOString()
-          : new Date().toISOString(),
+        source: sourceDomain,
+        sourceUrl,
+        summary: cleanText(summary).replace(/<[^>]+>/g, "").slice(0, 280),
+        image,
+        updatedAtISO: toISODate(updated, published),
       });
     }
   }
@@ -200,32 +228,32 @@ export default async function handler(req) {
       );
     }
 
-    const results = [];
+    // fetch en parallèle (et on garde ta tolérance erreurs)
+    const chunks = await Promise.all(
+      urls.filter(Boolean).map(async (url) => {
+        try {
+          const r = await safeFetch(url, { timeout: 6500 });
+          const xml = await r.text();
+          return parseRSS(xml, url).slice(0, 50);
+        } catch (e) {
+          return [{
+            id: `err-${Math.random().toString(36).slice(2)}`,
+            title: `Erreur RSS: ${url}`,
+            url,
+            source: domainOf(url),
+            sourceUrl: url,
+            updatedAtISO: new Date().toISOString(),
+            error: String(e?.message || e) || "fetch_failed",
+          }];
+        }
+      })
+    );
 
-    for (const url of urls) {
-      if (!url) continue;
-
-      try {
-        const r = await safeFetch(url, { timeout: 6500 });
-        const xml = await r.text();
-        const items = parseRSS(xml, url).slice(0, 40);
-        results.push(...items);
-      } catch (e) {
-        results.push({
-          id: `err-${Math.random().toString(36).slice(2)}`,
-          title: `Erreur RSS: ${url}`,
-          url,
-          source: url,
-          updatedAtISO: new Date().toISOString(),
-          error: String(e?.message || e) || "fetch_failed",
-        });
-      }
-    }
-
+    const results = chunks.flat();
     const sorted = results.sort(
       (a, b) => new Date(b.updatedAtISO) - new Date(a.updatedAtISO)
     );
-    const unique = dedupe(sorted).slice(0, 100);
+    const unique = dedupe(sorted).slice(0, 120);
 
     return new Response(
       JSON.stringify({
