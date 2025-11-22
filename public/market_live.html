@@ -4,8 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Marché en direct • MMM V10.3</title>
-
-  <!-- Chemin absolu pour le CSS -->
   <link rel="stylesheet" href="/mmm.css">
 </head>
 
@@ -20,7 +18,7 @@
     </div>
   </div>
 
-  <!-- Zone debug visible -->
+  <!-- Zone debug visible (tu pourras l’enlever après) -->
   <div id="debug" style="padding:8px;font-family:monospace;"></div>
 
   <!-- Ici on injecte les cards -->
@@ -31,55 +29,76 @@
       document.getElementById("debug").innerHTML += msg + "<br/>";
     };
 
-    try {
-      debug("🔄 Chargement module getBestImage…");
+    async function main() {
+      try {
+        debug("🔄 Chargement module getBestImage…");
 
-      // ✅ Import ABSOLU (fichier dans /public)
-      const mod = await import("/getBestImage.js");
-      const { getBestImage } = mod;
+        const mod = await import("/getBestImage.js");
+        const { getBestImage } = mod;
 
-      debug("✅ Module chargé.");
+        debug("✅ Module chargé.");
 
-      const items = [
-        { title: "Peugeot 208 2018", type: "auto", url: null },
-        { title: "iPhone 14 Pro", type: "product", url: null }
-      ];
+        // ✅ 1) Charger les vrais flux marché
+        // ⚠️ Remplace /api/market par TA route réelle si différente
+        debug("📡 Récupération des flux marché…");
+        const data = await fetch("/api/market").then(r => r.json());
 
-      async function renderMarket(items) {
-        const container = document.getElementById("market-container");
-        container.innerHTML = "";
+        // ✅ 2) Normaliser les items selon ton JSON
+        // Si ta route renvoie { items: [...] } => ok
+        // Si ta route renvoie directement [...] => ok
+        const items = data.items || data || [];
 
-        for (const item of items) {
-          const img = await getBestImage({
-            q: item.title,
-            type: item.type,
-            url: item.url
-          });
-
-          const card = document.createElement("div");
-          card.className = "card";
-
-          card.innerHTML = `
-            <img
-              src="${img.thumbUrl || img.imageUrl || "/placeholder.png"}"
-              alt="${item.title}"
-              style="width:100%;height:160px;object-fit:cover;border-radius:8px;margin-bottom:8px;"
-            />
-            <b>${item.title}</b><br/>
-            <small>${item.type}</small>
-            ${img.source === "ai-fallback" ? "<div class='small'>Illustration IA</div>" : ""}
-          `;
-
-          container.appendChild(card);
+        if (!items.length) {
+          debug("⚠️ Aucun item trouvé dans les flux.");
+        } else {
+          debug(`✅ ${items.length} item(s) reçus.`);
         }
+
+        // ✅ 3) Render
+        await renderMarket(items, getBestImage);
+        debug("🎉 Cards affichées.");
+
+      } catch (e) {
+        debug("❌ Erreur: " + e.message);
       }
-
-      await renderMarket(items);
-      debug("🎉 Cards affichées.");
-
-    } catch (e) {
-      debug("❌ Erreur module: " + e.message);
     }
+
+    async function renderMarket(items, getBestImage) {
+      const container = document.getElementById("market-container");
+      container.innerHTML = "";
+
+      // 🔥 Parallélisation pour aller plus vite
+      const results = await Promise.all(
+        items.map(async (item) => {
+          const q = item.title || item.name || item.model || "Opportunité";
+          const type = item.type || "product";
+          const url = item.url || item.link || null;
+
+          const img = await getBestImage({ q, type, url });
+          return { item, img, q, type };
+        })
+      );
+
+      for (const { item, img, q, type } of results) {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+          <img
+            src="${img.thumbUrl || img.imageUrl || "/placeholder.png"}"
+            alt="${q}"
+            style="width:100%;height:160px;object-fit:cover;border-radius:8px;margin-bottom:8px;"
+          />
+          <b>${q}</b><br/>
+          <small>${type}</small>
+          ${img.source === "ai-fallback" ? "<div class='small'>Illustration IA</div>" : ""}
+        `;
+
+        container.appendChild(card);
+      }
+    }
+
+    main();
   </script>
 </body>
 </html>
