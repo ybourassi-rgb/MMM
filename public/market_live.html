@@ -21,6 +21,11 @@
   <!-- Zone debug (auto-cachée si DEBUG=false) -->
   <div id="debug" style="padding:8px;font-family:monospace;"></div>
 
+  <!-- ✅ Filtres -->
+  <div id="filters" style="padding:8px; display:flex; gap:6px; flex-wrap:wrap;">
+    <button class="btn" data-filter="all">Tout</button>
+  </div>
+
   <!-- Ici on injecte les cards -->
   <div id="market-container" class="grid" style="margin-top:12px;"></div>
 
@@ -44,50 +49,41 @@
     // ✅ Pagination params
     let PAGE = 1;
     const PAGE_SIZE = 10;
-    let RESULTS_CACHE = []; // on garde les résultats prêts
+
+    // Cache global
+    let ALL_RESULTS = [];     // tous les résultats
+    let RESULTS_CACHE = [];  // résultats filtrés courants
 
     async function main() {
       try {
         debug("🔄 Chargement module getBestImage…");
-
         const mod = await import("/getBestImage.js");
         const { getBestImage } = mod;
-
         debug("✅ Module chargé.");
-        debug("📡 Récupération des flux marché…");
 
+        debug("📡 Récupération des flux marché…");
         const data = await fetch("/api/market").then(r => r.json());
         debug("🧾 Réponse brute: " + JSON.stringify(data).slice(0, 200) + "...");
 
         // ✅ Normalisation robuste (ajout de feed)
         let items = [];
+        if (Array.isArray(data)) items = data;
+        else if (Array.isArray(data.feed)) items = data.feed;
+        else if (Array.isArray(data.items)) items = data.items;
+        else if (Array.isArray(data.results)) items = data.results;
+        else if (Array.isArray(data.articles)) items = data.articles;
+        else if (data.items && typeof data.items === "object") items = Object.values(data.items);
+        else if (data.data && Array.isArray(data.data)) items = data.data;
 
-        if (Array.isArray(data)) {
-          items = data;
-        } else if (Array.isArray(data.feed)) {
-          items = data.feed;
-        } else if (Array.isArray(data.items)) {
-          items = data.items;
-        } else if (Array.isArray(data.results)) {
-          items = data.results;
-        } else if (Array.isArray(data.articles)) {
-          items = data.articles;
-        } else if (data.items && typeof data.items === "object") {
-          items = Object.values(data.items);
-        } else if (data.data && Array.isArray(data.data)) {
-          items = data.data;
-        }
-
-        if (!Array.isArray(items)) items = [];
-        if (items.length === 0) {
+        if (!Array.isArray(items) || items.length === 0) {
           debug("⚠️ Aucun item trouvé dans les flux.");
           return;
         }
 
         debug(`✅ ${items.length} item(s) reçus.`);
 
-        // ✅ Prépare images + infos en parallèle une seule fois
-        RESULTS_CACHE = await Promise.all(
+        // ✅ Prépare images + infos en parallèle
+        ALL_RESULTS = await Promise.all(
           items.map(async (item) => {
             const q = item.title || item.name || item.model || "Opportunité";
             const type = item.type || "product";
@@ -98,7 +94,15 @@
           })
         );
 
+        // ✅ Initialise cache courant = tout
+        RESULTS_CACHE = ALL_RESULTS;
+
+        // ✅ construit filtres
+        buildFilters(ALL_RESULTS);
+
         // ✅ Render 1ère page
+        PAGE = 1;
+        clearMarket();
         renderPage();
 
         debug("🎉 Cards affichées (page 1).");
@@ -106,6 +110,40 @@
       } catch (e) {
         debug("❌ Erreur: " + e.message);
       }
+    }
+
+    function clearMarket() {
+      document.getElementById("market-container").innerHTML = "";
+      document.getElementById("pagination-zone").innerHTML = "";
+    }
+
+    function buildFilters(results) {
+      const filtersDiv = document.getElementById("filters");
+      filtersDiv.innerHTML = `<button class="btn" data-filter="all">Tout</button>`;
+
+      const types = [...new Set(results.map(r => r.type).filter(Boolean))];
+
+      for (const t of types) {
+        const btn = document.createElement("button");
+        btn.className = "btn";
+        btn.dataset.filter = t;
+        btn.textContent = t;
+        filtersDiv.appendChild(btn);
+      }
+
+      filtersDiv.querySelectorAll("button").forEach(btn => {
+        btn.onclick = () => {
+          const filter = btn.dataset.filter;
+
+          RESULTS_CACHE = (filter === "all")
+            ? ALL_RESULTS
+            : ALL_RESULTS.filter(r => r.type === filter);
+
+          PAGE = 1;
+          clearMarket();
+          renderPage();
+        };
+      });
     }
 
     function renderPage() {
