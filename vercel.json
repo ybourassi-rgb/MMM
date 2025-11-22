@@ -1,43 +1,26 @@
 {
   "version": 2,
-
   "builds": [
     { "src": "api/**/*.js", "use": "@vercel/node" },
-    { "src": "public/**", "use": "@vercel/static" },
-    { "src": "*.html", "use": "@vercel/static" },
-    { "src": "*.js", "use": "@vercel/static" },
-    { "src": "*.css", "use": "@vercel/static" }
+    { "src": "public/**", "use": "@vercel/static" }
   ],
-
-  "rewrites": [
-    { "source": "/api", "destination": "/api/index.js" },
-    { "source": "/api/(.*)", "destination": "/api/$1.js" },
-
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/((?!api($|/)).*)", "destination": "/public/$1" }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1.js" },
+    { "src": "/", "dest": "/public/index.html" },
+    { "src": "/(.*)", "dest": "/public/$1" }
   ],
-
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
         { "key": "Pragma", "value": "no-cache" },
-        { "key": "Expires", "value": "0" },
-        { "key": "CDN-Cache-Control", "value": "no-store" },
-        { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
+        { "key": "Expires", "value": "0" }
       ]
     }
   ],
-
   "crons": [
-    {
-      "path": "/api/affiliation_run",
-      "schedule": "*/20 * * * *"
-    },
-    {
-      "path": "/api/mmy-autopublisher",
-      "schedule": "*/30 * * * *"
-    }
+    { "path": "/api/affiliation_run", "schedule": "*/20 * * * *" },
+    { "path": "/api/mmy-autopublisher", "schedule": "*/30 * * * *" }
   ]
 }
