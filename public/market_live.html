@@ -18,16 +18,28 @@
     </div>
   </div>
 
-  <!-- Zone debug visible (on l’enlèvera après) -->
+  <!-- Zone debug (auto-cachée si DEBUG=false) -->
   <div id="debug" style="padding:8px;font-family:monospace;"></div>
 
   <!-- Ici on injecte les cards -->
   <div id="market-container" class="grid" style="margin-top:12px;"></div>
 
   <script type="module">
+    // ✅ Étape 1 : Debug ON/OFF
+    const DEBUG = false; // <-- mets true si tu veux afficher les logs
+
     const debug = (msg) => {
-      document.getElementById("debug").innerHTML += msg + "<br/>";
+      if (!DEBUG) return;
+      const el = document.getElementById("debug");
+      el.style.display = "block";
+      el.innerHTML += msg + "<br/>";
     };
+
+    // Si DEBUG=false -> on cache le bloc debug
+    if (!DEBUG) {
+      const el = document.getElementById("debug");
+      if (el) el.style.display = "none";
+    }
 
     async function main() {
       try {
