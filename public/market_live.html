@@ -34,8 +34,8 @@
     try {
       debug("🔄 Chargement module getBestImage…");
 
-      // ✅ Import ABSOLU
-      const mod = await import("/lib/getBestImage.js");
+      // ✅ Import ABSOLU (fichier dans /public)
+      const mod = await import("/getBestImage.js");
       const { getBestImage } = mod;
 
       debug("✅ Module chargé.");
