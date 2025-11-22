@@ -12,8 +12,8 @@ export default function handler(req, res) {
       { path: "/api/affiliation_run", desc: "Cron affiliation (run automatique)" },
       { path: "/api/mmy-autopublisher", desc: "Cron autopublisher" }
 
-      // Ajoute ici ta route Rainforest exacte si elle porte un autre nom
-      // ex: { path: "/api/amazon", desc: "Produit Amazon via Rainforest" }
+      // Ajoute ici ta route Rainforest exacte si besoin :
+      // { path: "/api/amazon", desc: "Produit Amazon via Rainforest" }
     ],
     timestamp: new Date().toISOString()
   });
