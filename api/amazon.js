@@ -1,69 +1,69 @@
-// api/amazon.js
+// /api/amazon.js
 export default async function handler(req, res) {
   try {
-    const asin = req.query.asin;
+    const asin = (req.query.asin || "").trim();
     if (!asin) {
-      return res.status(400).json({ ok: false, error: "Missing asin" });
+      return res.status(400).json({ ok: false, error: "asin_missing" });
     }
 
-    const apiKey = process.env.RAINFOREST_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ ok: false, error: "Missing RAINFOREST_API_KEY" });
-    }
-
-    const url =
-      "https://api.rainforestapi.com/request" +
-      `?api_key=${apiKey}` +
-      `&amazon_domain=amazon.fr` +
-      `&type=product` +
-      `&asin=${encodeURIComponent(asin)}`;
-
-    const rfRes = await fetch(url);
-    const data = await rfRes.json();
-
-    // Si Rainforest renvoie une erreur / quota / etc.
-    if (data?.request_info?.success === false) {
-      return res.status(502).json({
-        ok: false,
-        error: data.request_info?.message || "Rainforest error",
-        request_info: data.request_info
+    const RF_KEY = process.env.RAINFOREST_API_KEY;
+    if (!RF_KEY) {
+      // fallback propre si pas de clé
+      return res.status(200).json({
+        ok: true,
+        route: "amazon",
+        asin,
+        mode: "mock",
+        product: {
+          asin,
+          title: "Produit mock (clé Rainforest absente)",
+          price: null,
+          images: [],
+          url: `https://www.amazon.com/dp/${asin}`
+        }
       });
     }
 
-    const p = data?.product || {};
+    const url =
+      `https://api.rainforestapi.com/request?api_key=${RF_KEY}` +
+      `&type=product&amazon_domain=amazon.com&asin=${encodeURIComponent(asin)}`;
 
-    // Mapping robuste (Rainforest varie selon les produits)
-    const rating =
-      p.rating ??
-      p.rating_summary?.rating ??
-      p.reviews?.rating ??
-      null;
+    const r = await fetch(url);
+    const data = await r.json();
 
-    const reviewsCount =
-      p.ratings_total ??
-      p.reviews_total ??
-      p.rating_summary?.total_ratings ??
-      null;
+    if (!r.ok || data.request_info?.success === false) {
+      return res.status(502).json({
+        ok: false,
+        route: "amazon",
+        asin,
+        error: "rainforest_error",
+        details: data
+      });
+    }
 
-    const price =
-      p.buybox_winner?.price?.value ??
-      p.price?.value ??
-      null;
-
+    const p = data.product || {};
     return res.status(200).json({
       ok: true,
+      route: "amazon",
       asin,
-      title: p.title || null,
-      rating,
-      reviewsCount,
-      price,
-      currency: p.buybox_winner?.price?.currency || p.price?.currency || "EUR",
-      productUrl: p.link || `https://www.amazon.fr/dp/${asin}`
+      mode: "rainforest",
+      product: {
+        asin: p.asin || asin,
+        title: p.title,
+        brand: p.brand,
+        price: p.buybox_winner?.price?.value || p.price?.value || null,
+        currency: p.buybox_winner?.price?.currency || p.price?.currency || null,
+        rating: p.rating || null,
+        ratings_total: p.ratings_total || null,
+        images:
+          (p.main_image && [p.main_image.link]) ||
+          (p.images?.map(x => x.link)) ||
+          [],
+        url: p.link || `https://www.amazon.com/dp/${asin}`
+      },
+      raw: data
     });
   } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: e.message || "Server error"
-    });
+    return res.status(500).json({ ok: false, error: "server_error", message: e.message });
   }
 }
