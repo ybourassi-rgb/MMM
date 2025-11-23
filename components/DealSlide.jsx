@@ -14,16 +14,17 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
+    link,          // ✅ fallback si l’API renvoie encore "link"
     affiliateUrl,
     halal,
   } = item || {};
 
-  const openLink = (link) => {
-    if (!link) return;
-    window.open(link, "_blank", "noopener,noreferrer");
+  const openLink = (href) => {
+    if (!href) return;
+    window.open(href, "_blank", "noopener,noreferrer");
   };
 
-  const trackClick = async (domain) => {
+  const trackClick = async (domain, href) => {
     try {
       await fetch("/api/log-click", {
         method: "POST",
@@ -33,7 +34,7 @@ export default function DealSlide({ item, active }) {
           title,
           score,
           category,
-          url: affiliateUrl || url,
+          url: href, // ✅ on logge le vrai lien ouvert
         }),
       });
     } catch (e) {
@@ -42,13 +43,15 @@ export default function DealSlide({ item, active }) {
   };
 
   const onSee = async () => {
-    const link = affiliateUrl || url;
-    if (!link) return;
+    const href = affiliateUrl || url || link; // ✅ lien final
+    if (!href) return;
+
     try {
-      const domain = new URL(link).hostname;
-      await trackClick(domain);
+      const domain = new URL(href).hostname;
+      await trackClick(domain, href);
     } catch {}
-    openLink(link);
+
+    openLink(href);
   };
 
   const onAnalyze = () => {
@@ -57,12 +60,12 @@ export default function DealSlide({ item, active }) {
   };
 
   const onShare = async () => {
-    const link = affiliateUrl || url || "";
+    const href = affiliateUrl || url || link || "";
     try {
       if (navigator.share) {
-        await navigator.share({ title, text: title, url: link });
+        await navigator.share({ title, text: title, url: href });
       } else {
-        await navigator.clipboard.writeText(link);
+        await navigator.clipboard.writeText(href);
         alert("Lien copié ✅");
       }
     } catch (e) {
