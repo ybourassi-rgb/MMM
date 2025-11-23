@@ -51,7 +51,10 @@ async function sendTelegram({ token, chatId, text, image }) {
  * - deal => Redis deals + Telegram DEALS
  */
 export async function publishDeal(item, mode = "deals") {
-  const isNews = item?.sourceType === "news";
+  // ✅ accepte "type" (runAgent) ou "sourceType" (ancien format)
+  const isNews =
+    item?.type === "news" ||
+    item?.sourceType === "news";
 
   // ✅ 1) News → pas de saveDeal, juste Telegram AUTO
   if (isNews) {
@@ -106,12 +109,16 @@ export async function publishDeal(item, mode = "deals") {
  * import publishTelegram from "./utils/publishTelegram.js"
  */
 export default async function publishTelegram(item) {
+  const isNews =
+    item?.type === "news" ||
+    item?.sourceType === "news";
+
   // auto-routing
-  return publishDeal(item, item?.sourceType === "news" ? "auto" : "deals");
+  return publishDeal(item, isNews ? "auto" : "deals");
 }
 
 /**
- * Message Telegram standardisé 2026
+ * Message Telegram standardisé
  */
 function buildTelegramMessage(d, isNews = false) {
   const link = d.affiliateUrl || d.url || d.link || "";
