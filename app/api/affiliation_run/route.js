@@ -54,7 +54,6 @@ async function handler(req) {
   }).catch(() => null);
 
   // On laisse le worker tourner en fond sans attendre
-  // (mais on évite un warning d’async non géré)
   trigger;
 
   return json({
