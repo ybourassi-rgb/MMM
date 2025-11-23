@@ -1,5 +1,9 @@
+// app/api/redirect/route.js
 import { Redis } from "@upstash/redis";
 import { applyAffiliation } from "../../../lib/affiliations.js";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // --- Helpers ---
 function pickParam(urlObj, keys = []) {
@@ -74,9 +78,9 @@ export async function GET(req) {
 
   const rawUrlParam = pickParam(urlObj, ["u", "url"]) || null;
   if (!rawUrlParam) {
-    return new Response(
-      JSON.stringify({ ok: true, message: "Redirect API fonctionne 🔥" }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+    return NextResponse.json(
+      { ok: true, message: "Redirect API fonctionne 🔥" },
+      { status: 200 }
     );
   }
 
