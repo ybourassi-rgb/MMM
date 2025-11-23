@@ -7,6 +7,9 @@ const TG_CHAT_AUTO = process.env.TELEGRAM_CHAT_ID_AUTO;
 const TG_TOKEN_DEALS = process.env.TELEGRAM_BOT_TOKEN_DEALS;
 const TG_CHAT_DEALS = process.env.TELEGRAM_CHAT_ID_DEALS;
 
+/**
+ * Envoie un message Telegram
+ */
 async function sendTelegram({ token, chatId, text, image }) {
   if (!token || !chatId) throw new Error("Telegram env missing");
 
@@ -43,16 +46,18 @@ async function sendTelegram({ token, chatId, text, image }) {
 }
 
 /**
- * Publie un item:
- * - type/news  => Telegram AUTO only
- * - type/deal  => Redis deals + Telegram DEALS
+ * Publie un item
+ * - type: "news" => Telegram AUTO (pas Redis deals)
+ * - type: "deal" => Redis deals + Telegram DEALS
  */
 export async function publishDeal(item) {
-  const type = item?.type || item?.sourceType || "news";
+  const type = item?.type || "news";
   const isNews = type === "news";
 
+  // ✅ News → Telegram AUTO uniquement
   if (isNews) {
     const text = buildTelegramMessage(item, true);
+
     const tgRes = await sendTelegram({
       token: TG_TOKEN_AUTO,
       chatId: TG_CHAT_AUTO,
@@ -62,12 +67,14 @@ export async function publishDeal(item) {
 
     console.log("✅ Sent NEWS to Telegram:", {
       ok: tgRes?.ok,
+      chatId: TG_CHAT_AUTO,
       tgMessageId: tgRes?.result?.message_id,
     });
 
     return { ...item, publishedTo: "auto" };
   }
 
+  // ✅ Deal → save Redis canonique + Telegram DEALS
   const saved = await saveDeal(item);
 
   console.log("✅ Saved DEAL to Redis:", {
@@ -88,6 +95,7 @@ export async function publishDeal(item) {
 
   console.log("✅ Sent DEAL to Telegram:", {
     ok: tgRes?.ok,
+    chatId: TG_CHAT_DEALS,
     tgMessageId: tgRes?.result?.message_id,
   });
 
@@ -98,6 +106,9 @@ export default async function publishTelegram(item) {
   return publishDeal(item);
 }
 
+/**
+ * Message Telegram standardisé 2026
+ */
 function buildTelegramMessage(d, isNews = false) {
   const link = d.affiliateUrl || d.url || d.link || "";
 
