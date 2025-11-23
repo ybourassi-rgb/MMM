@@ -15,13 +15,13 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link, // dealabs
+    link, // Dealabs renvoie souvent "link"
     affiliateUrl,
     halal,
     summary,
   } = item || {};
 
-  // ✅ lien final robuste
+  // ✅ lien final robuste (affiliate > url > link)
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
@@ -54,14 +54,19 @@ export default function DealSlide({ item, active }) {
     }
   };
 
-  // ✅ bouton Voir (Safari / iOS safe)
+  /**
+   * ✅ IMPORTANT pour mobile/Safari:
+   * - On ouvre le lien DIRECTEMENT dans le handler (sans await avant),
+   *   sinon certains navigateurs bloquent le popup.
+   * - On track après, en "fire-and-forget".
+   */
   const onSee = () => {
     if (!finalUrl) return;
 
-    // 1) Ouvre direct (Safari OK)
+    // 1) ouvre direct
     openLink(finalUrl);
 
-    // 2) Track après, sans bloquer le clic
+    // 2) track après sans bloquer
     try {
       const domain = new URL(finalUrl).hostname;
       trackClick(domain); // pas de await
@@ -70,6 +75,7 @@ export default function DealSlide({ item, active }) {
 
   const onAnalyze = () => {
     console.log("Analyze:", item);
+    // plus tard: ouvrir modal Y-Score
   };
 
   const onShare = async () => {
@@ -88,6 +94,7 @@ export default function DealSlide({ item, active }) {
 
   const onFav = () => {
     console.log("Fav:", item);
+    // plus tard: save profil Upstash
   };
 
   return (
@@ -102,7 +109,7 @@ export default function DealSlide({ item, active }) {
             priority={active}
             sizes="100vw"
             onError={() => setImgOk(false)}
-            style={{ objectFit: "contain" }} // évite le zoom
+            style={{ objectFit: "contain" }} // évite le zoom grossier
           />
         ) : (
           <div className="deal-media-fallback">
@@ -186,7 +193,7 @@ export default function DealSlide({ item, active }) {
         .deal-media {
           position: relative;
           width: 100%;
-          height: 45vh; /* baisse à 40vh si tu veux */
+          height: 45vh; /* mets 40vh si tu veux l'image encore plus petite */
           background: #0b1020;
           overflow: hidden;
         }
@@ -237,8 +244,7 @@ export default function DealSlide({ item, active }) {
         .deal-actions {
           position: absolute;
           right: 10px;
-          top: calc(45vh - 80px); /* ✅ icônes plus hautes */
-          /* mets -100px si tu veux encore plus haut */
+          top: calc(45vh - 100px); /* ✅ icônes encore plus hautes */
           display: flex;
           flex-direction: column;
           gap: 12px;
