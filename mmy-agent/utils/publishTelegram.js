@@ -1,5 +1,5 @@
+// mmy-agent/utils/publishTelegram.js
 import { saveDeal } from "./saveLog.js";
-import fetch from "node-fetch";
 
 const TG_TOKEN_AUTO = process.env.TELEGRAM_BOT_TOKEN_AUTO;
 const TG_CHAT_AUTO = process.env.TELEGRAM_CHAT_ID_AUTO;
@@ -46,15 +46,14 @@ async function sendTelegram({ token, chatId, text, image }) {
 }
 
 /**
- * Publie un item
- * - type: "news" => Telegram AUTO (pas Redis deals)
- * - type: "deal" => Redis deals + Telegram DEALS
+ * Publie un item (news ou deal)
+ * - news => Telegram AUTO (pas de Redis deals)
+ * - deal => Redis deals + Telegram DEALS
  */
-export async function publishDeal(item) {
-  const type = item?.type || "news";
-  const isNews = type === "news";
+export async function publishDeal(item, mode = "deals") {
+  const isNews = item?.sourceType === "news";
 
-  // ✅ News → Telegram AUTO uniquement
+  // ✅ 1) News → pas de saveDeal, juste Telegram AUTO
   if (isNews) {
     const text = buildTelegramMessage(item, true);
 
@@ -67,14 +66,14 @@ export async function publishDeal(item) {
 
     console.log("✅ Sent NEWS to Telegram:", {
       ok: tgRes?.ok,
-      chatId: TG_CHAT_AUTO,
+      mode: "auto",
       tgMessageId: tgRes?.result?.message_id,
     });
 
     return { ...item, publishedTo: "auto" };
   }
 
-  // ✅ Deal → save Redis canonique + Telegram DEALS
+  // ✅ 2) Deal → save Redis canonique + Telegram DEALS
   const saved = await saveDeal(item);
 
   console.log("✅ Saved DEAL to Redis:", {
@@ -95,15 +94,20 @@ export async function publishDeal(item) {
 
   console.log("✅ Sent DEAL to Telegram:", {
     ok: tgRes?.ok,
-    chatId: TG_CHAT_DEALS,
+    mode: "deals",
     tgMessageId: tgRes?.result?.message_id,
   });
 
   return saved;
 }
 
+/**
+ * Export default pour matcher:
+ * import publishTelegram from "./utils/publishTelegram.js"
+ */
 export default async function publishTelegram(item) {
-  return publishDeal(item);
+  // auto-routing
+  return publishDeal(item, item?.sourceType === "news" ? "auto" : "deals");
 }
 
 /**
