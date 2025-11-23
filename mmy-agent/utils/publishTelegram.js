@@ -1,4 +1,6 @@
+// mmy-agent/utils/publishTelegram.js
 import { saveDeal } from "./saveLog.js";
+import buildAffiliateLink from "./buildAffiliateLink.js";
 import fetch from "node-fetch";
 
 const TG_TOKEN_AUTO = process.env.TELEGRAM_BOT_TOKEN_AUTO;
@@ -7,9 +9,6 @@ const TG_CHAT_AUTO = process.env.TELEGRAM_CHAT_ID_AUTO;
 const TG_TOKEN_DEALS = process.env.TELEGRAM_BOT_TOKEN_DEALS;
 const TG_CHAT_DEALS = process.env.TELEGRAM_CHAT_ID_DEALS;
 
-/**
- * Envoie un message Telegram
- */
 async function sendTelegram({ token, chatId, text, image }) {
   if (!token || !chatId) throw new Error("Telegram env missing");
 
@@ -45,15 +44,10 @@ async function sendTelegram({ token, chatId, text, image }) {
   return r.json();
 }
 
-/**
- * Publie un item (news ou deal)
- * - news => Telegram AUTO (pas de Redis deals)
- * - deal => Redis deals + Telegram DEALS
- */
-export async function publishDeal(item, mode = "deals") {
-  const isNews = item?.sourceType === "news";
+export async function publishDeal(item) {
+  const isNews = item?.type === "news";   // ✅ FIX
 
-  // ✅ 1) News → pas de saveDeal, juste Telegram AUTO
+  // -------- NEWS → canal AUTO --------
   if (isNews) {
     const text = buildTelegramMessage(item, true);
 
@@ -73,8 +67,9 @@ export async function publishDeal(item, mode = "deals") {
     return { ...item, publishedTo: "auto" };
   }
 
-  // ✅ 2) Deal → save Redis canonique + Telegram DEALS
-  const saved = await saveDeal(item);
+  // -------- DEAL → Redis + canal DEALS --------
+  const affiliateUrl = buildAffiliateLink(item.link || item.url);
+  const saved = await saveDeal({ ...item, affiliateUrl });
 
   console.log("✅ Saved DEAL to Redis:", {
     id: saved.id,
@@ -101,22 +96,14 @@ export async function publishDeal(item, mode = "deals") {
   return saved;
 }
 
-/**
- * Export default pour matcher:
- * import publishTelegram from "./utils/publishTelegram.js"
- */
 export default async function publishTelegram(item) {
-  // auto-routing
-  return publishDeal(item, item?.sourceType === "news" ? "auto" : "deals");
+  return publishDeal(item);
 }
 
-/**
- * Message Telegram standardisé 2026
- */
 function buildTelegramMessage(d, isNews = false) {
   const link = d.affiliateUrl || d.url || d.link || "";
-
   const badgeType = isNews ? "📰 Actu" : "🔥 Deal";
+
   const halalBadge =
     d.halal === true
       ? "✅ Halal"
