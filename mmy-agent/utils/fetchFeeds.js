@@ -1,4 +1,3 @@
-// mmy-agent/utils/fetchFeeds.js
 import Parser from "rss-parser";
 
 const parser = new Parser({
@@ -11,11 +10,8 @@ const parser = new Parser({
   },
 });
 
-// Liste de feeds :
-// - type "deal" => Telegram DEALS + Redis
-// - type "news" => Telegram AUTO (actu)
 const FEEDS = [
-  // -------- DEALS / BONS PLANS --------
+  // DEALS
   {
     url: "https://www.dealabs.com/rss/hot.xml",
     type: "deal",
@@ -41,7 +37,7 @@ const FEEDS = [
     defaultCategory: "Tech",
   },
 
-  // -------- NEWS --------
+  // NEWS
   {
     url: "https://www.lemonde.fr/rss/en_continu.xml",
     type: "news",
@@ -56,11 +52,9 @@ const FEEDS = [
   },
 ];
 
-// Normalisation (IMPORTANT: sourceType au lieu de type)
 function normalizeItem(i, feedMeta) {
   const title = (i.title || "").trim();
   const link = (i.link || i.guid || "").trim();
-
   const content =
     (i.contentSnippet ||
       i.content ||
@@ -73,9 +67,8 @@ function normalizeItem(i, feedMeta) {
     title,
     link,
     content,
-
-    // ✅ champ attendu par index.js
-    sourceType: feedMeta.type, // "deal" | "news"
+    type: feedMeta.type,          // ✅ canon
+    sourceType: feedMeta.type,    // ✅ compat ancienne
     source: feedMeta.source,
     category: feedMeta.defaultCategory,
     publishedAt: i.isoDate || i.pubDate || null,
@@ -92,10 +85,8 @@ export default async function fetchFeeds(limit = 40) {
 
       for (const item of feed.items || []) {
         const n = normalizeItem(item, f);
-
         if (!n.link || seen.has(n.link)) continue;
         seen.add(n.link);
-
         results.push(n);
       }
     } catch (err) {
