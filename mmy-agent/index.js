@@ -1,14 +1,12 @@
-// mmy-agent/index.js
 import fetchFeeds from "./utils/fetchFeeds.js";
 import summarize from "./utils/summarize.js";
 import classify from "./utils/classify.js";
 import score from "./utils/score.js";
 import publishTelegram from "./utils/publishTelegram.js";
 import { hasBeenPosted, markPosted } from "./utils/saveLog.js";
-
 import { Redis } from "@upstash/redis";
 
-// --- Redis ping (debug Railway) ---
+// --- Redis ping (debug) ---
 const redisPing = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN,
@@ -16,14 +14,6 @@ const redisPing = new Redis({
 
 async function testRedis() {
   try {
-    const urlOk = !!(
-      process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL
-    );
-    const tokenOk = !!(
-      process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN
-    );
-    console.log("[redis] env url?", urlOk, "token?", tokenOk);
-
     const pong = await redisPing.ping();
     console.log("[redis ping ✅]", pong);
 
@@ -34,7 +24,6 @@ async function testRedis() {
   }
 }
 
-// --- Helpers deals clean ---
 const DEAL_DOMAINS = ["amazon.", "aliexpress.", "ebay.", "dealabs.", "pepper."];
 
 function isDealDomain(url = "") {
@@ -60,18 +49,12 @@ async function main() {
 
   for (const item of items) {
     try {
-      // ✅ sourceType vient de fetchFeeds.js
-      const sourceType = item.sourceType || "news";
+      const type = item.type || "news";
 
-      // Anti-doublon global
       const already = await hasBeenPosted(item.link);
-      if (already) {
-        console.log("⏩ Déjà publié, on skip :", item.link);
-        continue;
-      }
+      if (already) continue;
 
-      // -------- NEWS --------
-      if (sourceType === "news") {
+      if (type === "news") {
         const summary = await summarize(item);
         const category = await classify(summary);
 
@@ -82,7 +65,7 @@ async function main() {
           summary,
           category,
           yscore,
-          sourceType: "news", // ✅ garder standard
+          type: "news",
         });
 
         await markPosted(item.link);
@@ -90,18 +73,11 @@ async function main() {
         continue;
       }
 
-      // -------- DEAL --------
-      if (sourceType === "deal") {
-        if (!isDealDomain(item.link)) {
-          console.log("🧹 Deal rejeté (domaine non autorisé):", item.link);
-          continue;
-        }
+      if (type === "deal") {
+        if (!isDealDomain(item.link)) continue;
 
         const ok = await isAlive(item.link);
-        if (!ok) {
-          console.log("🧹 Deal rejeté (lien mort):", item.link);
-          continue;
-        }
+        if (!ok) continue;
 
         const summary = await summarize(item);
         const category = await classify(summary);
@@ -113,33 +89,26 @@ async function main() {
         const isAmazon = item.link.toLowerCase().includes("amazon.");
         const minScore = isAmazon ? 85 : 75;
 
-        if (globalScore < minScore) {
-          console.log(`🟡 Deal ignoré (${globalScore} < ${minScore})`);
-          continue;
-        }
+        if (globalScore < minScore) continue;
 
         await publishTelegram({
           ...item,
           summary,
           category,
           yscore,
-          sourceType: "deal", // ✅ garder standard
+          type: "deal",
         });
 
         await markPosted(item.link);
         console.log("🔥 Deal publié");
         continue;
       }
-
-      console.log("⚠️ Item ignoré (sourceType inconnu):", sourceType, item.link);
-    } catch (error) {
-      console.error("❌ Erreur sur un item :", error);
+    } catch (e) {
+      console.error("❌ Erreur item:", e);
     }
   }
 
   console.log("✨ Cycle terminé");
 }
 
-main().catch((e) => {
-  console.error("❌ Erreur globale MMY Agent :", e);
-});
+main().catch((e) => console.error("❌ Erreur globale:", e));
