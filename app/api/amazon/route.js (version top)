@@ -1,0 +1,115 @@
+import { NextResponse } from "next/server";
+
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
+
+function json(data, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
+}
+
+function isValidASIN(asin) {
+  return /^[A-Z0-9]{8,12}$/i.test(asin);
+}
+
+export async function GET(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const asin = (searchParams.get("asin") || "").trim().toUpperCase();
+
+    if (!asin) {
+      return json({ ok: false, error: "asin_missing" }, 400);
+    }
+    if (!isValidASIN(asin)) {
+      return json({ ok: false, error: "asin_invalid", asin }, 400);
+    }
+
+    const RF_KEY = (process.env.RAINFOREST_API_KEY || "").trim();
+    const AMAZON_DOMAIN = (process.env.AMAZON_DOMAIN || "amazon.fr").trim();
+
+    if (!RF_KEY) {
+      return json({
+        ok: true,
+        route: "amazon",
+        asin,
+        mode: "mock",
+        product: {
+          asin,
+          title: "Produit mock (clé Rainforest absente)",
+          price: null,
+          images: [],
+          url: `https://${AMAZON_DOMAIN}/dp/${asin}`,
+        },
+      });
+    }
+
+    const apiUrl =
+      `https://api.rainforestapi.com/request?api_key=${encodeURIComponent(RF_KEY)}` +
+      `&type=product&amazon_domain=${encodeURIComponent(AMAZON_DOMAIN)}` +
+      `&asin=${encodeURIComponent(asin)}`;
+
+    const r = await fetch(apiUrl, { cache: "no-store" });
+    const data = await r.json().catch(() => ({}));
+
+    if (!r.ok || data.request_info?.success === false) {
+      return json({
+        ok: false,
+        route: "amazon",
+        asin,
+        error: "rainforest_error",
+        status: r.status,
+        details: data,
+      }, 502);
+    }
+
+    const p = data.product || {};
+    const images =
+      (p.main_image?.link && [p.main_image.link]) ||
+      (Array.isArray(p.images) ? p.images.map((x) => x.link).filter(Boolean) : []) ||
+      [];
+
+    return json({
+      ok: true,
+      route: "amazon",
+      asin,
+      mode: "rainforest",
+      product: {
+        asin: p.asin || asin,
+        title: p.title || null,
+        brand: p.brand || null,
+        price: p.buybox_winner?.price?.value ?? p.price?.value ?? null,
+        currency: p.buybox_winner?.price?.currency ?? p.price?.currency ?? null,
+        rating: p.rating ?? null,
+        ratings_total: p.ratings_total ?? null,
+        images,
+        url: p.link || `https://${AMAZON_DOMAIN}/dp/${asin}`,
+      },
+      raw: data, // tu peux enlever si tu veux alléger
+    });
+  } catch (e) {
+    return json({
+      ok: false,
+      error: "server_error",
+      message: e?.message || String(e),
+    }, 500);
+  }
+}
