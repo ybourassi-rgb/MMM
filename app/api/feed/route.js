@@ -12,53 +12,30 @@ const parser = new Parser({
   },
 });
 
-/* =========================
-   0) Text cleanup (mojibake)
-   ========================= */
-function cleanText(s = "") {
-  return String(s)
-    .replace(/Â°/g, "°")
-    .replace(/â‚¬/g, "€")
-    .replace(/â€™/g, "’")
-    .replace(/â€œ/g, "“")
-    .replace(/â€/g, "”")
-    .replace(/Ã /g, "à")
-    .replace(/Ã©/g, "é")
-    .replace(/Ã¨/g, "è")
-    .replace(/Ãª/g, "ê")
-    .replace(/Ã®/g, "î")
-    .replace(/Ã´/g, "ô")
-    .replace(/Ã¹/g, "ù")
-    .replace(/Ã§/g, "ç")
-    .trim();
-}
-
-/* ========================================
-   1) Dealabs thumbnails => original image
-   ======================================== */
-// thumb:
+// ✅ Dealabs met souvent des miniatures :
 // https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
-// full:
+// → on veut l’original :
 // https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/ID_1.jpg
 function upgradeDealabsImage(url) {
   if (!url) return url;
-
   try {
     const u = new URL(url);
 
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
+      u.pathname = u.pathname.replace(
+        /\/re\/\d+x\d+\/qt\/\d+\//i,
+        "/"
+      );
       return u.toString();
     }
+
     return url;
   } catch {
     return url;
   }
 }
 
-/* =========================
-   2) Pick best image in item
-   ========================= */
+// petite util pour extraire une image d’un item RSS
 function pickImage(it) {
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
@@ -74,31 +51,35 @@ function pickImage(it) {
   return null;
 }
 
-/* =========================
-   3) Normalize
-   ========================= */
-function normalizeItem(raw, i = 0) {
+function normalizeItem(raw, i = 0, forcedCategory = null) {
   const url = raw.link || raw.url || raw.guid || "";
 
   const image = pickImage(raw);
 
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
-    title: cleanText(raw.title) || "Opportunité",
+    title: raw.title?.trim() || "Opportunité",
     url,
     link: raw.link || null,
     image,
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
-    category: raw.category || raw.type || "autre",
+
+    category:
+      forcedCategory ||
+      raw.category ||
+      raw.type ||
+      "autre",
 
     margin: raw.yscore
       ? `${raw.yscore.opportunityScore ?? "—"}%`
       : raw.margin,
+
     risk: raw.yscore
       ? `${raw.yscore.riskScore ?? "—"}/100`
       : raw.risk,
+
     horizon: raw.horizon || "court terme",
 
     halal: raw.yscore
@@ -108,66 +89,119 @@ function normalizeItem(raw, i = 0) {
     affiliateUrl: raw.affiliateUrl || null,
     source: raw.source || "rss",
     publishedAt: raw.publishedAt || raw.isoDate || null,
-    summary: cleanText(raw.summary || raw.contentSnippet || ""),
+    summary: raw.summary || raw.contentSnippet || null,
   };
 }
 
-/* =========================
-   4) Sources
-   ========================= */
-const SOURCES = [
-  // ===== DEALABS (FR) =====
-  "https://www.dealabs.com/rss/hot",
-  "https://www.dealabs.com/rss/nouveaux",          // nouveaux deals
-  "https://www.dealabs.com/rss/bonnes-affaires",   // si dispo selon région
-  "https://www.dealabs.com/rss/groupe/high-tech",
-  "https://www.dealabs.com/rss/groupe/maison-jardin",
-  "https://www.dealabs.com/rss/groupe/auto-moto",
-  "https://www.dealabs.com/rss/groupe/voyages",    // bon plan voyage
+// mélange simple
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
-  // ===== E-COMMERCE / PROMOS GÉNÉRALISTES =====
-  "https://www.promocatalogues.fr/rss",            // catalogues promos
-  "https://www.radins.com/rss.xml",                // site bons plans
-  "https://www.ma-reduc.com/rss",                  // réductions & codes
-  "https://www.cuponation.fr/blog/feed",           // coupons
+// Round-robin par catégorie pour alterner (voyage / autre / voyage / autre…)
+function interleaveByCategory(items) {
+  const groups = {};
+  for (const it of items) {
+    const c = it.category || "autre";
+    if (!groups[c]) groups[c] = [];
+    groups[c].push(it);
+  }
 
-  // ===== TECH / GAMING =====
-  "https://www.generation-nt.com/rss",             // actus + deals parfois
-  "https://www.jeuxvideo.com/rss.xml",             // bons plans JV/tech
+  // on mélange chaque groupe pour éviter "bloc par source"
+  Object.values(groups).forEach(shuffle);
 
-  // ===== VOYAGES (très grand public) =====
-  "https://www.voyagespirates.fr/feed",            // Voyage Pirates FR
-  "https://www.traveldealz.fr/feed",               // grosses promos vols/hôtels
-  "https://www.dealchecker.co.uk/rss.xml",         // travel deals (EU)
-  "https://www.secretflying.com/feed/",            // erreurs tarifaires vols
+  const cats = Object.keys(groups);
+  const result = [];
+  let left = true;
 
-  // ===== AUTOMOBILE / MOBILITÉ =====
-  "https://www.caradisiac.com/rss/actualite/",     // actus auto (parfois deals)
-  "https://www.autoplus.fr/rss",                   
+  while (left) {
+    left = false;
+    for (const c of cats) {
+      const next = groups[c].shift();
+      if (next) {
+        result.push(next);
+        left = true;
+      }
+    }
+  }
 
-  // ===== IMMOBILIER / INVEST =====
-  "https://www.seloger.com/rss/annonces.xml",      // annonces immo (si dispo)
-  "https://www.pap.fr/rss.xml",                    // annonces PAP
+  return result;
+}
 
-  // ===== AJOUTE ICI TES SOURCES MAROC si tu en as =====
-  // ex: sites locaux qui ont un /feed ou /rss
-];
-
-/* =========================
-   5) GET
-   ========================= */
 export async function GET() {
   try {
-    const feeds = await Promise.allSettled(
-      SOURCES.map((u) => parser.parseURL(u))
+    // ✅ Ajoute autant de sources que tu veux
+    // tag = catégorie forçée si le RSS est trop "général"
+    const SOURCES = [
+      // -------------------- GROS DEALS GÉNÉRAUX --------------------
+      { url: "https://www.dealabs.com/rss/hot", tag: "bons-plans" },
+      { url: "https://www.dealabs.com/rss/new", tag: "bons-plans" },
+
+      // -------------------- HIGH TECH / GAMING --------------------
+      { url: "https://www.dealabs.com/groupe/high-tech/rss", tag: "high-tech" },
+      { url: "https://www.dealabs.com/groupe/informatique/rss", tag: "high-tech" },
+      { url: "https://www.dealabs.com/groupe/jeux-video/rss", tag: "gaming" },
+      { url: "https://www.dealabs.com/groupe/console/rss", tag: "gaming" },
+
+      // -------------------- MAISON / BRICOLAGE / JARDIN --------------------
+      { url: "https://www.dealabs.com/groupe/maison/rss", tag: "maison" },
+      { url: "https://www.dealabs.com/groupe/bricolage/rss", tag: "bricolage" },
+      { url: "https://www.dealabs.com/groupe/jardin/rss", tag: "jardin" },
+
+      // -------------------- MODE / SNEAKERS / BEAUTÉ --------------------
+      { url: "https://www.dealabs.com/groupe/mode/rss", tag: "mode" },
+      { url: "https://www.dealabs.com/groupe/chaussures/rss", tag: "sneakers" },
+      { url: "https://www.dealabs.com/groupe/beaute-et-parfum/rss", tag: "beaute" },
+
+      // -------------------- SUPERMARCHÉ / COURSES --------------------
+      { url: "https://www.dealabs.com/groupe/supermarche-et-alimentation/rss", tag: "courses" },
+      { url: "https://www.dealabs.com/groupe/hygiene-et-sante/rss", tag: "courses" },
+
+      // -------------------- BÉBÉ / FAMILLE --------------------
+      { url: "https://www.dealabs.com/groupe/bebe-et-enfants/rss", tag: "famille" },
+      { url: "https://www.dealabs.com/groupe/jouets/rss", tag: "famille" },
+
+      // -------------------- AUTO / MOTO --------------------
+      { url: "https://www.dealabs.com/groupe/auto-moto/rss", tag: "auto" },
+      { url: "https://www.dealabs.com/groupe/pieces-auto/rss", tag: "auto" },
+
+      // -------------------- IMMO / BUSINESS --------------------
+      { url: "https://www.dealabs.com/groupe/immobilier/rss", tag: "immo" },
+      { url: "https://www.dealabs.com/groupe/services-et-entreprises/rss", tag: "business" },
+
+      // -------------------- VOYAGE --------------------
+      { url: "https://www.dealabs.com/groupe/voyages/rss", tag: "voyage" },
+      { url: "https://www.dealabs.com/groupe/transport/rss", tag: "voyage" },
+
+      // -------------------- AUTRES SITES (OPTIONNEL) --------------------
+      // Promos vols/hotels (en général)
+      { url: "https://www.voyage-prive.com/rss/offres", tag: "voyage" },
+      // Deals variés hors Dealabs
+      { url: "https://www.hotukdeals.com/rss/hot", tag: "bons-plans" },
+    ];
+
+    const feeds = await Promise.all(
+      SOURCES.map(async ({ url, tag }) => {
+        const f = await parser.parseURL(url);
+        return { ...f, __tag: tag };
+      })
     );
 
-    const items = feeds
-      .filter((f) => f.status === "fulfilled")
-      .flatMap((f) => f.value.items || [])
-      .map(normalizeItem)
-      // ✅ on garde seulement deals AVEC lien + AVEC image
+    let items = feeds
+      .flatMap((f) =>
+        (f.items || []).map((raw, i) =>
+          normalizeItem(raw, i, f.__tag)
+        )
+      )
+      // ✅ on garde seulement ceux avec lien ET image
       .filter((it) => it.url && it.image);
+
+    // ✅ mélange alterné par catégorie
+    items = interleaveByCategory(items);
 
     return NextResponse.json({ ok: true, items, cursor: null });
   } catch (e) {
