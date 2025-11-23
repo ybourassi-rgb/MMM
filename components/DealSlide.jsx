@@ -15,18 +15,18 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link,          // Dealabs renvoie souvent "link"
+    link, // <= Dealabs
     affiliateUrl,
     halal,
   } = item || {};
 
-  // Choix du vrai lien
+  // On choisit le bon lien
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // Fallback image si cassée
+  // Image cassée → fallback
   const [imgOk, setImgOk] = useState(true);
   const finalImage = imgOk ? image : null;
 
@@ -86,7 +86,7 @@ export default function DealSlide({ item, active }) {
 
   return (
     <div className="deal-slide">
-      {/* Image/video background */}
+      {/* Media background */}
       <div className="deal-media">
         {finalImage ? (
           <Image
@@ -97,8 +97,6 @@ export default function DealSlide({ item, active }) {
             sizes="100vw"
             onError={() => setImgOk(false)}
             style={{ objectFit: "cover" }}
-            // évite un flou artificiel de Next
-            unoptimized
           />
         ) : (
           <div className="deal-media-fallback">
@@ -108,7 +106,7 @@ export default function DealSlide({ item, active }) {
         <div className="deal-gradient" />
       </div>
 
-      {/* Chips top */}
+      {/* Top chips */}
       <div className="deal-top">
         {score != null && <div className="deal-chip">Y-Score {score}</div>}
         {category && <div className="deal-chip">{category}</div>}
@@ -118,7 +116,7 @@ export default function DealSlide({ item, active }) {
         )}
       </div>
 
-      {/* Actions right */}
+      {/* Right actions */}
       <div className="deal-actions">
         <button className="action-btn" onClick={onFav}>
           ❤️<span>Favori</span>
@@ -134,7 +132,7 @@ export default function DealSlide({ item, active }) {
         </button>
       </div>
 
-      {/* Bottom */}
+      {/* Bottom infos */}
       <div className="deal-bottom">
         <h2 className="deal-title">{title}</h2>
         {price && <p className="deal-price">Prix: {price}</p>}
@@ -146,12 +144,14 @@ export default function DealSlide({ item, active }) {
               <div className="metric-value green">{margin}</div>
             </div>
           )}
+
           {risk && (
             <div className="metric">
               <div className="metric-title">Risque</div>
               <div className="metric-value orange">{risk}</div>
             </div>
           )}
+
           {horizon && (
             <div className="metric">
               <div className="metric-title">Horizon</div>
