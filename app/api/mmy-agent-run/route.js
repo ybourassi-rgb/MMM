@@ -11,6 +11,8 @@ function json(data, status = 200) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
+      "Pragma": "no-cache",
+      "Expires": "0",
     },
   });
 }
@@ -18,12 +20,8 @@ function json(data, status = 200) {
 // 🔒 Bloque toute exécution pendant le build Vercel/Next
 function isBuildTime() {
   const phase = process.env.NEXT_PHASE || "";
-  // phase-production-build pendant `next build`
   if (phase.includes("production-build")) return true;
-
-  // sécurité Vercel (rare mais utile)
   if (process.env.VERCEL_BUILD_STEP === "1") return true;
-
   return false;
 }
 
