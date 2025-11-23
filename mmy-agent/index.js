@@ -4,7 +4,7 @@ import summarize from "./utils/summarize.js";
 import classify from "./utils/classify.js";
 import score from "./utils/score.js";
 import publishTelegram from "./utils/publishTelegram.js";
-import saveLog, { hasBeenPosted, markPosted } from "./utils/saveLog.js";
+import { hasBeenPosted, markPosted } from "./utils/saveLog.js";
 
 import { Redis } from "@upstash/redis";
 
@@ -53,37 +53,35 @@ async function isAlive(url) {
 async function main() {
   console.log("🚀 MMY Agent : cycle démarré");
 
-  // ✅ ping Redis immédiat Railway
   await testRedis();
 
-  // 1. RÉCUPÉRATION DES FLUX
   const items = await fetchFeeds();
   console.log(`📡 ${items.length} éléments récupérés`);
 
   for (const item of items) {
     try {
-      const sourceType = item.sourceType || "news"; // sécurité
+      const sourceType = item.type || "news"; // ✅ FIX
 
-      // --- NEWS FLOW ---
+      // Anti-doublon global
+      const already = await hasBeenPosted(item.link);
+      if (already) {
+        console.log("⏩ Déjà publié, on skip :", item.link);
+        continue;
+      }
+
+      // -------- NEWS --------
       if (sourceType === "news") {
-        // anti-doublon news (optionnel)
-        const already = await hasBeenPosted(item.link);
-        if (already) continue;
-
         const summary = await summarize(item);
         const category = await classify(summary);
 
-        // score light (facultatif) — on ne filtre pas strictement
         const yscore = await score(item.link, summary, category).catch(() => null);
 
         await publishTelegram({
-          title: item.title,
-          link: item.link,
+          ...item,
           summary,
           category,
           yscore,
-          sourceType: "news",
-          source: item.source,
+          type: "news",  // garde clair
         });
 
         await markPosted(item.link);
@@ -91,40 +89,26 @@ async function main() {
         continue;
       }
 
-      // --- DEAL FLOW ---
+      // -------- DEAL --------
       if (sourceType === "deal") {
-        // 1) anti-doublon deal
-        const already = await hasBeenPosted(item.link);
-        if (already) {
-          console.log("⏩ Déjà publié, on skip :", item.link);
-          continue;
-        }
-
-        // 2) allowlist domaine
         if (!isDealDomain(item.link)) {
           console.log("🧹 Deal rejeté (domaine non autorisé):", item.link);
           continue;
         }
 
-        // 3) lien vivant
         const ok = await isAlive(item.link);
         if (!ok) {
           console.log("🧹 Deal rejeté (lien mort):", item.link);
           continue;
         }
 
-        // 4) résumé + classification
         const summary = await summarize(item);
         const category = await classify(summary);
 
-        // 5) scoring complet
         const yscore = await score(item.link, summary, category);
         const globalScore =
           typeof yscore?.globalScore === "number" ? yscore.globalScore : 0;
 
-        console.log("📊 Score reçu :", yscore);
-
-        // 6) filtre score (plus strict pour Amazon)
         const isAmazon = item.link.toLowerCase().includes("amazon.");
         const minScore = isAmazon ? 85 : 75;
 
@@ -133,37 +117,20 @@ async function main() {
           continue;
         }
 
-        console.log(`🔥 Deal détecté (${globalScore}) → publication`);
-
-        // 7) Telegram + Redis deals (fait dans publishTelegram)
         await publishTelegram({
-          title: item.title,
-          link: item.link,
+          ...item,
           summary,
           category,
           yscore,
-          sourceType: "deal",
-          source: item.source,
+          type: "deal", // garde clair
         });
 
-        // 8) log secondaire (optionnel)
-        await saveLog({
-          title: item.title,
-          category,
-          yscore,
-          link: item.link,
-        });
-
-        // 9) marquer posté
         await markPosted(item.link);
-
-        console.log("✅ Deal publié");
+        console.log("🔥 Deal publié");
         continue;
       }
 
-      // si sourceType inconnu
-      console.log("⚠️ Item ignoré (sourceType inconnu):", sourceType, item.link);
-
+      console.log("⚠️ Item ignoré (type inconnu):", sourceType, item.link);
     } catch (error) {
       console.error("❌ Erreur sur un item :", error);
     }
