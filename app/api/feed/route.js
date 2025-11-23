@@ -12,15 +12,21 @@ const parser = new Parser({
   },
 });
 
-// ====== Dealabs thumbnails -> full size ======
+// ==============================
+// Utils
+// ==============================
+
+// Dealabs met souvent des miniatures (150x150). On les upgrade.
 function upgradeDealabsImage(url) {
   if (!url) return url;
   try {
     const u = new URL(url);
 
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      // supprime /re/150x150/qt/55/ etc.
-      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
+      u.pathname = u.pathname.replace(
+        /\/re\/\d+x\d+\/qt\/\d+\//i,
+        "/"
+      );
       return u.toString();
     }
     return url;
@@ -29,55 +35,33 @@ function upgradeDealabsImage(url) {
   }
 }
 
-// ====== Ignore images "fake" / default ======
-function isUsableImage(url) {
-  if (!url) return false;
-
-  const lower = url.toLowerCase();
-
-  // pas d'images vectorielles / placeholders
-  if (lower.endsWith(".svg")) return false;
-
-  // Dealabs default image
-  if (lower.includes("default-voucher")) return false;
-
-  // si c'est clairement une icone générique
-  if (lower.includes("placeholder")) return false;
-
-  return true;
-}
-
-// ====== Extract image from RSS item ======
+// Parse une image depuis RSS
 function pickImage(it) {
   const mc = it.mediaContent;
-  let img = null;
+  if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
+  if (Array.isArray(mc) && mc[0]?.$?.url)
+    return upgradeDealabsImage(mc[0].$?.url);
 
-  if (mc?.$?.url) img = mc.$.url;
-  if (!img && Array.isArray(mc) && mc[0]?.$?.url) img = mc[0].$?.url;
+  if (it.enclosure?.url) return upgradeDealabsImage(it.enclosure.url);
 
-  if (!img && it.enclosure?.url) img = it.enclosure.url;
+  const html = it.contentEncoded || it.content || "";
+  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (match?.[1]) return upgradeDealabsImage(match[1]);
 
-  if (!img) {
-    const html = it.contentEncoded || it.content || "";
-    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-    if (match?.[1]) img = match[1];
-  }
-
-  img = upgradeDealabsImage(img);
-
-  return isUsableImage(img) ? img : null;
+  return null;
 }
 
-// ====== Normalize item to your UI format ======
-function normalizeItem(raw, i = 0) {
+// Normalisation d’un item
+function normalizeItem(raw, i = 0, sourceName = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
+  const image = pickImage(raw);
 
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
     url,
     link: raw.link || null,
-    image: pickImage(raw),
+    image,
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
@@ -96,41 +80,95 @@ function normalizeItem(raw, i = 0) {
       : raw.halal ?? null,
 
     affiliateUrl: raw.affiliateUrl || null,
-    source: raw.source || "rss",
+    source: sourceName,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
 }
 
+// Mélange "propre" pour intercaler voyage / autres
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Fetch RSS avec timeout + fallback
+async function parseWithTimeout(url, timeoutMs = 8000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    // rss-parser ne supporte pas AbortController directement,
+    // donc on fetch nous-même puis parseString
+    const res = await fetch(url, {
+      signal: ac.signal,
+      headers: { "User-Agent": "MMM-FeedBot/1.0" },
+      cache: "no-store",
+    });
+    const xml = await res.text();
+    return await parser.parseString(xml);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// ==============================
+// GET
+// ==============================
 export async function GET() {
   try {
+    // 🚀 MAX sources : Deals + Voyage + Auto/Occasion + Immo + Tech + Jeux + Divers
     const SOURCES = [
-      // ===== Hot deals =====
-      "https://www.dealabs.com/rss/hot",
+      // ----- DEALS GÉNÉRALISTES -----
+      { name: "dealabs-hot", url: "https://www.dealabs.com/rss/hot" },
+      { name: "dealabs-new", url: "https://www.dealabs.com/rss/nouveau" },
+      { name: "hotukdeals", url: "https://www.hotukdeals.com/rss/hot" },
+      { name: "mydealz", url: "https://www.mydealz.de/rss/hot" },
 
-      // ===== Voyages (mix) =====
-      "https://www.voyagespirates.fr/rss/top",
-      "https://www.fly4free.com/feed/",
-      "https://www.secretflying.com/posts/feed/",
+      // ----- TECH / GAMING / HIGH-TECH -----
+      { name: "frandroid", url: "https://www.frandroid.com/feed" },
+      { name: "hitek", url: "https://hitek.fr/rss/actualite" },
+      { name: "jeuxvideo", url: "https://www.jeuxvideo.com/rss/rss.xml" },
 
-      // ===== Marketplace / “comme leboncoin / FB” =====
-      // (tu peux ajouter tes propres sources ici)
-      // ex: rss de petites annonces si tu en as
+      // ----- VOYAGE / BONS PLANS VOYAGE -----
+      { name: "voyage-dealabs", url: "https://www.dealabs.com/groupe/voyages/rss" },
+      { name: "secretflying", url: "https://www.secretflying.com/feed/" },
+      { name: "voyagereddit", url: "https://www.reddit.com/r/traveldeals/.rss" },
+
+      // ----- AUTO / OCCASION / MOBILITÉ -----
+      { name: "leboncoin-auto", url: "https://www.leboncoin.fr/rss/voitures.xml" },
+      { name: "leboncoin-moto", url: "https://www.leboncoin.fr/rss/motos.xml" },
+
+      // ----- IMMO / INVEST -----
+      { name: "leboncoin-immo", url: "https://www.leboncoin.fr/rss/locations.xml" },
+
+      // ----- DIVERS POPULAIRES -----
+      { name: "ikea", url: "https://www.ikea.com/fr/fr/rss/" },
+      { name: "steamdeals", url: "https://store.steampowered.com/feeds/daily_deals.xml" },
     ];
 
-    const feeds = await Promise.all(
-      SOURCES.map((u) => parser.parseURL(u))
+    // On parse tout sans bloquer si un flux crash
+    const feeds = await Promise.allSettled(
+      SOURCES.map(async (s) => {
+        const f = await parseWithTimeout(s.url, 8000);
+        return { source: s.name, items: f.items || [] };
+      })
     );
 
+    // Normalise + flatten
     let items = feeds
-      .flatMap((f) => f.items || [])
-      .map(normalizeItem);
+      .filter((r) => r.status === "fulfilled")
+      .flatMap((r) => r.value.items.map((it, i) => normalizeItem(it, i, r.value.source)));
 
-    // ✅ 1) garde seulement ceux avec lien + image valide
+    // ✅ SUPPRIMER ceux sans lien OU sans image
     items = items.filter((it) => it.url && it.image);
 
-    // ✅ 2) petit mélange pour intercaler voyage/tech/etc
-    items = items.sort(() => Math.random() - 0.5);
+    // Mélange global
+    items = shuffle(items);
 
     return NextResponse.json({ ok: true, items, cursor: null });
   } catch (e) {
