@@ -4,10 +4,7 @@ import summarize from "./utils/summarize.js";
 import classify from "./utils/classify.js";
 import score from "./utils/score.js";
 import publishTelegram from "./utils/publishTelegram.js";
-import saveLog, {
-  hasBeenPosted,
-  markPosted,
-} from "./utils/saveLog.js";
+import saveLog, { hasBeenPosted, markPosted } from "./utils/saveLog.js";
 
 import { Redis } from "@upstash/redis";
 
@@ -37,10 +34,26 @@ async function testRedis() {
   }
 }
 
+// --- Helpers deals clean ---
+const DEAL_DOMAINS = ["amazon.", "aliexpress.", "ebay.", "dealabs.", "pepper."];
+
+function isDealDomain(url = "") {
+  return DEAL_DOMAINS.some((d) => url.toLowerCase().includes(d));
+}
+
+async function isAlive(url) {
+  try {
+    const r = await fetch(url, { method: "HEAD", redirect: "follow" });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   console.log("🚀 MMY Agent : cycle démarré");
 
-  // ✅ Ping Redis immédiat Railway
+  // ✅ ping Redis immédiat Railway
   await testRedis();
 
   // 1. RÉCUPÉRATION DES FLUX
@@ -49,40 +62,91 @@ async function main() {
 
   for (const item of items) {
     try {
-      // 2. ANTI-DOUBLON : si le lien a déjà été publié, on skip
-      const already = await hasBeenPosted(item.link);
-      if (already) {
-        console.log("⏩ Déjà publié, on skip :", item.link);
-        continue;
-      }
+      const sourceType = item.sourceType || "news"; // sécurité
 
-      // 3. RÉSUMÉ
-      const summary = await summarize(item);
+      // --- NEWS FLOW ---
+      if (sourceType === "news") {
+        // anti-doublon news (optionnel)
+        const already = await hasBeenPosted(item.link);
+        if (already) continue;
 
-      // 4. CLASSIFICATION
-      const category = await classify(summary);
+        const summary = await summarize(item);
+        const category = await classify(summary);
 
-      // 5. SCORING AVEC Y-SCORE
-      const yscore = await score(item.link, summary, category);
-      const globalScore =
-        typeof yscore?.globalScore === "number" ? yscore.globalScore : 0;
+        // score light (facultatif) — on ne filtre pas strictement
+        const yscore = await score(item.link, summary, category).catch(() => null);
 
-      console.log("📊 Score reçu :", yscore);
-
-      // 6. FILTRE SUR LE SCORE
-      if (globalScore >= 75) {
-        console.log(`🔥 Deal détecté (${globalScore}) → publication`);
-
-        // 7. ENVOI TELEGRAM
         await publishTelegram({
           title: item.title,
           link: item.link,
           summary,
           category,
           yscore,
+          sourceType: "news",
+          source: item.source,
         });
 
-        // 8. LOG
+        await markPosted(item.link);
+        console.log("📰 News publiée");
+        continue;
+      }
+
+      // --- DEAL FLOW ---
+      if (sourceType === "deal") {
+        // 1) anti-doublon deal
+        const already = await hasBeenPosted(item.link);
+        if (already) {
+          console.log("⏩ Déjà publié, on skip :", item.link);
+          continue;
+        }
+
+        // 2) allowlist domaine
+        if (!isDealDomain(item.link)) {
+          console.log("🧹 Deal rejeté (domaine non autorisé):", item.link);
+          continue;
+        }
+
+        // 3) lien vivant
+        const ok = await isAlive(item.link);
+        if (!ok) {
+          console.log("🧹 Deal rejeté (lien mort):", item.link);
+          continue;
+        }
+
+        // 4) résumé + classification
+        const summary = await summarize(item);
+        const category = await classify(summary);
+
+        // 5) scoring complet
+        const yscore = await score(item.link, summary, category);
+        const globalScore =
+          typeof yscore?.globalScore === "number" ? yscore.globalScore : 0;
+
+        console.log("📊 Score reçu :", yscore);
+
+        // 6) filtre score (plus strict pour Amazon)
+        const isAmazon = item.link.toLowerCase().includes("amazon.");
+        const minScore = isAmazon ? 85 : 75;
+
+        if (globalScore < minScore) {
+          console.log(`🟡 Deal ignoré (${globalScore} < ${minScore})`);
+          continue;
+        }
+
+        console.log(`🔥 Deal détecté (${globalScore}) → publication`);
+
+        // 7) Telegram + Redis deals (fait dans publishTelegram)
+        await publishTelegram({
+          title: item.title,
+          link: item.link,
+          summary,
+          category,
+          yscore,
+          sourceType: "deal",
+          source: item.source,
+        });
+
+        // 8) log secondaire (optionnel)
         await saveLog({
           title: item.title,
           category,
@@ -90,11 +154,16 @@ async function main() {
           link: item.link,
         });
 
-        // 9. ENREGISTRER LE LIEN COMME DÉJÀ PUBLIÉ
+        // 9) marquer posté
         await markPosted(item.link);
-      } else {
-        console.log(`🟡 Ignoré (${globalScore})`);
+
+        console.log("✅ Deal publié");
+        continue;
       }
+
+      // si sourceType inconnu
+      console.log("⚠️ Item ignoré (sourceType inconnu):", sourceType, item.link);
+
     } catch (error) {
       console.error("❌ Erreur sur un item :", error);
     }
