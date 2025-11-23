@@ -41,10 +41,14 @@ function isDealDomain(url = "") {
   return DEAL_DOMAINS.some((d) => url.toLowerCase().includes(d));
 }
 
+// ✅ HEAD + fallback GET (évite les faux "dead links" sur Amazon & co)
 async function isAlive(url) {
   try {
     const r = await fetch(url, { method: "HEAD", redirect: "follow" });
-    return r.ok;
+    if (r.ok) return true;
+
+    const r2 = await fetch(url, { method: "GET", redirect: "follow" });
+    return r2.ok;
   } catch {
     return false;
   }
