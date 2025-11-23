@@ -15,18 +15,19 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link,          // <= Dealabs
+    link,          // dealabs
     affiliateUrl,
     halal,
+    summary,        // <-- on affiche le résumé si présent
   } = item || {};
 
-  // 1) Lien final fiable
+  // lien final robuste
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // 2) Image cassée => fallback
+  // image cassée => fallback
   const [imgOk, setImgOk] = useState(true);
   const finalImage = imgOk ? image : null;
 
@@ -64,6 +65,7 @@ export default function DealSlide({ item, active }) {
 
   const onAnalyze = () => {
     console.log("Analyze:", item);
+    // Plus tard: ouvrir modal Y-Score
   };
 
   const onShare = async () => {
@@ -82,53 +84,42 @@ export default function DealSlide({ item, active }) {
 
   const onFav = () => {
     console.log("Fav:", item);
+    // Plus tard: save profil Upstash
   };
 
   return (
     <div className="deal-slide">
-      {/* MEDIA */}
+      {/* MEDIA TOP (plus petit) */}
       <div className="deal-media">
-        {/* Fond flou / cover (style) */}
-        {finalImage && (
-          <div
-            className="deal-media-bg"
-            style={{ backgroundImage: `url(${finalImage})` }}
-          />
-        )}
-
-        {/* Image principale plus petite */}
         {finalImage ? (
-          <div className="deal-media-main">
-            <Image
-              src={finalImage}
-              alt={title}
-              fill
-              priority={active}
-              sizes="100vw"
-              onError={() => setImgOk(false)}
-              style={{ objectFit: "contain", objectPosition: "center" }}
-            />
-          </div>
+          <Image
+            src={finalImage}
+            alt={title}
+            fill
+            priority={active}
+            sizes="100vw"
+            onError={() => setImgOk(false)}
+            style={{ objectFit: "contain" }}  // <- mieux pour éviter le gros zoom
+          />
         ) : (
           <div className="deal-media-fallback">
             {image ? "Image indisponible" : "PHOTO / MINI-VIDÉO"}
           </div>
         )}
-
         <div className="deal-gradient" />
+
+        {/* Chips sur l’image */}
+        <div className="deal-top">
+          {score != null && <div className="deal-chip">Y-Score {score}</div>}
+          {category && <div className="deal-chip">{category}</div>}
+          {city && <div className="deal-chip">{city}</div>}
+          {halal != null && (
+            <div className="deal-chip">{halal ? "Halal ✅" : "Non Halal ⚠️"}</div>
+          )}
+        </div>
       </div>
 
-      {/* TOP CHIPS */}
-      <div className="deal-top">
-        {score != null && <div className="deal-chip">Y-Score {score}</div>}
-        {category && <div className="deal-chip">{category}</div>}
-        {city && <div className="deal-chip">{city}</div>}
-        {halal != null && (
-          <div className="deal-chip">{halal ? "Halal ✅" : "Non Halal ⚠️"}</div>
-        )}
-      </div>
-
-      {/* ACTIONS */}
+      {/* ACTIONS RIGHT */}
       <div className="deal-actions">
         <button className="action-btn" onClick={onFav}>
           ❤️<span>Favori</span>
@@ -144,10 +135,17 @@ export default function DealSlide({ item, active }) {
         </button>
       </div>
 
-      {/* BOTTOM */}
-      <div className="deal-bottom">
+      {/* CONTENT BOTTOM (texte article mieux lisible) */}
+      <div className="deal-content">
         <h2 className="deal-title">{title}</h2>
+
         {price && <p className="deal-price">Prix: {price}</p>}
+
+        {summary && (
+          <p className="deal-summary">
+            {summary}
+          </p>
+        )}
 
         <div className="deal-metrics">
           {margin && (
@@ -179,36 +177,18 @@ export default function DealSlide({ item, active }) {
           width: 100%;
           position: relative;
           color: #fff;
+          background: #0b1020;
+          display: flex;
+          flex-direction: column;
         }
 
+        /* ===== MEDIA ===== */
         .deal-media {
-          position: absolute;
-          inset: 0;
+          position: relative;
+          width: 100%;
+          height: 45vh; /* <- baisse à 40vh si tu veux encore plus petit */
           background: #0b1020;
           overflow: hidden;
-        }
-
-        /* Fond blur cover */
-        .deal-media-bg {
-          position: absolute;
-          inset: 0;
-          background-size: cover;
-          background-position: center;
-          filter: blur(18px);
-          transform: scale(1.1);
-          opacity: 0.55;
-        }
-
-        /* Zone image principale PLUS PETITE */
-        .deal-media-main {
-          position: absolute;
-          top: 110px;         /* descend un peu sous le header */
-          left: 0;
-          right: 0;
-          height: 50vh;       /* ✅ taille image */
-          margin: 0 auto;
-          padding: 10px 18px; /* un peu d’air */
-          z-index: 1;
         }
 
         .deal-media-fallback {
@@ -224,28 +204,22 @@ export default function DealSlide({ item, active }) {
         .deal-gradient {
           position: absolute;
           inset: 0;
-          background: radial-gradient(
-              900px 600px at 50% 0%,
-              rgba(0, 0, 0, 0.15),
-              transparent 55%
-            ),
-            linear-gradient(
-              180deg,
-              rgba(0, 0, 0, 0.05),
-              rgba(0, 0, 0, 0.9)
-            );
-          z-index: 2;
+          background:
+            radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.15), transparent 55%),
+            linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.6));
+          pointer-events: none;
         }
 
         .deal-top {
           position: absolute;
-          top: 72px;
-          left: 14px;
+          top: 12px;
+          left: 12px;
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
-          z-index: 3;
+          z-index: 2;
         }
+
         .deal-chip {
           display: inline-flex;
           align-items: center;
@@ -259,15 +233,17 @@ export default function DealSlide({ item, active }) {
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
         }
 
+        /* ===== ACTIONS ===== */
         .deal-actions {
           position: absolute;
           right: 10px;
-          bottom: 150px;
+          top: calc(45vh + 10px);
           display: flex;
           flex-direction: column;
           gap: 12px;
           z-index: 3;
         }
+
         .action-btn {
           background: rgba(0, 0, 0, 0.5);
           border: 1px solid rgba(255, 255, 255, 0.12);
@@ -282,41 +258,59 @@ export default function DealSlide({ item, active }) {
           min-width: 56px;
           backdrop-filter: blur(6px);
         }
+
         .action-btn span {
           font-size: 11px;
           opacity: 0.9;
           font-weight: 600;
         }
+
         .action-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
 
-        .deal-bottom {
-          position: absolute;
-          left: 14px;
-          right: 78px;
-          bottom: 90px;
-          z-index: 3;
+        /* ===== CONTENT ===== */
+        .deal-content {
+          position: relative;
+          flex: 1;
+          padding: 12px 78px 18px 14px; /* right space for buttons */
+          overflow: auto;               /* scroll si texte long */
         }
+
         .deal-title {
-          font-size: 20px;
+          font-size: 18px;  /* <- écriture article un peu plus petite */
           font-weight: 800;
-          line-height: 1.15;
-          text-shadow: 0 6px 18px rgba(0, 0, 0, 0.8);
+          line-height: 1.2;
+          margin: 0;
+          text-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
         }
+
         .deal-price {
           margin-top: 6px;
           font-size: 14px;
           opacity: 0.9;
         }
 
+        .deal-summary {
+          margin-top: 8px;
+          font-size: 13px;
+          line-height: 1.45;
+          color: rgba(255,255,255,0.8);
+          max-height: 6.5em;          /* ~4-5 lignes */
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-line-clamp: 5;
+          -webkit-box-orient: vertical;
+        }
+
         .deal-metrics {
-          margin-top: 10px;
+          margin-top: 12px;
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
         }
+
         .metric {
           background: rgba(0, 0, 0, 0.5);
           border: 1px solid rgba(255, 255, 255, 0.12);
@@ -324,20 +318,19 @@ export default function DealSlide({ item, active }) {
           border-radius: 12px;
           min-width: 95px;
         }
+
         .metric-title {
           font-size: 12px;
           opacity: 0.8;
         }
+
         .metric-value {
           font-weight: 800;
           margin-top: 4px;
         }
-        .metric-value.green {
-          color: #00e389;
-        }
-        .metric-value.orange {
-          color: #ffbb55;
-        }
+
+        .metric-value.green { color: #00e389; }
+        .metric-value.orange { color: #ffbb55; }
       `}</style>
     </div>
   );
