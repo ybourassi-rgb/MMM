@@ -15,19 +15,17 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link, // Dealabs renvoie souvent "link"
+    link,
     affiliateUrl,
     halal,
     summary,
   } = item || {};
 
-  // ✅ lien final robuste (affiliate > url > link)
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // ✅ image cassée => fallback
   const [imgOk, setImgOk] = useState(true);
   const finalImage = imgOk ? image : null;
 
@@ -54,29 +52,16 @@ export default function DealSlide({ item, active }) {
     }
   };
 
-  /**
-   * ✅ IMPORTANT pour mobile/Safari:
-   * - On ouvre le lien DIRECTEMENT dans le handler (sans await avant),
-   *   sinon certains navigateurs bloquent le popup.
-   * - On track après, en "fire-and-forget".
-   */
   const onSee = () => {
     if (!finalUrl) return;
-
-    // 1) ouvre direct
     openLink(finalUrl);
-
-    // 2) track après sans bloquer
     try {
       const domain = new URL(finalUrl).hostname;
-      trackClick(domain); // pas de await
+      trackClick(domain);
     } catch {}
   };
 
-  const onAnalyze = () => {
-    console.log("Analyze:", item);
-    // plus tard: ouvrir modal Y-Score
-  };
+  const onAnalyze = () => console.log("Analyze:", item);
 
   const onShare = async () => {
     const l = finalUrl || "";
@@ -92,10 +77,7 @@ export default function DealSlide({ item, active }) {
     }
   };
 
-  const onFav = () => {
-    console.log("Fav:", item);
-    // plus tard: save profil Upstash
-  };
+  const onFav = () => console.log("Fav:", item);
 
   return (
     <div className="deal-slide">
@@ -109,17 +91,17 @@ export default function DealSlide({ item, active }) {
             priority={active}
             sizes="100vw"
             onError={() => setImgOk(false)}
-            style={{ objectFit: "contain" }} // évite le zoom grossier
+            style={{ objectFit: "contain" }}
+            unoptimized   // ✅ IMPORTANT : stop Next optimizer
           />
         ) : (
           <div className="deal-media-fallback">
-            {image ? "Image indisponible" : "PHOTO / MINI-VIDÉO"}
+            {image ? "Image indisponible" : "Visuel disponible dans le lien 🔗"}
           </div>
         )}
 
         <div className="deal-gradient" />
 
-        {/* Chips sur l’image */}
         <div className="deal-top">
           {score != null && <div className="deal-chip">Y-Score {score}</div>}
           {category && <div className="deal-chip">{category}</div>}
@@ -151,7 +133,6 @@ export default function DealSlide({ item, active }) {
         <h2 className="deal-title">{title}</h2>
 
         {price && <p className="deal-price">Prix: {price}</p>}
-
         {summary && <p className="deal-summary">{summary}</p>}
 
         <div className="deal-metrics">
@@ -161,14 +142,12 @@ export default function DealSlide({ item, active }) {
               <div className="metric-value green">{margin}</div>
             </div>
           )}
-
           {risk && (
             <div className="metric">
               <div className="metric-title">Risque</div>
               <div className="metric-value orange">{risk}</div>
             </div>
           )}
-
           {horizon && (
             <div className="metric">
               <div className="metric-title">Horizon</div>
@@ -189,11 +168,10 @@ export default function DealSlide({ item, active }) {
           flex-direction: column;
         }
 
-        /* ===== MEDIA ===== */
         .deal-media {
           position: relative;
           width: 100%;
-          height: 45vh; /* mets 40vh si tu veux l'image encore plus petite */
+          height: 45vh;
           background: #0b1020;
           overflow: hidden;
         }
@@ -205,7 +183,7 @@ export default function DealSlide({ item, active }) {
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          opacity: 0.6;
+          opacity: 0.7;
         }
 
         .deal-gradient {
@@ -240,11 +218,10 @@ export default function DealSlide({ item, active }) {
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
         }
 
-        /* ===== ACTIONS ===== */
         .deal-actions {
           position: absolute;
           right: 10px;
-          top: calc(45vh - 100px); /* ✅ icônes encore plus hautes */
+          top: calc(45vh - 100px);
           display: flex;
           flex-direction: column;
           gap: 12px;
@@ -277,11 +254,10 @@ export default function DealSlide({ item, active }) {
           cursor: not-allowed;
         }
 
-        /* ===== CONTENT ===== */
         .deal-content {
           position: relative;
           flex: 1;
-          padding: 12px 78px 18px 14px; /* place à droite pour boutons */
+          padding: 12px 78px 18px 14px;
           overflow: auto;
         }
 
