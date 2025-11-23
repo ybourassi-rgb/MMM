@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildAffiliateRedirect } from "@/lib/affiliations.js";
+import { buildAffiliateRedirect } from "../../../lib/affiliations.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ function json(data, status = 200) {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
+      "Content-Type": "application/json; charset=utf-8",
     },
   });
 }
@@ -32,7 +33,7 @@ export async function GET(req) {
 
   const url = searchParams.get("url");
   const platform = searchParams.get("platform");
-  const product = searchParams.get("product"); // pas utilisé ici mais on le garde
+  const product = searchParams.get("product"); // gardé pour tracking futur
   const redirect = searchParams.get("redirect");
 
   // MODE 1 — génération du lien affilié
@@ -49,6 +50,7 @@ export async function GET(req) {
         ok: true,
         link: finalLink,
         original: url,
+        ts: Date.now(),
       });
     } catch (e) {
       console.error("track generate error:", e);
