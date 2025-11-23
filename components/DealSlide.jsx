@@ -15,19 +15,21 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link, // Dealabs renvoie souvent "link"
+    link,
     affiliateUrl,
     halal,
   } = item || {};
 
-  // 1) On choisit le bon lien même si l’API renvoie "link"
+  // Choix du lien final (affiliate > url > link)
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // 2) Gestion image cassée → fallback propre
+  // Gestion erreurs images
   const [imgOk, setImgOk] = useState(true);
+  const [forceNativeImg, setForceNativeImg] = useState(false);
+
   const finalImage = imgOk ? image : null;
 
   const openLink = (l) => {
@@ -64,7 +66,6 @@ export default function DealSlide({ item, active }) {
 
   const onAnalyze = () => {
     console.log("Analyze:", item);
-    // Plus tard: ouvrir modal Y-Score
   };
 
   const onShare = async () => {
@@ -83,7 +84,6 @@ export default function DealSlide({ item, active }) {
 
   const onFav = () => {
     console.log("Fav:", item);
-    // Plus tard: save profil Upstash
   };
 
   return (
@@ -91,17 +91,30 @@ export default function DealSlide({ item, active }) {
       {/* Media background */}
       <div className="deal-media">
         {finalImage ? (
-          <Image
-            src={finalImage}
-            alt={title}
-            fill
-            priority={active}
-            sizes="100vw"
-            quality={100}        // ✅ qualité max
-            unoptimized          // ✅ évite blur Next sur miniatures
-            onError={() => setImgOk(false)}
-            style={{ objectFit: "cover" }}
-          />
+          forceNativeImg ? (
+            // ✅ fallback ultime : pas de block domaine
+            <img
+              src={finalImage}
+              alt={title}
+              onError={() => setImgOk(false)}
+              className="native-img"
+            />
+          ) : (
+            // ✅ Next/Image si domaine autorisé
+            <Image
+              src={finalImage}
+              alt={title}
+              fill
+              priority={active}
+              sizes="100vw"
+              quality={100}
+              onError={() => {
+                // si Next bloque en prod => on passe en <img>
+                setForceNativeImg(true);
+              }}
+              style={{ objectFit: "cover" }}
+            />
+          )
         ) : (
           <div className="deal-media-fallback">
             {image ? "Image indisponible" : "PHOTO / MINI-VIDÉO"}
@@ -165,7 +178,6 @@ export default function DealSlide({ item, active }) {
         </div>
       </div>
 
-      {/* Styles DealSlide (isolés) */}
       <style jsx>{`
         .deal-slide {
           height: 100%;
@@ -179,6 +191,13 @@ export default function DealSlide({ item, active }) {
           inset: 0;
           background: #0b1020;
         }
+
+        .native-img{
+          position:absolute; inset:0;
+          width:100%; height:100%;
+          object-fit:cover;
+        }
+
         .deal-media-fallback {
           position: absolute;
           inset: 0;
@@ -265,6 +284,7 @@ export default function DealSlide({ item, active }) {
           bottom: 90px;
           z-index: 2;
         }
+
         .deal-title {
           font-size: 20px;
           font-weight: 800;
