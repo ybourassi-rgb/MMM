@@ -81,13 +81,8 @@ export default function DealCard({ item, active }) {
     }
   };
 
-  const onFav = () => {
-    console.log("Fav:", item);
-  };
-
-  const onAnalyze = () => {
-    console.log("Analyze:", item);
-  };
+  const onFav = () => console.log("Fav:", item);
+  const onAnalyze = () => console.log("Analyze:", item);
 
   return (
     <div className={`card ${active ? "active" : ""}`}>
@@ -167,9 +162,7 @@ export default function DealCard({ item, active }) {
         {!!tags?.length && (
           <div className="tags">
             {tags.map((t) => (
-              <span key={t} className="tag">
-                {t}
-              </span>
+              <span key={t} className="tag">{t}</span>
             ))}
           </div>
         )}
@@ -238,12 +231,11 @@ export default function DealCard({ item, active }) {
 
         .mediaLabel{opacity:.8; z-index:2}
 
-        /* ✅ ICI ON REMONTE LES ICONES */
+        /* ✅ ICI: on remonte les icônes */
         .actions{
           position:absolute;
           right:8px;
-          top:52%;                 /* au milieu de l’écran */
-          transform: translateY(-52%);
+          top:180px;           /* 👈 remonte */
           display:grid;
           gap:10px;
           z-index:3;
@@ -252,7 +244,8 @@ export default function DealCard({ item, active }) {
         .abtn{
           width:56px;height:56px;border-radius:14px;
           background:#0b1124;border:1px solid #1b2440;
-          display:grid;place-items:center;color:#e9ecf5;font-size:20px;
+          display:grid;place-items:center;
+          color:#e9ecf5;font-size:20px;
           backdrop-filter: blur(6px);
         }
         .abtn small{font-size:10px;color:#b9c2d8;margin-top:2px}
@@ -263,8 +256,8 @@ export default function DealCard({ item, active }) {
         .sub{margin:0;color:#8b93a7;font-size:13px}
         .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
         .kpi{
-          background:#0c1226;border:1px solid #1a2340;
-          border-radius:12px;padding:8px;font-size:12px
+          background:#0c1226;border:1px solid #1a2340;border-radius:12px;
+          padding:8px;font-size:12px
         }
         .kpi b{display:block;font-size:15px;margin-top:2px}
         .good{color:#18d47b}
@@ -278,8 +271,8 @@ export default function DealCard({ item, active }) {
 
         .cta{display:flex;gap:8px;margin-top:4px}
         .primary, .secondary{
-          flex:1;padding:12px;border-radius:12px;
-          font-weight:800;text-align:center;border:1px solid #27406f;
+          flex:1;padding:12px;border-radius:12px;font-weight:800;
+          text-align:center;border:1px solid #27406f;
         }
         .primary{background:#112449;color:#e7f0ff;}
         .secondary{background:#0c1226;border-color:#1b2440;color:#d7dbea;}
