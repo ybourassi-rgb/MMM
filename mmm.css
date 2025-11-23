@@ -1,121 +1,125 @@
-/* ---- Layout / Header ---- */
-.nav {
-  display:flex; justify-content:space-between; align-items:center;
-  gap:16px; padding:16px 20px; position:sticky; top:0; z-index:5;
-  background:rgba(10,10,10,.75); backdrop-filter:saturate(140%) blur(8px);
-  border-bottom:1px solid rgba(255,255,255,.06);
+/* =========================================================
+   TikTok Feed (scroll vertical / snap / plein écran)
+   ========================================================= */
+
+.tiktok-feed{
+  height: 100vh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  overscroll-behavior-y: contain;
+  background: #05060a;
 }
-.brand {display:flex; align-items:center; gap:10px; font-weight:700;}
-.brand-title {font-size:16px;}
-.brand-pill {font-size:12px; padding:.2rem .5rem; border:1px solid #2a2a2a; border-radius:999px; opacity:.9}
-.dot{width:8px; height:8px; border-radius:50%; background:linear-gradient(180deg,#2cf38b,#0a8b55); box-shadow:0 0 10px #2cf38b}
+.tiktok-feed::-webkit-scrollbar{ display:none; }
 
-.status-wrap{display:flex; align-items:center; gap:8px; font-size:14px}
-.status-label{opacity:.8}
-
-/* ---- Chips (badge état) ---- */
-.chip{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:.35rem .6rem; border-radius:999px; font-weight:600; font-size:12px;
-  border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03)
-}
-.chip--pending{color:#aaa}
-.chip--ok{color:#0df39b; border-color:rgba(13,243,155,.3); background:rgba(13,243,155,.08)}
-.chip--ko{color:#ff5266; border-color:rgba(255,82,102,.25); background:rgba(255,82,102,.08)}
-
-/* ---- Container & Cards ---- */
-.container{max-width:1050px; margin:24px auto; padding:0 16px}
-.cards-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:18px}
-.app-card{
-  display:flex; align-items:center; gap:12px; padding:14px 16px; border-radius:14px;
-  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
-  border:1px solid rgba(255,255,255,.08); text-decoration:none; color:inherit; transition:.2s ease;
-}
-.app-card:hover{transform:translateY(-1px); box-shadow:0 8px 30px rgba(0,0,0,.25)}
-.app-emoji{font-size:20px}
-.app-title{font-weight:600}
-
-/* ---- Panel ---- */
-.panel{
-  border-radius:16px; padding:18px;
-  background:radial-gradient(1200px 500px at -20% -100%, rgba(50,170,255,.08), transparent 40%),
-             linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
-  border:1px solid rgba(255,255,255,.08);
-}
-.panel-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
-.panel-title{font-weight:800; font-size:18px; display:flex; align-items:center; gap:10px}
-.pill{
-  padding:.25rem .55rem; border-radius:999px; font-size:12px; font-weight:700;
-  border:1px solid rgba(255,82,102,.28); color:#ff6b7d; background:rgba(255,82,102,.08)
-}
-.pill[hidden]{display:none}
-
-.hint{opacity:.7; font-size:13px; margin:.2rem 0 1rem}
-
-.prompt-row{display:flex; flex-direction:column; gap:10px}
-.prompt-input{
-  width:100%; background:#0e0f10; color:#eaeaea; border:1px solid #2a2a2a;
-  border-radius:12px; padding:12px 12px; outline:none; resize:vertical; min-height:98px;
-}
-.prompt-input:focus{border-color:#33d1ff; box-shadow:0 0 0 2px rgba(51,209,255,.15)}
-.prompt-actions{display:flex; gap:10px}
-
-.btn{
-  padding:.7rem 1rem; border-radius:10px; border:1px solid rgba(255,255,255,.08);
-  background:rgba(255,255,255,.03); color:#eaeaea; font-weight:700; cursor:pointer;
-}
-.btn--accent{background:linear-gradient(180deg,#1cc6ff,#4f7dff); border:none; color:#071120}
-.btn--accent:disabled{opacity:.7; cursor:not-allowed}
-.btn--ghost{background:transparent}
-
-.status-line{min-height:24px; font-size:13px; opacity:.8; margin-top:6px}
-.spinner{
-  width:14px; height:14px; border-radius:50%;
-  border:2px solid rgba(255,255,255,.25); border-top-color:#1cc6ff; display:inline-block; animation:rot 1s linear infinite; vertical-align:-2px;
-}
-@keyframes rot{to{transform:rotate(360deg)}}
-
-.subhead{margin:.9rem 0 .4rem; font-size:15px; opacity:.9}
-.answer{
-  background:#0e0f10; border:1px solid #2a2a2a; border-radius:12px;
-  padding:12px; white-space:pre-wrap; overflow:auto; min-height:120px;
+.tiktok-slide{
+  height: 100vh;
+  width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  position: relative;
+  display: flex;
 }
 
-/* -------------------------------------------------
-   ✅ Correctifs iPhone / Safari + lisibilité globale
-   ------------------------------------------------- */
-html { color-scheme: dark light; }           /* évite l’assombrissement automatique de Safari */
-
-.answer{
-  background:#0b0b0b;                       /* fond plus net */
-  color:#eaeaea;                            /* texte clair lisible */
-  border-color:#242424;
-  line-height:1.55;
-  word-break:break-word;
+.deal-slide{
+  height:100%;
+  width:100%;
+  position:relative;
+  color:#fff;
 }
 
-.prompt-input::placeholder{ color:#8a8a8a; }
-
-/* mode clair (si l’utilisateur force le light mode) */
-@media (prefers-color-scheme: light){
-  .answer{
-    background:#ffffff;
-    color:#111;
-    border-color:#e6e6e6;
-  }
-  .prompt-input{
-    background:#fff;
-    color:#111;
-    border-color:#ddd;
-  }
+.deal-media{
+  position:absolute;
+  inset:0;
+  background:#0b1020;
 }
 
-/* petit polish mobile */
+.deal-media-fallback{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:700; letter-spacing:.04em;
+  opacity:.5;
+}
+
+.deal-gradient{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,.15), transparent 55%),
+    linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.85));
+}
+
+.deal-top{
+  position:absolute; top:72px; left:14px;
+  display:flex; gap:8px; flex-wrap:wrap;
+  z-index:2;
+}
+
+.deal-chip{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:.35rem .6rem;
+  border-radius:999px; font-weight:700; font-size:12px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.45);
+  box-shadow:0 6px 20px rgba(0,0,0,.25);
+}
+
+.deal-actions{
+  position:absolute; right:10px; bottom:150px;
+  display:flex; flex-direction:column; gap:12px;
+  z-index:2;
+}
+.action-btn{
+  background:rgba(0,0,0,.5);
+  border:1px solid rgba(255,255,255,.12);
+  color:#fff;
+  border-radius:14px;
+  padding:10px 8px;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  font-size:18px;
+  min-width:56px;
+  backdrop-filter: blur(6px);
+}
+.action-btn span{
+  font-size:11px; opacity:.9; font-weight:600;
+}
+
+.deal-bottom{
+  position:absolute; left:14px; right:78px; bottom:90px;
+  z-index:2;
+}
+
+.deal-title{
+  font-size:20px; font-weight:800; line-height:1.15;
+  text-shadow:0 6px 18px rgba(0,0,0,.8);
+}
+
+.deal-price{
+  margin-top:6px; font-size:14px; opacity:.9;
+}
+
+.deal-metrics{
+  margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;
+}
+.metric{
+  background:rgba(0,0,0,.5);
+  border:1px solid rgba(255,255,255,.12);
+  padding:10px; border-radius:12px; min-width:95px;
+}
+.metric-title{ font-size:12px; opacity:.8; }
+.metric-value{ font-weight:800; margin-top:4px; }
+.metric-value.green{ color:#00e389; }
+.metric-value.orange{ color:#ffbb55; }
+
+.tiktok-loading{
+  position: sticky; bottom: 0;
+  text-align: center; padding: 10px 0;
+  background: rgba(0,0,0,.6);
+  font-size: 13px; z-index: 10;
+}
+
 @media (max-width: 480px){
-  .panel{ padding:14px; }
-  .prompt-input{ min-height:88px; }
-  .btn{ padding:.65rem .9rem; }
+  .deal-top{ top:64px; }
+  .deal-title{ font-size:18px; }
+  .deal-actions{ bottom:140px; }
 }
-
-/* utilitaire */
-.muted{opacity:.6}
