@@ -13,20 +13,15 @@ const parser = new Parser({
 });
 
 // ==============================
-// Utils
+// Utils Images
 // ==============================
 
-// Dealabs met souvent des miniatures (150x150). On les upgrade.
 function upgradeDealabsImage(url) {
   if (!url) return url;
   try {
     const u = new URL(url);
-
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(
-        /\/re\/\d+x\d+\/qt\/\d+\//i,
-        "/"
-      );
+      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       return u.toString();
     }
     return url;
@@ -35,7 +30,6 @@ function upgradeDealabsImage(url) {
   }
 }
 
-// Parse une image depuis RSS
 function pickImage(it) {
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
@@ -51,42 +45,43 @@ function pickImage(it) {
   return null;
 }
 
-// Normalisation d’un item
-function normalizeItem(raw, i = 0, sourceName = "rss") {
-  const url = raw.link || raw.url || raw.guid || "";
-  const image = pickImage(raw);
+// ❌ images “fake/placeholder” connues
+function isBlacklistedImage(url = "") {
+  const u = url.toLowerCase();
 
-  return {
-    id: raw.id || raw.guid || `${Date.now()}-${i}`,
-    title: raw.title?.trim() || "Opportunité",
-    url,
-    link: raw.link || null,
-    image,
-
-    price: raw.price || null,
-    score: raw.yscore?.globalScore ?? raw.score ?? null,
-    category: raw.category || raw.type || "autre",
-
-    margin: raw.yscore
-      ? `${raw.yscore.opportunityScore ?? "—"}%`
-      : raw.margin,
-    risk: raw.yscore
-      ? `${raw.yscore.riskScore ?? "—"}/100`
-      : raw.risk,
-    horizon: raw.horizon || "court terme",
-
-    halal: raw.yscore
-      ? raw.yscore.halalScore >= 80
-      : raw.halal ?? null,
-
-    affiliateUrl: raw.affiliateUrl || null,
-    source: sourceName,
-    publishedAt: raw.publishedAt || raw.isoDate || null,
-    summary: raw.summary || raw.contentSnippet || null,
-  };
+  return (
+    u.includes("default-voucher") ||      // Dealabs bons de reduc
+    u.includes("default-thread") ||       // Dealabs image par défaut
+    u.includes("no-image") ||
+    u.endsWith(".svg") ||                // souvent placeholder
+    u.includes("spacer") ||
+    u.includes("blank")
+  );
 }
 
-// Mélange "propre" pour intercaler voyage / autres
+// ✅ check rapide si l’image existe vraiment (HEAD)
+async function imageExists(url, timeoutMs = 2500) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      signal: ac.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+
+    const ct = res.headers.get("content-type") || "";
+    return ct.startsWith("image/");
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Petit shuffle
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -96,14 +91,12 @@ function shuffle(arr) {
   return a;
 }
 
-// Fetch RSS avec timeout + fallback
+// Fetch RSS avec timeout
 async function parseWithTimeout(url, timeoutMs = 8000) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), timeoutMs);
 
   try {
-    // rss-parser ne supporte pas AbortController directement,
-    // donc on fetch nous-même puis parseString
     const res = await fetch(url, {
       signal: ac.signal,
       headers: { "User-Agent": "MMM-FeedBot/1.0" },
@@ -116,42 +109,44 @@ async function parseWithTimeout(url, timeoutMs = 8000) {
   }
 }
 
-// ==============================
-// GET
-// ==============================
+// Normalisation item
+function normalizeItem(raw, i = 0, sourceName = "rss") {
+  const url = raw.link || raw.url || raw.guid || "";
+  const image = pickImage(raw);
+
+  return {
+    id: raw.id || raw.guid || `${Date.now()}-${i}`,
+    title: raw.title?.trim() || "Opportunité",
+    url,
+    link: raw.link || null,
+    image,
+    price: raw.price || null,
+    score: raw.yscore?.globalScore ?? raw.score ?? null,
+    category: raw.category || raw.type || "autre",
+    horizon: raw.horizon || "court terme",
+    halal: raw.yscore ? raw.yscore.halalScore >= 80 : raw.halal ?? null,
+    affiliateUrl: raw.affiliateUrl || null,
+    source: sourceName,
+    publishedAt: raw.publishedAt || raw.isoDate || null,
+    summary: raw.summary || raw.contentSnippet || null,
+  };
+}
+
 export async function GET() {
   try {
-    // 🚀 MAX sources : Deals + Voyage + Auto/Occasion + Immo + Tech + Jeux + Divers
     const SOURCES = [
-      // ----- DEALS GÉNÉRALISTES -----
       { name: "dealabs-hot", url: "https://www.dealabs.com/rss/hot" },
       { name: "dealabs-new", url: "https://www.dealabs.com/rss/nouveau" },
       { name: "hotukdeals", url: "https://www.hotukdeals.com/rss/hot" },
       { name: "mydealz", url: "https://www.mydealz.de/rss/hot" },
 
-      // ----- TECH / GAMING / HIGH-TECH -----
-      { name: "frandroid", url: "https://www.frandroid.com/feed" },
-      { name: "hitek", url: "https://hitek.fr/rss/actualite" },
-      { name: "jeuxvideo", url: "https://www.jeuxvideo.com/rss/rss.xml" },
-
-      // ----- VOYAGE / BONS PLANS VOYAGE -----
       { name: "voyage-dealabs", url: "https://www.dealabs.com/groupe/voyages/rss" },
       { name: "secretflying", url: "https://www.secretflying.com/feed/" },
-      { name: "voyagereddit", url: "https://www.reddit.com/r/traveldeals/.rss" },
 
-      // ----- AUTO / OCCASION / MOBILITÉ -----
       { name: "leboncoin-auto", url: "https://www.leboncoin.fr/rss/voitures.xml" },
-      { name: "leboncoin-moto", url: "https://www.leboncoin.fr/rss/motos.xml" },
-
-      // ----- IMMO / INVEST -----
       { name: "leboncoin-immo", url: "https://www.leboncoin.fr/rss/locations.xml" },
-
-      // ----- DIVERS POPULAIRES -----
-      { name: "ikea", url: "https://www.ikea.com/fr/fr/rss/" },
-      { name: "steamdeals", url: "https://store.steampowered.com/feeds/daily_deals.xml" },
     ];
 
-    // On parse tout sans bloquer si un flux crash
     const feeds = await Promise.allSettled(
       SOURCES.map(async (s) => {
         const f = await parseWithTimeout(s.url, 8000);
@@ -159,15 +154,34 @@ export async function GET() {
       })
     );
 
-    // Normalise + flatten
     let items = feeds
       .filter((r) => r.status === "fulfilled")
-      .flatMap((r) => r.value.items.map((it, i) => normalizeItem(it, i, r.value.source)));
+      .flatMap((r) =>
+        r.value.items.map((it, i) => normalizeItem(it, i, r.value.source))
+      );
 
-    // ✅ SUPPRIMER ceux sans lien OU sans image
-    items = items.filter((it) => it.url && it.image);
+    // ✅ 1) garde seulement URL + image non blacklistée
+    items = items.filter((it) => it.url && it.image && !isBlacklistedImage(it.image));
 
-    // Mélange global
+    // ✅ 2) vérifie vraiment que l’image existe (on limite à 25 checks pour pas ralentir)
+    const checked = [];
+    for (const it of items) {
+      if (checked.length >= 25) break;
+      checked.push(it);
+    }
+
+    const existsMap = await Promise.all(
+      checked.map((it) => imageExists(it.image))
+    );
+
+    const okSet = new Set(
+      checked.filter((_, idx) => existsMap[idx]).map((x) => x.id)
+    );
+
+    // On garde tous ceux non checkés + ceux checkés OK
+    items = items.filter((it) => !okSet.size || okSet.has(it.id) || !checked.find(c => c.id === it.id));
+
+    // Mélange final
     items = shuffle(items);
 
     return NextResponse.json({ ok: true, items, cursor: null });
