@@ -60,7 +60,8 @@ async function main() {
 
   for (const item of items) {
     try {
-      const sourceType = item.type || "news"; // ✅ FIX
+      // ✅ sourceType vient de fetchFeeds.js
+      const sourceType = item.sourceType || "news";
 
       // Anti-doublon global
       const already = await hasBeenPosted(item.link);
@@ -81,7 +82,7 @@ async function main() {
           summary,
           category,
           yscore,
-          type: "news",  // garde clair
+          sourceType: "news", // ✅ garder standard
         });
 
         await markPosted(item.link);
@@ -122,7 +123,7 @@ async function main() {
           summary,
           category,
           yscore,
-          type: "deal", // garde clair
+          sourceType: "deal", // ✅ garder standard
         });
 
         await markPosted(item.link);
@@ -130,7 +131,7 @@ async function main() {
         continue;
       }
 
-      console.log("⚠️ Item ignoré (type inconnu):", sourceType, item.link);
+      console.log("⚠️ Item ignoré (sourceType inconnu):", sourceType, item.link);
     } catch (error) {
       console.error("❌ Erreur sur un item :", error);
     }
