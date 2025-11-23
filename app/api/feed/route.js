@@ -12,16 +12,20 @@ const parser = new Parser({
   },
 });
 
-/**
- * Dealabs thumbnails -> full image
- */
+// ✅ Dealabs met souvent des miniatures :
+// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
+// → on veut l’original :
+// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/ID_1.jpg
 function upgradeDealabsImage(url) {
   if (!url) return url;
   try {
     const u = new URL(url);
 
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
+      u.pathname = u.pathname.replace(
+        /\/re\/\d+x\d+\/qt\/\d+\//i,
+        "/"
+      );
       return u.toString();
     }
     return url;
@@ -30,6 +34,7 @@ function upgradeDealabsImage(url) {
   }
 }
 
+// petite util pour extraire une image d’un item RSS
 function pickImage(it) {
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
@@ -45,16 +50,29 @@ function pickImage(it) {
   return null;
 }
 
-function normalizeItem(raw, i = 0, sourceUrl = "") {
+// ✅ Vérifie si l'image est "vraie" (pas vide, pas placeholder)
+function isValidImage(url) {
+  if (!url) return false;
+
+  // Dealabs placeholder voucher
+  if (url.includes("default-voucher")) return false;
+
+  // si tu vois d'autres placeholders, ajoute-les ici :
+  // if (url.includes("no-image")) return false;
+
+  return true;
+}
+
+function normalizeItem(raw, i = 0) {
   const url = raw.link || raw.url || raw.guid || "";
+  const image = pickImage(raw);
 
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
-
     url,
     link: raw.link || null,
-    image: pickImage(raw),
+    image,
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
@@ -73,7 +91,7 @@ function normalizeItem(raw, i = 0, sourceUrl = "") {
       : raw.halal ?? null,
 
     affiliateUrl: raw.affiliateUrl || null,
-    source: raw.source || (sourceUrl ? new URL(sourceUrl).hostname : "rss"),
+    source: raw.source || "rss",
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
@@ -82,103 +100,23 @@ function normalizeItem(raw, i = 0, sourceUrl = "") {
 export async function GET() {
   try {
     const SOURCES = [
-      // =========================
-      // 🇫🇷 DEALABS (FR)
-      // =========================
       "https://www.dealabs.com/rss/hot",
-      "https://www.dealabs.com/rss/nouveaux",
-      "https://www.dealabs.com/rss/codes-promo",
-
-      // Dealabs catégories populaires
-      "https://www.dealabs.com/groupe/high-tech.rss",
-      "https://www.dealabs.com/groupe/informatique.rss",
-      "https://www.dealabs.com/groupe/telephonie.rss",
-      "https://www.dealabs.com/groupe/gaming.rss",
-      "https://www.dealabs.com/groupe/maison-jardin.rss",
-      "https://www.dealabs.com/groupe/auto-moto.rss",
-      "https://www.dealabs.com/groupe/supermarches.rss",
-
-      // =========================
-      // 🌍 PEPPER NETWORK
-      // =========================
-      "https://www.hotukdeals.com/rss/hot",
-      "https://www.mydealz.de/rss/hot",
-      "https://www.chollometro.com/rss/hot",
-      "https://www.pepper.pl/rss/hot",
-      "https://www.preisjaeger.at/rss/hot",
-      "https://nl.pepper.com/rss/hot",
-      "https://www.promodescuentos.com/rss/hot",
-      "https://www.ozbargain.com.au/rss/hot",
-
-      // =========================
-      // 🇺🇸 / 🇨🇦 SITES DEALS
-      // =========================
-      "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&searchin=first&rss=1",
-      "https://www.redflagdeals.com/rss/hot/",
-
-      // =========================
-      // 🚗 AUTO / MOBILITÉ
-      // =========================
-      // Bons plans auto FR (Dealabs suffit déjà, mais on ajoute du global)
-      "https://www.carscoops.com/feed/",
-      "https://www.autoblog.com/rss.xml",
-
-      // =========================
-      // 🏠 MAISON / IMMO / BRICOLAGE
-      // =========================
-      "https://www.maisonapart.com/rss/actualites.xml",
-      "https://www.systemed.fr/rss.xml",
-
-      // =========================
-      // 📱 TECH / GAMING / ECOM
-      // =========================
-      "https://www.frandroid.com/feed",
-      "https://www.dealabs.com/groupe/amazon.rss",
-      "https://www.dealabs.com/groupe/aliexpress.rss",
-
-      // =========================
-      // 💸 CRYPTO / FINANCE / MARCHÉS
-      // =========================
-      "https://cointelegraph.com/rss",
-      "https://www.coindesk.com/arc/outboundfeeds/rss/",
-      "https://www.boursorama.com/rss/actualites/",
-      "https://feeds.finance.yahoo.com/rss/2.0/headline?s=BTC-USD,ETH-USD,TSLA,NVDA&region=US&lang=en-US",
+      // ajoute tes flux ici
     ];
 
-    const settled = await Promise.allSettled(
+    const feeds = await Promise.all(
       SOURCES.map((u) => parser.parseURL(u))
     );
 
-    const feedsOk = settled
-      .map((res, idx) => {
-        if (res.status === "fulfilled") {
-          return { feed: res.value, sourceUrl: SOURCES[idx] };
-        }
-        console.warn("RSS failed:", SOURCES[idx], res.reason?.message);
-        return null;
-      })
-      .filter(Boolean);
+    let items = feeds
+      .flatMap((f) => f.items || [])
+      .map(normalizeItem);
 
-    let items = feedsOk.flatMap(({ feed, sourceUrl }) =>
-      (feed.items || []).map((raw, i) => normalizeItem(raw, i, sourceUrl))
-    );
-
+    // ✅ (A) garde seulement ceux avec lien
     items = items.filter((it) => it.url);
 
-    // dédup par url
-    const seen = new Set();
-    items = items.filter((it) => {
-      if (seen.has(it.url)) return false;
-      seen.add(it.url);
-      return true;
-    });
-
-    // tri date desc
-    items.sort((a, b) => {
-      const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-      const db = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-      return db - da;
-    });
+    // ✅ (B) REJET des deals sans vraie image
+    items = items.filter((it) => isValidImage(it.image));
 
     return NextResponse.json({ ok: true, items, cursor: null });
   } catch (e) {
