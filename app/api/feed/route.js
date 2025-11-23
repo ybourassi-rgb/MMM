@@ -12,19 +12,27 @@ const parser = new Parser({
   },
 });
 
+// ===============================
+// 1) Helpers images Dealabs
+// ===============================
+
 // Dealabs met souvent des miniatures :
-// https://static-pepper.dealabs.com/.../re/150x150/qt/55/xxx.jpg
-// → on veut l’original :
-// https://static-pepper.dealabs.com/.../xxx.jpg
+// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
+// -> on veut l'original (sans /re/150x150/qt/55/)
 function upgradeDealabsImage(url) {
   if (!url) return url;
+
   try {
     const u = new URL(url);
 
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
+      u.pathname = u.pathname.replace(
+        /\/re\/\d+x\d+\/qt\/\d+\//i,
+        "/"
+      );
       return u.toString();
     }
+
     return url;
   } catch {
     return url;
@@ -47,15 +55,26 @@ function pickImage(it) {
   return null;
 }
 
-function normalizeItem(raw, i = 0, sourceUrl = "") {
-  const url = raw.link || raw.url || raw.guid || "";
-  const image = pickImage(raw);
+// Dealabs a parfois des “images par défaut” qu’on veut jeter
+function isValidImage(url) {
+  if (!url) return false;
+  const lower = url.toLowerCase();
 
-  // Tag “voyage” si ça vient d’un flux voyage
-  const isTravelSource =
-    /voyage|travel|vol|hotel|sejour|vacances/i.test(sourceUrl) ||
-    /voyage|travel|vol|hotel|sejour|vacances/i.test(raw.category || "") ||
-    /voyage|travel|vol|hotel|sejour|vacances/i.test(raw.title || "");
+  // exemples qu’on vire:
+  if (lower.includes("default-voucher")) return false;
+  if (lower.includes("default-avatar")) return false;
+  if (lower.endsWith(".svg")) return false; // souvent placeholders
+
+  return true;
+}
+
+// ===============================
+// 2) Normalisation
+// ===============================
+function normalizeItem(raw, i = 0, sourceName = "rss") {
+  const url = raw.link || raw.url || raw.guid || "";
+
+  const image = pickImage(raw);
 
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
@@ -66,16 +85,11 @@ function normalizeItem(raw, i = 0, sourceUrl = "") {
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
-
-    category:
-      raw.category ||
-      raw.type ||
-      (isTravelSource ? "voyage" : "autre"),
+    category: raw.category || raw.type || sourceName || "autre",
 
     margin: raw.yscore
       ? `${raw.yscore.opportunityScore ?? "—"}%`
       : raw.margin,
-
     risk: raw.yscore
       ? `${raw.yscore.riskScore ?? "—"}/100`
       : raw.risk,
@@ -87,93 +101,107 @@ function normalizeItem(raw, i = 0, sourceUrl = "") {
       : raw.halal ?? null,
 
     affiliateUrl: raw.affiliateUrl || null,
-    source: raw.source || "rss",
-    sourceUrl,
+    source: sourceName,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
 }
 
-// shuffle simple
+// ===============================
+// 3) Fetch RSS robuste (évite blocage)
+// ===============================
+async function fetchTextWithTimeout(url, ms = 8000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        // Certains flux bloquent sans user-agent
+        "user-agent": "MoneyMotorYBot/1.0 (+https://mmm-alpha-one.vercel.app)",
+        accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function parseFeedSafe(url, sourceName) {
+  try {
+    const xml = await fetchTextWithTimeout(url);
+    const feed = await parser.parseString(xml);
+    feed._sourceName = sourceName;
+    return feed;
+  } catch (e) {
+    console.error("Feed fail:", url, e?.message);
+    return { items: [], _sourceName: sourceName };
+  }
+}
+
+// ===============================
+// 4) Shuffle pour mélanger voyages / autres
+// ===============================
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = (Math.random() * (i + 1)) | 0;
+    const j = Math.floor(Math.random() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
 
-// Mélange voyage / autres (1 voyage toutes les 3 cards environ)
-function interleaveTravel(items) {
-  const travel = items.filter((it) =>
-    /voyage|travel|vol|hotel|sejour|vacances/i.test(it.category || "")
-  );
-  const other = items.filter(
-    (it) => !/voyage|travel|vol|hotel|sejour|vacances/i.test(it.category || "")
-  );
-
-  const t = shuffle(travel);
-  const o = shuffle(other);
-
-  const out = [];
-  let ti = 0,
-    oi = 0;
-
-  while (ti < t.length || oi < o.length) {
-    // 3 autres, 1 voyage
-    for (let k = 0; k < 3 && oi < o.length; k++) {
-      out.push(o[oi++]);
-    }
-    if (ti < t.length) out.push(t[ti++]);
-  }
-
-  return out;
-}
-
+// ===============================
+// 5) GET
+// ===============================
 export async function GET() {
   try {
-    // ✅ Ajoute petit à petit ici
+    // 🔥 Plus de sources (style marketplace)
+    // Dealabs fournit beaucoup de catégories RSS.
+    // Liste par catégorie: /rss/groupe/xxx (dont Voyages).  [oai_citation:1‡Gist](https://gist.github.com/Snipees/608a97bc81c4003991876f7d7e6dc77b?utm_source=chatgpt.com)
     const SOURCES = [
-      // ---- GENERAL / SHOPPING ----
-      "https://www.dealabs.com/rss/hot",
-      "https://www.dealabs.com/rss/nouveau",
+      // général / hot
+      { name: "hot", url: "https://www.dealabs.com/rss/hot" },
+      { name: "bons-plans", url: "https://www.dealabs.com/rss/bons-plans" },
+      { name: "codes-promo", url: "https://www.dealabs.com/rss/codes-promo" },
 
-      // Groupes Dealabs (souvent dispo en RSS)
-      "https://www.dealabs.com/groupe/high-tech/rss",
-      "https://www.dealabs.com/groupe/maison-jardin/rss",
-      "https://www.dealabs.com/groupe/jeux-video/rss",
-      "https://www.dealabs.com/groupe/auto-moto/rss",
-      "https://www.dealabs.com/groupe/sport-loisirs/rss",
+      // marketplace-like (objets / maison / tech / mode etc.)
+      { name: "maison-jardin", url: "https://www.dealabs.com/rss/groupe/maison-jardin" },
+      { name: "informatique", url: "https://www.dealabs.com/rss/groupe/informatique" },
+      { name: "telephonie", url: "https://www.dealabs.com/rss/groupe/telephonie" },
+      { name: "image-son", url: "https://www.dealabs.com/rss/groupe/image-son-video" },
+      { name: "jeux", url: "https://www.dealabs.com/rss/groupe/consoles-jeux-video" },
+      { name: "sports", url: "https://www.dealabs.com/rss/groupe/sports-plein-air" },
+      { name: "mode", url: "https://www.dealabs.com/rss/groupe/mode-accessoires" },
+      { name: "animaux", url: "https://www.dealabs.com/rss/groupe/animaux" },
+      { name: "services", url: "https://www.dealabs.com/rss/groupe/services-divers" },
 
-      // ---- VOYAGE ----
-      "https://www.dealabs.com/groupe/voyages/rss",
-      "https://www.dealabs.com/groupe/vols/rss",
-      "https://www.dealabs.com/groupe/hotel/rss",
+      // ✈️ VOYAGES / SORTIES / RESTAURANTS
+      { name: "voyages", url: "https://www.dealabs.com/rss/groupe/voyages-sorties-restaurants" },
     ];
 
+    // parse tous les feeds sans bloquer
     const feeds = await Promise.all(
-      SOURCES.map((u) => parser.parseURL(u))
+      SOURCES.map((s) => parseFeedSafe(s.url, s.name))
     );
 
     let items = feeds
-      .flatMap((f, idx) =>
+      .flatMap((f) =>
         (f.items || []).map((raw, i) =>
-          normalizeItem(raw, i, SOURCES[idx])
+          normalizeItem(raw, i, f._sourceName)
         )
       )
-      .filter((it) => it.url);
+      .filter((it) => it.url)
+      // ✅ 100% sans image => on vire direct
+      .filter((it) => isValidImage(it.image));
 
-    // ✅ Enlève les deals sans image ou image “placeholder”
-    items = items.filter((it) => {
-      if (!it.image) return false;
-      if (it.image.includes("default-") || it.image.endsWith(".svg"))
-        return false;
-      return true;
-    });
-
-    // ✅ Mélange voyage / autres
-    items = interleaveTravel(items);
+    // ✅ Mélange pour avoir voyages + autres alternés
+    items = shuffle(items);
 
     return NextResponse.json({ ok: true, items, cursor: null });
   } catch (e) {
