@@ -13,10 +13,7 @@ const parser = new Parser({
 });
 
 /**
- * ✅ Dealabs met souvent des miniatures :
- * https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
- * → on veut l’original :
- * https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/ID_1.jpg
+ * Dealabs thumbnails -> full image
  */
 function upgradeDealabsImage(url) {
   if (!url) return url;
@@ -33,18 +30,14 @@ function upgradeDealabsImage(url) {
   }
 }
 
-// petite util pour extraire une image d’un item RSS
 function pickImage(it) {
-  // 1) media:content url
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
   if (Array.isArray(mc) && mc[0]?.$?.url)
     return upgradeDealabsImage(mc[0].$?.url);
 
-  // 2) enclosure url
   if (it.enclosure?.url) return upgradeDealabsImage(it.enclosure.url);
 
-  // 3) parfois dans content HTML => cherche un <img src="...">
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
   if (match?.[1]) return upgradeDealabsImage(match[1]);
@@ -80,7 +73,7 @@ function normalizeItem(raw, i = 0, sourceUrl = "") {
       : raw.halal ?? null,
 
     affiliateUrl: raw.affiliateUrl || null,
-    source: raw.source || new URL(sourceUrl).hostname || "rss",
+    source: raw.source || (sourceUrl ? new URL(sourceUrl).hostname : "rss"),
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
@@ -88,29 +81,70 @@ function normalizeItem(raw, i = 0, sourceUrl = "") {
 
 export async function GET() {
   try {
-    // ✅ PLEIN DE SOURCES (tu peux en enlever/ajouter)
     const SOURCES = [
-      // 🇫🇷 DEALABS
+      // =========================
+      // 🇫🇷 DEALABS (FR)
+      // =========================
       "https://www.dealabs.com/rss/hot",
       "https://www.dealabs.com/rss/nouveaux",
       "https://www.dealabs.com/rss/codes-promo",
 
-      // 🌍 PEPPER NETWORK (mêmes flux “hot”)
-      "https://www.hotukdeals.com/rss/hot",       // 🇬🇧 UK
-      "https://www.mydealz.de/rss/hot",          // 🇩🇪 DE
-      "https://www.chollometro.com/rss/hot",     // 🇪🇸 ES
-      "https://www.pepper.pl/rss/hot",           // 🇵🇱 PL
-      "https://www.preisjaeger.at/rss/hot",      // 🇦🇹 AT
-      "https://nl.pepper.com/rss/hot",           // 🇳🇱 NL
-      "https://www.promodescuentos.com/rss/hot", // 🇲🇽 MX
-      "https://www.ozbargain.com.au/rss/hot",    // 🇦🇺 AU (communauté deals)
+      // Dealabs catégories populaires
+      "https://www.dealabs.com/groupe/high-tech.rss",
+      "https://www.dealabs.com/groupe/informatique.rss",
+      "https://www.dealabs.com/groupe/telephonie.rss",
+      "https://www.dealabs.com/groupe/gaming.rss",
+      "https://www.dealabs.com/groupe/maison-jardin.rss",
+      "https://www.dealabs.com/groupe/auto-moto.rss",
+      "https://www.dealabs.com/groupe/supermarches.rss",
 
-      // 🇺🇸 / 🇨🇦 GROS SITES DEALS
+      // =========================
+      // 🌍 PEPPER NETWORK
+      // =========================
+      "https://www.hotukdeals.com/rss/hot",
+      "https://www.mydealz.de/rss/hot",
+      "https://www.chollometro.com/rss/hot",
+      "https://www.pepper.pl/rss/hot",
+      "https://www.preisjaeger.at/rss/hot",
+      "https://nl.pepper.com/rss/hot",
+      "https://www.promodescuentos.com/rss/hot",
+      "https://www.ozbargain.com.au/rss/hot",
+
+      // =========================
+      // 🇺🇸 / 🇨🇦 SITES DEALS
+      // =========================
       "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&searchin=first&rss=1",
       "https://www.redflagdeals.com/rss/hot/",
+
+      // =========================
+      // 🚗 AUTO / MOBILITÉ
+      // =========================
+      // Bons plans auto FR (Dealabs suffit déjà, mais on ajoute du global)
+      "https://www.carscoops.com/feed/",
+      "https://www.autoblog.com/rss.xml",
+
+      // =========================
+      // 🏠 MAISON / IMMO / BRICOLAGE
+      // =========================
+      "https://www.maisonapart.com/rss/actualites.xml",
+      "https://www.systemed.fr/rss.xml",
+
+      // =========================
+      // 📱 TECH / GAMING / ECOM
+      // =========================
+      "https://www.frandroid.com/feed",
+      "https://www.dealabs.com/groupe/amazon.rss",
+      "https://www.dealabs.com/groupe/aliexpress.rss",
+
+      // =========================
+      // 💸 CRYPTO / FINANCE / MARCHÉS
+      // =========================
+      "https://cointelegraph.com/rss",
+      "https://www.coindesk.com/arc/outboundfeeds/rss/",
+      "https://www.boursorama.com/rss/actualites/",
+      "https://feeds.finance.yahoo.com/rss/2.0/headline?s=BTC-USD,ETH-USD,TSLA,NVDA&region=US&lang=en-US",
     ];
 
-    // ✅ on ne casse pas tout si un flux plante
     const settled = await Promise.allSettled(
       SOURCES.map((u) => parser.parseURL(u))
     );
@@ -125,15 +159,13 @@ export async function GET() {
       })
       .filter(Boolean);
 
-    // 🔥 items normalisés
     let items = feedsOk.flatMap(({ feed, sourceUrl }) =>
       (feed.items || []).map((raw, i) => normalizeItem(raw, i, sourceUrl))
     );
 
-    // ✅ garde seulement ceux avec lien
     items = items.filter((it) => it.url);
 
-    // ✅ déduplication par url (évite doublons entre pays)
+    // dédup par url
     const seen = new Set();
     items = items.filter((it) => {
       if (seen.has(it.url)) return false;
@@ -141,7 +173,7 @@ export async function GET() {
       return true;
     });
 
-    // ✅ trie par date desc si possible
+    // tri date desc
     items.sort((a, b) => {
       const da = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
       const db = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
