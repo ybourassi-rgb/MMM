@@ -15,7 +15,7 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link,          // dealabs
+    link, // dealabs
     affiliateUrl,
     halal,
     summary,
@@ -54,14 +54,18 @@ export default function DealSlide({ item, active }) {
     }
   };
 
-  // ✅ bouton Voir = track + open
-  const onSee = async () => {
+  // ✅ bouton Voir (Safari / iOS safe)
+  const onSee = () => {
     if (!finalUrl) return;
+
+    // 1) Ouvre direct (Safari OK)
+    openLink(finalUrl);
+
+    // 2) Track après, sans bloquer le clic
     try {
       const domain = new URL(finalUrl).hostname;
-      await trackClick(domain);
+      trackClick(domain); // pas de await
     } catch {}
-    openLink(finalUrl);
   };
 
   const onAnalyze = () => {
