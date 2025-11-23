@@ -18,7 +18,7 @@ export default function DealSlide({ item, active }) {
     link,          // dealabs
     affiliateUrl,
     halal,
-    summary,        // résumé si présent
+    summary,       // résumé si dispo
   } = item || {};
 
   // lien final robuste
@@ -54,13 +54,18 @@ export default function DealSlide({ item, active }) {
     }
   };
 
-  const onSee = async () => {
+  // ✅ IMPORTANT: ouvrir le lien DIRECTEMENT au clic (sinon popup bloquée)
+  const onSee = () => {
     if (!finalUrl) return;
+
+    // 1) ouvre tout de suite
+    openLink(finalUrl);
+
+    // 2) tracking en arrière-plan (sans await)
     try {
       const domain = new URL(finalUrl).hostname;
-      await trackClick(domain);
+      trackClick(domain);
     } catch {}
-    openLink(finalUrl);
   };
 
   const onAnalyze = () => {
@@ -89,7 +94,7 @@ export default function DealSlide({ item, active }) {
 
   return (
     <div className="deal-slide">
-      {/* MEDIA TOP (plus petit) */}
+      {/* MEDIA TOP */}
       <div className="deal-media">
         {finalImage ? (
           <Image
@@ -99,13 +104,14 @@ export default function DealSlide({ item, active }) {
             priority={active}
             sizes="100vw"
             onError={() => setImgOk(false)}
-            style={{ objectFit: "contain" }} // évite le gros zoom
+            style={{ objectFit: "contain" }} // évite le zoom
           />
         ) : (
           <div className="deal-media-fallback">
             {image ? "Image indisponible" : "PHOTO / MINI-VIDÉO"}
           </div>
         )}
+
         <div className="deal-gradient" />
 
         {/* Chips sur l’image */}
@@ -121,16 +127,21 @@ export default function DealSlide({ item, active }) {
 
       {/* ACTIONS RIGHT */}
       <div className="deal-actions">
-        <button className="action-btn" onClick={onFav}>
+        <button type="button" className="action-btn" onClick={onFav}>
           ❤️<span>Favori</span>
         </button>
-        <button className="action-btn" onClick={onShare}>
+        <button type="button" className="action-btn" onClick={onShare}>
           📤<span>Partager</span>
         </button>
-        <button className="action-btn" onClick={onAnalyze}>
+        <button type="button" className="action-btn" onClick={onAnalyze}>
           🧠<span>Analyse</span>
         </button>
-        <button className="action-btn" onClick={onSee} disabled={!finalUrl}>
+        <button
+          type="button"
+          className="action-btn"
+          onClick={onSee}
+          disabled={!finalUrl}
+        >
           🔗<span>Voir</span>
         </button>
       </div>
@@ -182,7 +193,7 @@ export default function DealSlide({ item, active }) {
         .deal-media {
           position: relative;
           width: 100%;
-          height: 45vh; /* baisse à 40vh si tu veux plus petit */
+          height: 45vh; /* baisse à 40vh si tu veux */
           background: #0b1020;
           overflow: hidden;
         }
@@ -229,15 +240,15 @@ export default function DealSlide({ item, active }) {
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
         }
 
-        /* ===== ACTIONS (REMONTÉES) ===== */
+        /* ===== ACTIONS ===== */
         .deal-actions {
           position: absolute;
           right: 10px;
-          top: calc(45vh - 60px); /* ✅ icônes remontées */
+          top: calc(45vh + 10px);
           display: flex;
           flex-direction: column;
           gap: 12px;
-          z-index: 3;
+          z-index: 20; /* bien au-dessus */
         }
 
         .action-btn {
@@ -270,7 +281,7 @@ export default function DealSlide({ item, active }) {
         .deal-content {
           position: relative;
           flex: 1;
-          padding: 12px 78px 18px 14px; /* espace à droite pour les boutons */
+          padding: 12px 78px 18px 14px;
           overflow: auto;
         }
 
