@@ -12,8 +12,8 @@ const parser = new Parser({
 });
 
 // Liste de feeds :
-// - type "deal" => devrait alimenter Telegram Deals
-// - type "news" => si tu veux un canal séparé plus tard
+// - type "deal" => Telegram DEALS + Redis
+// - type "news" => Telegram AUTO (actu)
 const FEEDS = [
   // -------- DEALS / BONS PLANS --------
   {
@@ -41,7 +41,7 @@ const FEEDS = [
     defaultCategory: "Tech",
   },
 
-  // -------- NEWS (si tu veux garder un peu d’actu) --------
+  // -------- NEWS --------
   {
     url: "https://www.lemonde.fr/rss/en_continu.xml",
     type: "news",
@@ -56,7 +56,7 @@ const FEEDS = [
   },
 ];
 
-// petite normalisation + fallback texte
+// Normalisation (IMPORTANT: sourceType au lieu de type)
 function normalizeItem(i, feedMeta) {
   const title = (i.title || "").trim();
   const link = (i.link || i.guid || "").trim();
@@ -73,8 +73,9 @@ function normalizeItem(i, feedMeta) {
     title,
     link,
     content,
-    // tags utiles pour filtrer plus tard
-    type: feedMeta.type,
+
+    // ✅ champ attendu par index.js
+    sourceType: feedMeta.type, // "deal" | "news"
     source: feedMeta.source,
     category: feedMeta.defaultCategory,
     publishedAt: i.isoDate || i.pubDate || null,
@@ -102,6 +103,5 @@ export default async function fetchFeeds(limit = 40) {
     }
   }
 
-  // On mélange puis on coupe
   return results.slice(0, limit);
 }
