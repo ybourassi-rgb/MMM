@@ -103,8 +103,6 @@ export default function DealCard({ item, active }) {
             quality={90}
             onError={() => setImgOk(false)}
             style={{ objectFit: "cover" }}
-            // si tu veux éviter la compression Next (souvent cause du flou):
-            // unoptimized
           />
         ) : (
           <span className="mediaLabel">
@@ -127,7 +125,7 @@ export default function DealCard({ item, active }) {
       {/* ACTIONS FLOAT RIGHT */}
       <div className="actions">
         <button className="abtn" onClick={onFav}>
-          💾<small>Favori</small>
+          ❤️<small>Favori</small>
         </button>
         <button className="abtn" onClick={onShare}>
           📤<small>Partager</small>
@@ -177,11 +175,7 @@ export default function DealCard({ item, active }) {
         )}
 
         <div className="cta">
-          <button
-            onClick={onSee}
-            className="primary"
-            disabled={!finalUrl}
-          >
+          <button onClick={onSee} className="primary" disabled={!finalUrl}>
             Voir
           </button>
           <button onClick={onAnalyze} className="secondary">
@@ -234,7 +228,8 @@ export default function DealCard({ item, active }) {
         }
         .score{
           font-weight:800;color:white;background:rgba(78,163,255,.15);
-          border:1px solid rgba(78,163,255,.5);padding:2px 7px;border-radius:999px;
+          border:1px solid rgba(78,163,255,.5);
+          padding:2px 7px;border-radius:999px;
         }
         .chip{
           font-size:11px;color:#cbd3e7;background:#111938;border:1px solid #1f2a55;
@@ -243,16 +238,20 @@ export default function DealCard({ item, active }) {
 
         .mediaLabel{opacity:.8; z-index:2}
 
+        /* ✅ ICI ON REMONTE LES ICONES */
         .actions{
           position:absolute;
           right:8px;
-          bottom:130px;
+          top:52%;                 /* au milieu de l’écran */
+          transform: translateY(-52%);
           display:grid;
           gap:10px;
           z-index:3;
         }
+
         .abtn{
-          width:56px;height:56px;border-radius:14px;background:#0b1124;border:1px solid #1b2440;
+          width:56px;height:56px;border-radius:14px;
+          background:#0b1124;border:1px solid #1b2440;
           display:grid;place-items:center;color:#e9ecf5;font-size:20px;
           backdrop-filter: blur(6px);
         }
@@ -263,7 +262,10 @@ export default function DealCard({ item, active }) {
         h2{margin:0;font-size:18px}
         .sub{margin:0;color:#8b93a7;font-size:13px}
         .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-        .kpi{background:#0c1226;border:1px solid #1a2340;border-radius:12px;padding:8px;font-size:12px}
+        .kpi{
+          background:#0c1226;border:1px solid #1a2340;
+          border-radius:12px;padding:8px;font-size:12px
+        }
         .kpi b{display:block;font-size:15px;margin-top:2px}
         .good{color:#18d47b}
         .warn{color:#ffb454}
@@ -276,7 +278,8 @@ export default function DealCard({ item, active }) {
 
         .cta{display:flex;gap:8px;margin-top:4px}
         .primary, .secondary{
-          flex:1;padding:12px;border-radius:12px;font-weight:800;text-align:center;border:1px solid #27406f;
+          flex:1;padding:12px;border-radius:12px;
+          font-weight:800;text-align:center;border:1px solid #27406f;
         }
         .primary{background:#112449;color:#e7f0ff;}
         .secondary{background:#0c1226;border-color:#1b2440;color:#d7dbea;}
