@@ -11,8 +11,6 @@ function json(data, status = 200) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
-      "Pragma": "no-cache",
-      "Expires": "0",
     },
   });
 }
