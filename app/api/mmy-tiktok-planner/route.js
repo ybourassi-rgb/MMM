@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { AMAZON_PRODUCTS } from "@/lib/amazonProducts";
+import AMAZON_PRODUCTS from "../../../lib/amazonProducts.js";
 
+// Forcer Node (car on peut vouloir Buffer, libs etc. plus tard)
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// ---------- helpers réponses ----------
 function json(data, status = 200) {
   return NextResponse.json(data, {
     status,
@@ -28,6 +30,7 @@ export async function OPTIONS() {
   });
 }
 
+// ---------- logique planner ----------
 function pickRandomUnique(arr, count = 3) {
   if (!Array.isArray(arr) || arr.length === 0) return [];
   const copy = [...arr].filter(Boolean);
@@ -73,6 +76,7 @@ function buildVideoPlan(productUrl, index) {
     "#deals",
     "#promo",
     "#astuces",
+    "#musthave",
   ];
 
   const description =
@@ -92,10 +96,14 @@ function buildVideoPlan(productUrl, index) {
   };
 }
 
+// ---------- route GET ----------
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const count = Math.max(1, Math.min(5, Number(searchParams.get("count") || 3)));
+    const count = Math.max(
+      1,
+      Math.min(5, Number(searchParams.get("count") || 3))
+    );
 
     if (!AMAZON_PRODUCTS?.length) {
       return json({ ok: false, error: "AMAZON_PRODUCTS empty" }, 500);
@@ -112,6 +120,9 @@ export async function GET(req) {
     });
   } catch (err) {
     console.error("mmy-tiktok-planner error:", err);
-    return json({ ok: false, error: err.message || "internal_error" }, 500);
+    return json(
+      { ok: false, error: err?.message || "internal_error" },
+      500
+    );
   }
 }
