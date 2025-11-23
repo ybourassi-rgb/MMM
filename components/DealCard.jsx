@@ -18,7 +18,7 @@ export default function DealCard({ item, active }) {
     tags,
     mediaLabel,
     url,
-    link,          // <= parfois Dealabs renvoie link
+    link, // <= parfois Dealabs renvoie link
     affiliateUrl,
     image,
     category,
@@ -98,6 +98,7 @@ export default function DealCard({ item, active }) {
             quality={90}
             onError={() => setImgOk(false)}
             style={{ objectFit: "cover" }}
+            // unoptimized
           />
         ) : (
           <span className="mediaLabel">
@@ -117,7 +118,7 @@ export default function DealCard({ item, active }) {
         </div>
       </div>
 
-      {/* ACTIONS FLOAT RIGHT */}
+      {/* ACTIONS FLOAT RIGHT (REMONTÉES) */}
       <div className="actions">
         <button className="abtn" onClick={onFav}>
           ❤️<small>Favori</small>
@@ -137,6 +138,12 @@ export default function DealCard({ item, active }) {
       <div className="content">
         <h2>{title}</h2>
         {subtitle && <p className="sub">{subtitle}</p>}
+
+        {price && (
+          <p className="sub">
+            {price} {est ? `• Est: ${est}` : ""}
+          </p>
+        )}
 
         <div className="kpis">
           {margin && (
@@ -162,7 +169,9 @@ export default function DealCard({ item, active }) {
         {!!tags?.length && (
           <div className="tags">
             {tags.map((t) => (
-              <span key={t} className="tag">{t}</span>
+              <span key={t} className="tag">
+                {t}
+              </span>
             ))}
           </div>
         )}
@@ -221,8 +230,7 @@ export default function DealCard({ item, active }) {
         }
         .score{
           font-weight:800;color:white;background:rgba(78,163,255,.15);
-          border:1px solid rgba(78,163,255,.5);
-          padding:2px 7px;border-radius:999px;
+          border:1px solid rgba(78,163,255,.5);padding:2px 7px;border-radius:999px;
         }
         .chip{
           font-size:11px;color:#cbd3e7;background:#111938;border:1px solid #1f2a55;
@@ -231,21 +239,20 @@ export default function DealCard({ item, active }) {
 
         .mediaLabel{opacity:.8; z-index:2}
 
-        /* ✅ ICI: on remonte les icônes */
+        /* ✅ ICI : icônes remontées */
         .actions{
           position:absolute;
           right:8px;
-          top:180px;           /* 👈 remonte */
+          top:160px;     /* <-- remonte les boutons */
+          bottom:auto;
           display:grid;
           gap:10px;
           z-index:3;
         }
 
         .abtn{
-          width:56px;height:56px;border-radius:14px;
-          background:#0b1124;border:1px solid #1b2440;
-          display:grid;place-items:center;
-          color:#e9ecf5;font-size:20px;
+          width:56px;height:56px;border-radius:14px;background:#0b1124;border:1px solid #1b2440;
+          display:grid;place-items:center;color:#e9ecf5;font-size:20px;
           backdrop-filter: blur(6px);
         }
         .abtn small{font-size:10px;color:#b9c2d8;margin-top:2px}
@@ -254,11 +261,9 @@ export default function DealCard({ item, active }) {
         .content{padding:12px;display:grid;gap:8px;}
         h2{margin:0;font-size:18px}
         .sub{margin:0;color:#8b93a7;font-size:13px}
+
         .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-        .kpi{
-          background:#0c1226;border:1px solid #1a2340;border-radius:12px;
-          padding:8px;font-size:12px
-        }
+        .kpi{background:#0c1226;border:1px solid #1a2340;border-radius:12px;padding:8px;font-size:12px}
         .kpi b{display:block;font-size:15px;margin-top:2px}
         .good{color:#18d47b}
         .warn{color:#ffb454}
@@ -271,11 +276,15 @@ export default function DealCard({ item, active }) {
 
         .cta{display:flex;gap:8px;margin-top:4px}
         .primary, .secondary{
-          flex:1;padding:12px;border-radius:12px;font-weight:800;
-          text-align:center;border:1px solid #27406f;
+          flex:1;padding:12px;border-radius:12px;font-weight:800;text-align:center;border:1px solid #27406f;
         }
         .primary{background:#112449;color:#e7f0ff;}
         .secondary{background:#0c1226;border-color:#1b2440;color:#d7dbea;}
+
+        /* un tout petit ajustement mobile si besoin */
+        @media (max-height: 700px){
+          .actions{ top:120px; }
+        }
       `}</style>
     </div>
   );
