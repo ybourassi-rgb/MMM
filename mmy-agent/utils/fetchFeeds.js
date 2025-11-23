@@ -1,63 +1,90 @@
 // mmy-agent/utils/fetchFeeds.js
 import Parser from "rss-parser";
-const parser = new Parser();
 
-/**
- * fetchFeeds 2026
- * - Sépare NEWS vs DEALS
- * - Tag chaque item avec sourceType = "news" | "deal"
- * - Format homogène pour le pipeline (index.js)
- */
+const parser = new Parser({
+  timeout: 15000,
+  headers: {
+    "User-Agent": "MMY-Agent/1.0 (+https://moneymotory.app)"
+  }
+});
+
+// Helpers
+const isProbablyDealLink = (url = "") => {
+  const u = url.toLowerCase();
+  return (
+    u.includes("amazon.") ||
+    u.includes("aliexpress.") ||
+    u.includes("ebay.") ||
+    u.includes("/dp/") ||
+    u.includes("/gp/") ||
+    u.includes("deal") ||
+    u.includes("promo") ||
+    u.includes("offre")
+  );
+};
+
+const cleanItem = (i) => ({
+  title: (i.title || "").trim(),
+  link: (i.link || i.guid || "").trim(),
+  content: (i.contentSnippet || i.content || "").trim(),
+  pubDate: i.isoDate || i.pubDate || null,
+});
+
 export default async function fetchFeeds() {
-  // 1) NEWS (actus / marchés)
-  const newsFeeds = [
-    "https://www.lemonde.fr/rss/en_continu.xml",
-    "https://www.lefigaro.fr/rss/sections/economie.xml",
-    // 👉 ajoute ici tes flux crypto/tech/auto/immo si tu veux
+  // 1) SOURCES DEALS par défaut (non-news)
+  const defaultDealFeeds = [
+    // Sites deals FR (fiables)
+    "https://www.dealabs.com/rss/hot",
+    "https://www.dealabs.com/rss/new",
+    "https://www.promocodie.com/rss",
+    // Tech/Geek deals
+    "https://www.frandroid.com/feed",
+    // Tu peux ajouter d'autres flux deals ici
   ];
 
-  // 2) DEALS (bons plans e-commerce)
-  const dealFeeds = [
-    // FR (communauté deals)
-    "https://www.dealabs.com/rss", // si 403 ou change → on génère un RSS custom
+  // 2) SOURCES DEALS depuis Railway/Vercel (optionnel)
+  // Format attendu:
+  // AFFILIATOR_SOURCES='["https://....rss","https://....rss"]'
+  let envDealFeeds = [];
+  try {
+    if (process.env.AFFILIATOR_SOURCES) {
+      const parsed = JSON.parse(process.env.AFFILIATOR_SOURCES);
+      if (Array.isArray(parsed)) envDealFeeds = parsed;
+    }
+  } catch (e) {
+    console.warn("[fetchFeeds] AFFILIATOR_SOURCES invalid JSON");
+  }
 
-    // Réseau Pepper (international, pleins de vrais deals)
-    "https://www.hotukdeals.com/rss",
-    "https://www.mydealz.de/rss",
-    "https://nl.pepper.com/rss",
-  ];
+  // 3) Si tu veux garder des NEWS ailleurs, fais un autre fichier.
+  // Ici on ne prend QUE des deals.
+  const feeds = [...defaultDealFeeds, ...envDealFeeds];
 
   const results = [];
 
-  async function loadFeed(url, sourceType) {
+  for (const url of feeds) {
     try {
       const feed = await parser.parseURL(url);
 
-      return (feed.items || []).map((i) => ({
-        title: i.title || "",
-        link: i.link || "",
-        content: i.contentSnippet || i.content || "",
-        source: feed.title || url,
-        sourceType, // "news" | "deal"
-      }));
+      const items = (feed.items || [])
+        .map(cleanItem)
+        .filter((it) => it.title && it.link)
+        .filter((it) => isProbablyDealLink(it.link)); // filtre simple
+
+      results.push(...items);
     } catch (err) {
-      console.warn("Flux erreur:", url, err.message);
-      return [];
+      console.warn("[fetchFeeds] Flux erreur:", url, err?.message || err);
     }
   }
 
-  // Charger NEWS
-  for (const url of newsFeeds) {
-    const items = await loadFeed(url, "news");
-    results.push(...items);
+  // 4) Déduplication par link
+  const dedup = [];
+  const seen = new Set();
+  for (const it of results) {
+    if (seen.has(it.link)) continue;
+    seen.add(it.link);
+    dedup.push(it);
   }
 
-  // Charger DEALS
-  for (const url of dealFeeds) {
-    const items = await loadFeed(url, "deal");
-    results.push(...items);
-  }
-
-  // limite globale (ajuste si tu veux)
-  return results.slice(0, 60);
+  // 5) Limite
+  return dedup.slice(0, 30);
 }
