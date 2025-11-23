@@ -1,7 +1,6 @@
-// mmy-agent/utils/saveLog.js
 import { Redis } from "@upstash/redis";
 
-// ✅ on accepte les 2 noms, comme /api/feed
+// Accepte les 2 conventions d'env
 const url =
   process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL;
 const token =
@@ -17,7 +16,9 @@ if (!url || !token) {
 const redis = new Redis({ url, token });
 
 /**
- * Sauvegarde un deal dans Redis (liste canonique + listes par catégories)
+ * Sauvegarde un deal canonique dans Redis
+ * - deals:all (global)
+ * - deals:<category> (par catégorie)
  */
 export async function saveDeal(deal) {
   const id =
@@ -31,11 +32,9 @@ export async function saveDeal(deal) {
 
   const payload = JSON.stringify(item);
 
-  // ✅ liste globale lue par /api/feed
   await redis.lpush("deals:all", payload);
   await redis.ltrim("deals:all", 0, 300);
 
-  // ✅ listes par catégorie
   if (item.category) {
     const key = `deals:${String(item.category).toLowerCase()}`;
     await redis.lpush(key, payload);
@@ -45,30 +44,32 @@ export async function saveDeal(deal) {
   return item;
 }
 
-// --- anti-doublon via Redis ---
-const POSTED_KEY = "posted:links";
-
 /**
- * Check si un lien a déjà été posté
+ * Anti-doublon global
+ * stocke les liens déjà publiés dans un SET
  */
 export async function hasBeenPosted(link) {
   if (!link) return false;
-  const v = await redis.sismember(POSTED_KEY, link);
-  return !!v;
+  try {
+    return await redis.sismember("posted:links", link);
+  } catch (e) {
+    console.warn("[hasBeenPosted] redis error", e);
+    return false;
+  }
 }
 
-/**
- * Marque un lien comme déjà posté
- */
 export async function markPosted(link) {
   if (!link) return;
-  await redis.sadd(POSTED_KEY, link);
-}
+  try {
+    await redis.sadd("posted:links", link);
 
-/**
- * Default export pour matcher:
- * import saveLog from "./utils/saveLog.js"
- */
-export default async function saveLog(deal) {
-  return saveDeal(deal);
+    // optionnel: garder le set “propre”
+    const size = await redis.scard("posted:links");
+    if (size > 5000) {
+      // pas parfait mais évite l’explosion
+      await redis.del("posted:links");
+    }
+  } catch (e) {
+    console.warn("[markPosted] redis error", e);
+  }
 }
