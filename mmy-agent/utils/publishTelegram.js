@@ -1,6 +1,4 @@
-// mmy-agent/utils/publishTelegram.js
 import { saveDeal } from "./saveLog.js";
-import buildAffiliateLink from "./buildAffiliateLink.js";
 import fetch from "node-fetch";
 
 const TG_TOKEN_AUTO = process.env.TELEGRAM_BOT_TOKEN_AUTO;
@@ -44,13 +42,17 @@ async function sendTelegram({ token, chatId, text, image }) {
   return r.json();
 }
 
+/**
+ * Publie un item:
+ * - type/news  => Telegram AUTO only
+ * - type/deal  => Redis deals + Telegram DEALS
+ */
 export async function publishDeal(item) {
-  const isNews = item?.type === "news";   // ✅ FIX
+  const type = item?.type || item?.sourceType || "news";
+  const isNews = type === "news";
 
-  // -------- NEWS → canal AUTO --------
   if (isNews) {
     const text = buildTelegramMessage(item, true);
-
     const tgRes = await sendTelegram({
       token: TG_TOKEN_AUTO,
       chatId: TG_CHAT_AUTO,
@@ -60,16 +62,13 @@ export async function publishDeal(item) {
 
     console.log("✅ Sent NEWS to Telegram:", {
       ok: tgRes?.ok,
-      mode: "auto",
       tgMessageId: tgRes?.result?.message_id,
     });
 
     return { ...item, publishedTo: "auto" };
   }
 
-  // -------- DEAL → Redis + canal DEALS --------
-  const affiliateUrl = buildAffiliateLink(item.link || item.url);
-  const saved = await saveDeal({ ...item, affiliateUrl });
+  const saved = await saveDeal(item);
 
   console.log("✅ Saved DEAL to Redis:", {
     id: saved.id,
@@ -89,7 +88,6 @@ export async function publishDeal(item) {
 
   console.log("✅ Sent DEAL to Telegram:", {
     ok: tgRes?.ok,
-    mode: "deals",
     tgMessageId: tgRes?.result?.message_id,
   });
 
@@ -102,8 +100,8 @@ export default async function publishTelegram(item) {
 
 function buildTelegramMessage(d, isNews = false) {
   const link = d.affiliateUrl || d.url || d.link || "";
-  const badgeType = isNews ? "📰 Actu" : "🔥 Deal";
 
+  const badgeType = isNews ? "📰 Actu" : "🔥 Deal";
   const halalBadge =
     d.halal === true
       ? "✅ Halal"
