@@ -4,7 +4,10 @@ import summarize from "./utils/summarize.js";
 import classify from "./utils/classify.js";
 import score from "./utils/score.js";
 import publishTelegram from "./utils/publishTelegram.js";
-import saveLog, { hasBeenPosted, markPosted } from "./utils/saveLog.js";
+import saveLog, {
+  hasBeenPosted,
+  markPosted,
+} from "./utils/saveLog.js";
 
 import { Redis } from "@upstash/redis";
 
@@ -37,7 +40,7 @@ async function testRedis() {
 async function main() {
   console.log("🚀 MMY Agent : cycle démarré");
 
-  // ✅ ping Redis immédiat Railway
+  // ✅ Ping Redis immédiat Railway
   await testRedis();
 
   // 1. RÉCUPÉRATION DES FLUX
