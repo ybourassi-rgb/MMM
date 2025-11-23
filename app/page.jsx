@@ -1,4 +1,3 @@
-// app/page.jsx
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -7,31 +6,21 @@ import DealSlide from "@/components/DealSlide";
 export default function Page() {
   const [items, setItems] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
-
-  const [loading, setLoading] = useState(false); // loading pour fetchMore
-  const [initialLoading, setInitialLoading] = useState(true); // ✅ loading initial
+  const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState(null);
 
   const feedRef = useRef(null);
-  const initialDoneRef = useRef(false); // ✅ bloque fetchMore avant fin du 1er load
 
   // 1) Load initial feed
   useEffect(() => {
-    setInitialLoading(true);
-
     fetch("/api/feed", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
-        const firstItems =
-          d.items || d.feed || (Array.isArray(d) ? d : []);
+        const firstItems = d.items || d || [];
         setItems(firstItems);
         if (d.cursor) setCursor(d.cursor);
       })
-      .catch(() => setItems([]))
-      .finally(() => {
-        setInitialLoading(false);
-        initialDoneRef.current = true; // ✅ premier load terminé
-      });
+      .catch(() => setItems([]));
   }, []);
 
   // 2) Detect active slide
@@ -58,12 +47,6 @@ export default function Page() {
 
   // 3) Fetch more when near end
   const fetchMore = useCallback(async () => {
-    // ✅ bloque tant que le 1er load n’est pas fini
-    if (!initialDoneRef.current) return;
-
-    // ✅ si pas encore d’items, ne spam pas
-    if (!items.length) return;
-
     if (loading) return;
     if (activeIndex < items.length - 3) return;
 
@@ -76,8 +59,7 @@ export default function Page() {
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
 
-      const nextItems =
-        data.items || data.feed || (Array.isArray(data) ? data : []);
+      const nextItems = Array.isArray(data) ? data : data.items;
       const nextCursor = Array.isArray(data) ? null : data.cursor;
 
       if (nextItems?.length) {
@@ -89,7 +71,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [activeIndex, items.length, loading, cursor, items]);
+  }, [activeIndex, items.length, loading, cursor]);
 
   useEffect(() => {
     fetchMore();
@@ -143,11 +125,7 @@ export default function Page() {
           </section>
         ))}
 
-        {initialLoading && (
-          <div className="empty">Chargement initial...</div>
-        )}
-
-        {!initialLoading && !items.length && !loading && (
+        {!items.length && !loading && (
           <div className="empty">Aucune opportunité pour l’instant.</div>
         )}
 
@@ -163,7 +141,7 @@ export default function Page() {
         <div className="navitem">Profil</div>
       </nav>
 
-      {/* Styles (tes styles + TikTok) */}
+      {/* Styles */}
       <style jsx global>{`
         :root {
           --bg: #07090f;
@@ -266,7 +244,6 @@ export default function Page() {
           color: #fff;
         }
 
-        /* TikTok FEED fullscreen */
         .tiktok-feed {
           flex: 1;
           height: 100%;
