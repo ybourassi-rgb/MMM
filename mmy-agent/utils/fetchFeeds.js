@@ -3,88 +3,105 @@ import Parser from "rss-parser";
 
 const parser = new Parser({
   timeout: 15000,
-  headers: {
-    "User-Agent": "MMY-Agent/1.0 (+https://moneymotory.app)"
-  }
+  customFields: {
+    item: [
+      ["content:encoded", "contentEncoded"],
+      ["media:content", "mediaContent"],
+    ],
+  },
 });
 
-// Helpers
-const isProbablyDealLink = (url = "") => {
-  const u = url.toLowerCase();
-  return (
-    u.includes("amazon.") ||
-    u.includes("aliexpress.") ||
-    u.includes("ebay.") ||
-    u.includes("/dp/") ||
-    u.includes("/gp/") ||
-    u.includes("deal") ||
-    u.includes("promo") ||
-    u.includes("offre")
-  );
-};
+// Liste de feeds :
+// - type "deal" => devrait alimenter Telegram Deals
+// - type "news" => si tu veux un canal séparé plus tard
+const FEEDS = [
+  // -------- DEALS / BONS PLANS --------
+  {
+    url: "https://www.dealabs.com/rss/hot.xml",
+    type: "deal",
+    source: "dealabs-hot",
+    defaultCategory: "Deals",
+  },
+  {
+    url: "https://www.dealabs.com/rss/nouveaux.xml",
+    type: "deal",
+    source: "dealabs-new",
+    defaultCategory: "Deals",
+  },
+  {
+    url: "https://www.frandroid.com/bons-plans/feed",
+    type: "deal",
+    source: "frandroid-deals",
+    defaultCategory: "Tech",
+  },
+  {
+    url: "https://www.phonandroid.com/bons-plans/feed",
+    type: "deal",
+    source: "phonandroid-deals",
+    defaultCategory: "Tech",
+  },
 
-const cleanItem = (i) => ({
-  title: (i.title || "").trim(),
-  link: (i.link || i.guid || "").trim(),
-  content: (i.contentSnippet || i.content || "").trim(),
-  pubDate: i.isoDate || i.pubDate || null,
-});
+  // -------- NEWS (si tu veux garder un peu d’actu) --------
+  {
+    url: "https://www.lemonde.fr/rss/en_continu.xml",
+    type: "news",
+    source: "lemonde",
+    defaultCategory: "News",
+  },
+  {
+    url: "https://www.lefigaro.fr/rss/sections/economie.xml",
+    type: "news",
+    source: "lefigaro-economie",
+    defaultCategory: "News",
+  },
+];
 
-export default async function fetchFeeds() {
-  // 1) SOURCES DEALS par défaut (non-news)
-  const defaultDealFeeds = [
-    // Sites deals FR (fiables)
-    "https://www.dealabs.com/rss/hot",
-    "https://www.dealabs.com/rss/new",
-    "https://www.promocodie.com/rss",
-    // Tech/Geek deals
-    "https://www.frandroid.com/feed",
-    // Tu peux ajouter d'autres flux deals ici
-  ];
+// petite normalisation + fallback texte
+function normalizeItem(i, feedMeta) {
+  const title = (i.title || "").trim();
+  const link = (i.link || i.guid || "").trim();
 
-  // 2) SOURCES DEALS depuis Railway/Vercel (optionnel)
-  // Format attendu:
-  // AFFILIATOR_SOURCES='["https://....rss","https://....rss"]'
-  let envDealFeeds = [];
-  try {
-    if (process.env.AFFILIATOR_SOURCES) {
-      const parsed = JSON.parse(process.env.AFFILIATOR_SOURCES);
-      if (Array.isArray(parsed)) envDealFeeds = parsed;
-    }
-  } catch (e) {
-    console.warn("[fetchFeeds] AFFILIATOR_SOURCES invalid JSON");
-  }
+  const content =
+    (i.contentSnippet ||
+      i.content ||
+      i.contentEncoded ||
+      i.summary ||
+      ""
+    ).toString();
 
-  // 3) Si tu veux garder des NEWS ailleurs, fais un autre fichier.
-  // Ici on ne prend QUE des deals.
-  const feeds = [...defaultDealFeeds, ...envDealFeeds];
+  return {
+    title,
+    link,
+    content,
+    // tags utiles pour filtrer plus tard
+    type: feedMeta.type,
+    source: feedMeta.source,
+    category: feedMeta.defaultCategory,
+    publishedAt: i.isoDate || i.pubDate || null,
+  };
+}
 
+export default async function fetchFeeds(limit = 40) {
   const results = [];
+  const seen = new Set();
 
-  for (const url of feeds) {
+  for (const f of FEEDS) {
     try {
-      const feed = await parser.parseURL(url);
+      const feed = await parser.parseURL(f.url);
 
-      const items = (feed.items || [])
-        .map(cleanItem)
-        .filter((it) => it.title && it.link)
-        .filter((it) => isProbablyDealLink(it.link)); // filtre simple
+      for (const item of feed.items || []) {
+        const n = normalizeItem(item, f);
 
-      results.push(...items);
+        if (!n.link || seen.has(n.link)) continue;
+        seen.add(n.link);
+
+        results.push(n);
+      }
     } catch (err) {
-      console.warn("[fetchFeeds] Flux erreur:", url, err?.message || err);
+      console.warn("Flux erreur:", f.url, err.message);
     }
   }
 
-  // 4) Déduplication par link
-  const dedup = [];
-  const seen = new Set();
-  for (const it of results) {
-    if (seen.has(it.link)) continue;
-    seen.add(it.link);
-    dedup.push(it);
-  }
-
-  // 5) Limite
-  return dedup.slice(0, 30);
+  // On mélange puis on coupe
+  return results.slice(0, limit);
 }
