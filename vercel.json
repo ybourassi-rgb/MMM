@@ -1,41 +1,24 @@
 {
-  "version": 2,
-
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 30
-    }
-  },
-
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/(.*)", "destination": "/public/$1" }
-  ],
-
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
         { "key": "Pragma", "value": "no-cache" },
         { "key": "Expires", "value": "0" },
         { "key": "CDN-Cache-Control", "value": "no-store" },
         { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
       ]
-    },
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
     }
   ],
-
   "crons": [
-    { "path": "/api/affiliation_run", "schedule": "*/20 * * * *" },
-    { "path": "/api/mmy-autopublisher", "schedule": "*/30 * * * *" }
+    {
+      "path": "/api/affiliation_run",
+      "schedule": "*/20 * * * *"
+    },
+    {
+      "path": "/api/mmy-autopublisher",
+      "schedule": "*/30 * * * *"
+    }
   ]
 }
