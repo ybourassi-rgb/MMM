@@ -3,25 +3,20 @@
 const nextConfig = {
   images: {
     remotePatterns: [
-      // Dealabs & Pepper family
+      // Dealabs / HotUKDeals CDNs
       { protocol: "https", hostname: "www.dealabs.com" },
       { protocol: "https", hostname: "static-hotukdeals.akamaized.net" },
-      { protocol: "https", hostname: "**.dealabs.com" },
-      { protocol: "https", hostname: "**.pepper.com" },
+      { protocol: "https", hostname: "images.dealabs.com" },
+      { protocol: "https", hostname: "images-hotukdeals.akamaized.net" },
+      { protocol: "https", hostname: "static-pepper.dealabs.com" },
 
-      // Amazon
-      { protocol: "https", hostname: "**.amazon.com" },
-      { protocol: "https", hostname: "**.amazon.fr" },
-      { protocol: "https", hostname: "**.amazonaws.com" },
-
-      // Ebay / Ali / etc (au cas où)
-      { protocol: "https", hostname: "**.ebay.com" },
-      { protocol: "https", hostname: "**.ebay.fr" },
-      { protocol: "https", hostname: "**.aliexpress.com" },
-
-      // Divers
+      // Amazon / Ali / Ebay / etc.
+      { protocol: "https", hostname: "m.media-amazon.com" },
+      { protocol: "https", hostname: "images-eu.ssl-images-amazon.com" },
       { protocol: "https", hostname: "i.imgur.com" },
       { protocol: "https", hostname: "img.leboncoin.fr" },
+      { protocol: "https", hostname: "ae01.alicdn.com" },
+      { protocol: "https", hostname: "i.ebayimg.com" },
     ],
   },
 };
