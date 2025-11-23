@@ -9,18 +9,35 @@ import saveLog, {
   markPosted,
 } from "./utils/saveLog.js";
 
+import { Redis } from "@upstash/redis";
+
+// --- Redis ping (debug Railway) ---
+const redisPing = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN,
+});
+
+async function testRedis() {
+  try {
+    const urlOk = !!(process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL);
+    const tokenOk = !!(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN);
+    console.log("[redis] env url?", urlOk, "token?", tokenOk);
+
+    const pong = await redisPing.ping();
+    console.log("[redis ping ✅]", pong);
+
+    const len = await redisPing.llen("deals:all");
+    console.log("[redis] deals:all length =", len);
+  } catch (e) {
+    console.error("[redis ping ❌]", e);
+  }
+}
+
 async function main() {
   console.log("🚀 MMY Agent : cycle démarré");
 
-  // (Optionnel) Message de test au démarrage – tu peux commenter si tu veux
-  // await publishTelegram({
-  //   title: "MMY Agent opérationnel ✔️",
-  //   link: "",
-  //   summary: "Le service MMY tourne correctement sur Railway.",
-  //   category: "system",
-  //   yscore: { globalScore: 99 },
-  // });
-  // console.log("📤 Message de test envoyé à Telegram");
+  // ✅ ping Redis immédiat Railway
+  await testRedis();
 
   // 1. RÉCUPÉRATION DES FLUX
   const items = await fetchFeeds();
