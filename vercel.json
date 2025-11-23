@@ -19,6 +19,10 @@
     {
       "path": "/api/mmy-autopublisher",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/mmy-agent-run",
+      "schedule": "*/20 * * * *"
     }
   ]
 }
