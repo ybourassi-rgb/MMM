@@ -15,18 +15,18 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link, // <= Dealabs
+    link,          // <= Dealabs
     affiliateUrl,
     halal,
   } = item || {};
 
-  // On choisit le bon lien
+  // 1) Lien final fiable
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // Image cassée → fallback
+  // 2) Image cassée => fallback
   const [imgOk, setImgOk] = useState(true);
   const finalImage = imgOk ? image : null;
 
@@ -86,27 +86,39 @@ export default function DealSlide({ item, active }) {
 
   return (
     <div className="deal-slide">
-      {/* Media background */}
+      {/* MEDIA */}
       <div className="deal-media">
-        {finalImage ? (
-          <Image
-            src={finalImage}
-            alt={title}
-            fill
-            priority={active}
-            sizes="100vw"
-            onError={() => setImgOk(false)}
-            style={{ objectFit: "cover" }}
+        {/* Fond flou / cover (style) */}
+        {finalImage && (
+          <div
+            className="deal-media-bg"
+            style={{ backgroundImage: `url(${finalImage})` }}
           />
+        )}
+
+        {/* Image principale plus petite */}
+        {finalImage ? (
+          <div className="deal-media-main">
+            <Image
+              src={finalImage}
+              alt={title}
+              fill
+              priority={active}
+              sizes="100vw"
+              onError={() => setImgOk(false)}
+              style={{ objectFit: "contain", objectPosition: "center" }}
+            />
+          </div>
         ) : (
           <div className="deal-media-fallback">
             {image ? "Image indisponible" : "PHOTO / MINI-VIDÉO"}
           </div>
         )}
+
         <div className="deal-gradient" />
       </div>
 
-      {/* Top chips */}
+      {/* TOP CHIPS */}
       <div className="deal-top">
         {score != null && <div className="deal-chip">Y-Score {score}</div>}
         {category && <div className="deal-chip">{category}</div>}
@@ -116,7 +128,7 @@ export default function DealSlide({ item, active }) {
         )}
       </div>
 
-      {/* Right actions */}
+      {/* ACTIONS */}
       <div className="deal-actions">
         <button className="action-btn" onClick={onFav}>
           ❤️<span>Favori</span>
@@ -132,7 +144,7 @@ export default function DealSlide({ item, active }) {
         </button>
       </div>
 
-      {/* Bottom infos */}
+      {/* BOTTOM */}
       <div className="deal-bottom">
         <h2 className="deal-title">{title}</h2>
         {price && <p className="deal-price">Prix: {price}</p>}
@@ -173,7 +185,32 @@ export default function DealSlide({ item, active }) {
           position: absolute;
           inset: 0;
           background: #0b1020;
+          overflow: hidden;
         }
+
+        /* Fond blur cover */
+        .deal-media-bg {
+          position: absolute;
+          inset: 0;
+          background-size: cover;
+          background-position: center;
+          filter: blur(18px);
+          transform: scale(1.1);
+          opacity: 0.55;
+        }
+
+        /* Zone image principale PLUS PETITE */
+        .deal-media-main {
+          position: absolute;
+          top: 110px;         /* descend un peu sous le header */
+          left: 0;
+          right: 0;
+          height: 50vh;       /* ✅ taille image */
+          margin: 0 auto;
+          padding: 10px 18px; /* un peu d’air */
+          z-index: 1;
+        }
+
         .deal-media-fallback {
           position: absolute;
           inset: 0;
@@ -183,6 +220,7 @@ export default function DealSlide({ item, active }) {
           font-weight: 700;
           opacity: 0.6;
         }
+
         .deal-gradient {
           position: absolute;
           inset: 0;
@@ -194,8 +232,9 @@ export default function DealSlide({ item, active }) {
             linear-gradient(
               180deg,
               rgba(0, 0, 0, 0.05),
-              rgba(0, 0, 0, 0.85)
+              rgba(0, 0, 0, 0.9)
             );
+          z-index: 2;
         }
 
         .deal-top {
@@ -205,7 +244,7 @@ export default function DealSlide({ item, active }) {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
-          z-index: 2;
+          z-index: 3;
         }
         .deal-chip {
           display: inline-flex;
@@ -227,7 +266,7 @@ export default function DealSlide({ item, active }) {
           display: flex;
           flex-direction: column;
           gap: 12px;
-          z-index: 2;
+          z-index: 3;
         }
         .action-btn {
           background: rgba(0, 0, 0, 0.5);
@@ -258,7 +297,7 @@ export default function DealSlide({ item, active }) {
           left: 14px;
           right: 78px;
           bottom: 90px;
-          z-index: 2;
+          z-index: 3;
         }
         .deal-title {
           font-size: 20px;
