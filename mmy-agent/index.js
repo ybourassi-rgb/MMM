@@ -1,3 +1,4 @@
+// mmy-agent/index.js
 import fetchFeeds from "./utils/fetchFeeds.js";
 import summarize from "./utils/summarize.js";
 import classify from "./utils/classify.js";
@@ -7,7 +8,7 @@ import { hasBeenPosted, markPosted } from "./utils/saveLog.js";
 
 import { Redis } from "@upstash/redis";
 
-// --- Redis ping (debug Railway) ---
+// --- Redis ping (debug) ---
 const redisPing = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN,
@@ -49,8 +50,10 @@ async function isAlive(url) {
   }
 }
 
-async function main() {
+// ✅ fonction exportée pour Vercel / Railway
+export async function runAgentCycle() {
   console.log("🚀 MMY Agent : cycle démarré");
+
   await testRedis();
 
   const items = await fetchFeeds();
@@ -58,7 +61,7 @@ async function main() {
 
   for (const item of items) {
     try {
-      const type = item.type || "news";
+      const sourceType = item.type || "news";
 
       // Anti-doublon global
       const already = await hasBeenPosted(item.link);
@@ -68,7 +71,7 @@ async function main() {
       }
 
       // -------- NEWS --------
-      if (type === "news") {
+      if (sourceType === "news") {
         const summary = await summarize(item);
         const category = await classify(summary);
 
@@ -88,7 +91,7 @@ async function main() {
       }
 
       // -------- DEAL --------
-      if (type === "deal") {
+      if (sourceType === "deal") {
         if (!isDealDomain(item.link)) {
           console.log("🧹 Deal rejeté (domaine non autorisé):", item.link);
           continue;
@@ -128,7 +131,7 @@ async function main() {
         continue;
       }
 
-      console.log("⚠️ Item ignoré (type inconnu):", type, item.link);
+      console.log("⚠️ Item ignoré (type inconnu):", sourceType, item.link);
     } catch (error) {
       console.error("❌ Erreur sur un item :", error);
     }
@@ -137,6 +140,9 @@ async function main() {
   console.log("✨ Cycle terminé");
 }
 
-main().catch((e) => {
-  console.error("❌ Erreur globale MMY Agent :", e);
-});
+// ✅ si tu l’exécutes en CLI/Railway
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runAgentCycle().catch((e) =>
+    console.error("❌ Erreur globale MMY Agent :", e)
+  );
+}
