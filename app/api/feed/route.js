@@ -11,13 +11,21 @@ const parser = new Parser({
   },
 });
 
-// Upgrade des miniatures dealabs → version plus grande si possible
+// Upgrade Dealabs → HD seulement si domaine Dealabs
 function upgradeDealabs(url) {
-  if (!url) return url;
+  if (!url) return null;
+  try {
+    const u = new URL(url);
 
-  return url
-    .replace("/thumb/", "/")
-    .replace(/\/[0-9]{2,3}x[0-9]{2,3}\//, "/");
+    // On ne touche QUE Dealabs
+    if (!u.hostname.includes("dealabs")) return url;
+
+    return url
+      .replace("/thumb/", "/")
+      .replace(/\/[0-9]{2,3}x[0-9]{2,3}\//, "/");
+  } catch {
+    return url;
+  }
 }
 
 // petite util pour extraire une image d’un item RSS
@@ -29,17 +37,19 @@ function pickImage(it) {
   if (mc?.$?.url) url = mc.$.url;
   if (!url && Array.isArray(mc) && mc[0]?.$?.url) url = mc[0].$?.url;
 
-  // 2) enclosure url (souvent sur RSS)
+  // 2) enclosure url
   if (!url && it.enclosure?.url) url = it.enclosure.url;
 
-  // 3) parfois dans content HTML => cherche un <img src="...">
+  // 3) HTML content
   if (!url) {
     const html = it.contentEncoded || it.content || "";
     const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
     if (match?.[1]) url = match[1];
   }
 
-  return upgradeDealabs(url);
+  // si upgrade renvoie null, garde l’original
+  const upgraded = upgradeDealabs(url);
+  return upgraded || url || null;
 }
 
 function normalizeItem(raw, i = 0) {
@@ -49,12 +59,11 @@ function normalizeItem(raw, i = 0) {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
 
-    // ✅ UI DealSlide utilise url/link/affiliateUrl
     url: raw.url || raw.link || raw.guid || "",
     link: raw.link || null,
     affiliateUrl: raw.affiliateUrl || null,
 
-    image: pickImage(raw), // ✅ image absolue si dispo
+    image: pickImage(raw),
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
     category: raw.category || raw.type || "autre",
@@ -72,7 +81,6 @@ export async function GET() {
   try {
     const SOURCES = [
       "https://www.dealabs.com/rss/hot",
-      // ajoute tes flux ici
     ];
 
     const feeds = await Promise.all(
