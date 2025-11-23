@@ -82,7 +82,7 @@ async function main() {
           yscore,
         });
 
-        // 8. LOG
+        // 8. LOG (Redis)
         await saveLog({
           title: item.title,
           category,
