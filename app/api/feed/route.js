@@ -12,9 +12,33 @@ const parser = new Parser({
   },
 });
 
-// ✅ Dealabs met souvent des miniatures :
+/* =========================
+   0) Text cleanup (mojibake)
+   ========================= */
+function cleanText(s = "") {
+  return String(s)
+    .replace(/Â°/g, "°")
+    .replace(/â‚¬/g, "€")
+    .replace(/â€™/g, "’")
+    .replace(/â€œ/g, "“")
+    .replace(/â€/g, "”")
+    .replace(/Ã /g, "à")
+    .replace(/Ã©/g, "é")
+    .replace(/Ã¨/g, "è")
+    .replace(/Ãª/g, "ê")
+    .replace(/Ã®/g, "î")
+    .replace(/Ã´/g, "ô")
+    .replace(/Ã¹/g, "ù")
+    .replace(/Ã§/g, "ç")
+    .trim();
+}
+
+/* ========================================
+   1) Dealabs thumbnails => original image
+   ======================================== */
+// thumb:
 // https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
-// → on veut l’original :
+// full:
 // https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/ID_1.jpg
 function upgradeDealabsImage(url) {
   if (!url) return url;
@@ -23,31 +47,26 @@ function upgradeDealabsImage(url) {
     const u = new URL(url);
 
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(
-        /\/re\/\d+x\d+\/qt\/\d+\//i,
-        "/"
-      );
+      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       return u.toString();
     }
-
     return url;
   } catch {
     return url;
   }
 }
 
-// petite util pour extraire une image d’un item RSS
+/* =========================
+   2) Pick best image in item
+   ========================= */
 function pickImage(it) {
-  // 1) media:content url
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
   if (Array.isArray(mc) && mc[0]?.$?.url)
     return upgradeDealabsImage(mc[0].$?.url);
 
-  // 2) enclosure url
   if (it.enclosure?.url) return upgradeDealabsImage(it.enclosure.url);
 
-  // 3) parfois dans content HTML => cherche un <img src="...">
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
   if (match?.[1]) return upgradeDealabsImage(match[1]);
@@ -55,15 +74,20 @@ function pickImage(it) {
   return null;
 }
 
+/* =========================
+   3) Normalize
+   ========================= */
 function normalizeItem(raw, i = 0) {
   const url = raw.link || raw.url || raw.guid || "";
 
+  const image = pickImage(raw);
+
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
-    title: raw.title?.trim() || "Opportunité",
+    title: cleanText(raw.title) || "Opportunité",
     url,
     link: raw.link || null,
-    image: pickImage(raw),
+    image,
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
@@ -84,79 +108,68 @@ function normalizeItem(raw, i = 0) {
     affiliateUrl: raw.affiliateUrl || null,
     source: raw.source || "rss",
     publishedAt: raw.publishedAt || raw.isoDate || null,
-    summary: raw.summary || raw.contentSnippet || null,
+    summary: cleanText(raw.summary || raw.contentSnippet || ""),
   };
 }
 
+/* =========================
+   4) Sources
+   ========================= */
+const SOURCES = [
+  // ===== DEALABS (FR) =====
+  "https://www.dealabs.com/rss/hot",
+  "https://www.dealabs.com/rss/nouveaux",          // nouveaux deals
+  "https://www.dealabs.com/rss/bonnes-affaires",   // si dispo selon région
+  "https://www.dealabs.com/rss/groupe/high-tech",
+  "https://www.dealabs.com/rss/groupe/maison-jardin",
+  "https://www.dealabs.com/rss/groupe/auto-moto",
+  "https://www.dealabs.com/rss/groupe/voyages",    // bon plan voyage
+
+  // ===== E-COMMERCE / PROMOS GÉNÉRALISTES =====
+  "https://www.promocatalogues.fr/rss",            // catalogues promos
+  "https://www.radins.com/rss.xml",                // site bons plans
+  "https://www.ma-reduc.com/rss",                  // réductions & codes
+  "https://www.cuponation.fr/blog/feed",           // coupons
+
+  // ===== TECH / GAMING =====
+  "https://www.generation-nt.com/rss",             // actus + deals parfois
+  "https://www.jeuxvideo.com/rss.xml",             // bons plans JV/tech
+
+  // ===== VOYAGES (très grand public) =====
+  "https://www.voyagespirates.fr/feed",            // Voyage Pirates FR
+  "https://www.traveldealz.fr/feed",               // grosses promos vols/hôtels
+  "https://www.dealchecker.co.uk/rss.xml",         // travel deals (EU)
+  "https://www.secretflying.com/feed/",            // erreurs tarifaires vols
+
+  // ===== AUTOMOBILE / MOBILITÉ =====
+  "https://www.caradisiac.com/rss/actualite/",     // actus auto (parfois deals)
+  "https://www.autoplus.fr/rss",                   
+
+  // ===== IMMOBILIER / INVEST =====
+  "https://www.seloger.com/rss/annonces.xml",      // annonces immo (si dispo)
+  "https://www.pap.fr/rss.xml",                    // annonces PAP
+
+  // ===== AJOUTE ICI TES SOURCES MAROC si tu en as =====
+  // ex: sites locaux qui ont un /feed ou /rss
+];
+
+/* =========================
+   5) GET
+   ========================= */
 export async function GET() {
   try {
-    const SOURCES = [
-      // ===== FR Pepper Network =====
-      "https://www.dealabs.com/rss/hot",
-      "https://www.dealabs.com/rss/new",
-      "https://www.dealabs.com/rss/discussed",
-      "https://www.dealabs.com/rss/commented",
-
-      // ===== International Pepper Network =====
-      "https://www.hotukdeals.com/rss/hot",
-      "https://www.hotukdeals.com/rss/new",
-
-      "https://www.mydealz.de/rss/hot",
-      "https://www.mydealz.de/rss/new",
-
-      "https://www.chollometro.com/rss/hot",
-      "https://www.chollometro.com/rss/new",
-
-      "https://www.pepper.com/rss/hot",
-      "https://www.pepper.com/rss/new",
-
-      // ===== Autres sites FR bons plans =====
-      "https://www.radins.com/rss.xml",
-      "https://www.ma-reduc.com/rss.xml",
-      "https://www.echantillonsgratuits.fr/feed/",
-      "https://www.bonsplans.fr/rss.xml",
-
-      // ===== Tech / Gaming deals =====
-      "https://www.jeuxvideo.com/rss/les-bons-plans.xml",
-      "https://www.numerama.com/rss/bons-plans/",
-      "https://www.frandroid.com/rss/bons-plans",
-
-      // =========================================
-      // ✅✅ VOYAGE / BONS PLANS TRAVEL
-      // =========================================
-      "https://www.dealabs.com/groupe/voyage/rss",
-      "https://www.dealabs.com/groupe/volsavion/rss",
-      "https://www.dealabs.com/groupe/hotel/rss",
-
-      "https://www.voyagepirates.fr/rss",
-      "https://www.fly4free.com/feed/",
-      "https://www.secretflying.com/feed/",
-      "https://travel-dealz.eu/feed/",
-      "https://www.theflightdeal.com/feed/",
-      "https://www.holidaypirates.com/rss",
-    ];
-
-    // ✅ allSettled : si un flux bug => ça casse pas tout
-    const results = await Promise.allSettled(
+    const feeds = await Promise.allSettled(
       SOURCES.map((u) => parser.parseURL(u))
     );
 
-    const feedsOk = results
-      .filter((r) => r.status === "fulfilled")
-      .map((r) => r.value);
-
-    const items = feedsOk
-      .flatMap((f) => f.items || [])
+    const items = feeds
+      .filter((f) => f.status === "fulfilled")
+      .flatMap((f) => f.value.items || [])
       .map(normalizeItem)
-      .filter((it) => it.url);
+      // ✅ on garde seulement deals AVEC lien + AVEC image
+      .filter((it) => it.url && it.image);
 
-    return NextResponse.json({
-      ok: true,
-      items,
-      cursor: null,
-      sourcesOk: feedsOk.length,
-      sourcesTotal: SOURCES.length,
-    });
+    return NextResponse.json({ ok: true, items, cursor: null });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Feed error", items: [] },
