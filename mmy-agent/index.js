@@ -4,10 +4,7 @@ import summarize from "./utils/summarize.js";
 import classify from "./utils/classify.js";
 import score from "./utils/score.js";
 import publishTelegram from "./utils/publishTelegram.js";
-import saveLog, {
-  hasBeenPosted,
-  markPosted,
-} from "./utils/saveLog.js";
+import saveLog, { hasBeenPosted, markPosted } from "./utils/saveLog.js";
 
 import { Redis } from "@upstash/redis";
 
@@ -82,7 +79,7 @@ async function main() {
           yscore,
         });
 
-        // 8. LOG (Redis)
+        // 8. LOG
         await saveLog({
           title: item.title,
           category,
