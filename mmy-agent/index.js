@@ -41,14 +41,10 @@ function isDealDomain(url = "") {
   return DEAL_DOMAINS.some((d) => url.toLowerCase().includes(d));
 }
 
-// ✅ HEAD + fallback GET (évite les faux "dead links" sur Amazon & co)
 async function isAlive(url) {
   try {
     const r = await fetch(url, { method: "HEAD", redirect: "follow" });
-    if (r.ok) return true;
-
-    const r2 = await fetch(url, { method: "GET", redirect: "follow" });
-    return r2.ok;
+    return r.ok;
   } catch {
     return false;
   }
@@ -91,6 +87,7 @@ export async function runAgent() {
           category,
           yscore,
           type: "news",
+          sourceType: "news", // ✅ AJOUT pour publishTelegram
         });
 
         await markPosted(item.link);
@@ -134,6 +131,7 @@ export async function runAgent() {
           category,
           yscore,
           type: "deal",
+          sourceType: "deal", // ✅ AJOUT pour publishTelegram
         });
 
         await markPosted(item.link);
