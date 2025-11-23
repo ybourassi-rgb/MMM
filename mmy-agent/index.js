@@ -19,8 +19,12 @@ const redisPing = new Redis({
 
 async function testRedis() {
   try {
-    const urlOk = !!(process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL);
-    const tokenOk = !!(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN);
+    const urlOk = !!(
+      process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL
+    );
+    const tokenOk = !!(
+      process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN
+    );
     console.log("[redis] env url?", urlOk, "token?", tokenOk);
 
     const pong = await redisPing.ping();
