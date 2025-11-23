@@ -1,48 +1,44 @@
 import { Redis } from "@upstash/redis";
 
-export const runtime = "nodejs"; 
-// important : Upstash SDK + fetch OK en node runtime
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
 
-export async function GET(req) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    const category = searchParams.get("category"); // optional
-    const limit = Number(searchParams.get("limit") || 20);
-    const cursor = searchParams.get("cursor"); // optional pour pagination simple
+    const url =
+      process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL;
+    const token =
+      process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN;
 
-    // clé cible
-    const key = category
-      ? `deals:${category.toLowerCase()}`
-      : "deals:all";
+    console.log("[feed] redis url?", !!url, "token?", !!token);
 
-    // Pagination simple par offset
-    const offset = cursor ? Number(cursor) : 0;
-    const raw = await redis.lrange(key, offset, offset + limit - 1);
+    if (!url || !token) {
+      return json(
+        { ok: false, error: "Upstash env missing", hasUrl: !!url, hasToken: !!token },
+        500
+      );
+    }
 
-    const items = raw
-      .map((x) => {
-        try {
-          return JSON.parse(x);
-        } catch {
-          return null;
-        }
-      })
+    const redis = new Redis({ url, token });
+
+    const raw = await redis.lrange("deals:all", 0, 50);
+    const items = (raw || [])
+      .map((x) => { try { return JSON.parse(x); } catch { return null; } })
       .filter(Boolean);
 
-    // Nouveau cursor (offset suivant)
-    const nextCursor = offset + items.length;
-
-    return Response.json({
-      items,
-      cursor: items.length ? String(nextCursor) : null,
-    });
+    return json({ items, cursor: null });
   } catch (e) {
-    console.error("feed error", e);
-    return Response.json({ items: [], cursor: null }, { status: 200 });
+    console.error("[feed error]", e);
+    return json({ items: [], cursor: null });
   }
 }
