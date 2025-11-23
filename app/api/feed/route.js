@@ -12,22 +12,71 @@ const parser = new Parser({
   },
 });
 
-// petite util pour extraire une image d’un item RSS
+/**
+ * - prend la meilleure image possible dans un item RSS
+ * - puis tente d'améliorer l'URL si c'est un thumbnail connu
+ */
 function pickImage(it) {
   // 1) media:content url
   const mc = it.mediaContent;
-  if (mc?.$?.url) return mc.$.url;
-  if (Array.isArray(mc) && mc[0]?.$?.url) return mc[0].$?.url;
+  let url =
+    mc?.$?.url ||
+    (Array.isArray(mc) && mc[0]?.$?.url) ||
+    null;
 
-  // 2) enclosure url (souvent sur RSS)
-  if (it.enclosure?.url) return it.enclosure.url;
+  // 2) enclosure url
+  if (!url && it.enclosure?.url) url = it.enclosure.url;
 
-  // 3) parfois dans content HTML => cherche un <img src="...">
-  const html = it.contentEncoded || it.content || "";
-  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (match?.[1]) return match[1];
+  // 3) dans HTML -> <img src="...">
+  if (!url) {
+    const html = it.contentEncoded || it.content || "";
+    // srcset (souvent plusieurs tailles)
+    const srcsetMatch = html.match(/srcset=["']([^"']+)["']/i);
+    if (srcsetMatch?.[1]) {
+      // on prend la dernière URL du srcset (= la plus grande en général)
+      const last = srcsetMatch[1].split(",").pop()?.trim();
+      const lastUrl = last?.split(" ")?.[0];
+      if (lastUrl) url = lastUrl;
+    }
 
-  return null;
+    if (!url) {
+      const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch?.[1]) url = imgMatch[1];
+    }
+  }
+
+  if (!url) return null;
+
+  // Normalise URL (//domain => https://domain)
+  if (url.startsWith("//")) url = "https:" + url;
+
+  // ✅ Amélioration "HD" pour thumbnails courants
+  url = upgradeThumbUrl(url);
+
+  return url;
+}
+
+/**
+ * Essaie de transformer une miniature en image plus grande
+ * selon les patterns connus.
+ */
+function upgradeThumbUrl(url) {
+  let u = url;
+
+  // Dealabs / HotUKDeals / Pepper etc.
+  // Exemple mini : .../thread/thumbnail/xxxx/12345_1.jpg?width=200
+  // => on enlève width/height trop petits
+  u = u.replace(/([?&])(width|w|height|h)=\d+/gi, "$1");
+  u = u.replace(/[?&]$/g, "");
+
+  // Si on voit "thumbnail" dans le path -> tente "large"
+  u = u.replace(/\/thumbnail\//i, "/large/");
+
+  // Certains CDN utilisent /small/ /thumb/
+  u = u.replace(/\/small\//i, "/large/");
+  u = u.replace(/\/thumb\//i, "/large/");
+
+  return u;
 }
 
 function normalizeItem(raw, i = 0) {
@@ -36,8 +85,8 @@ function normalizeItem(raw, i = 0) {
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
-    url, // ✅ le champ que l’UI utilise
-    image: pickImage(raw), // ✅ image absolue si dispo
+    url,                       // ✅ champ utilisé par l'UI
+    image: pickImage(raw),     // ✅ image HD si dispo
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
     category: raw.category || raw.type || "autre",
@@ -54,10 +103,9 @@ function normalizeItem(raw, i = 0) {
 
 export async function GET() {
   try {
-    // Exemple sources (mets les tiennes)
     const SOURCES = [
       "https://www.dealabs.com/rss/hot",
-      // ajoute tes flux ici
+      // ajoute tes autres flux ici
     ];
 
     const feeds = await Promise.all(
@@ -67,7 +115,7 @@ export async function GET() {
     const items = feeds
       .flatMap((f) => f.items || [])
       .map(normalizeItem)
-      .filter((it) => it.url); // garde seulement ceux avec lien
+      .filter((it) => it.url);
 
     return NextResponse.json({ ok: true, items, cursor: null });
   } catch (e) {
