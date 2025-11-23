@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useMemo, useState } from "react";
 
 export default function DealSlide({ item, active }) {
   const {
@@ -14,17 +15,27 @@ export default function DealSlide({ item, active }) {
     risk,
     horizon,
     url,
-    link,          // ✅ fallback si l’API renvoie encore "link"
+    link,          // <= Dealabs
     affiliateUrl,
     halal,
   } = item || {};
 
-  const openLink = (href) => {
-    if (!href) return;
-    window.open(href, "_blank", "noopener,noreferrer");
+  // 1) On choisit le bon lien même si l’API renvoie "link"
+  const finalUrl = useMemo(
+    () => affiliateUrl || url || link || null,
+    [affiliateUrl, url, link]
+  );
+
+  // 2) Gestion image cassée → fallback propre
+  const [imgOk, setImgOk] = useState(true);
+  const finalImage = imgOk ? image : null;
+
+  const openLink = (l) => {
+    if (!l) return;
+    window.open(l, "_blank", "noopener,noreferrer");
   };
 
-  const trackClick = async (domain, href) => {
+  const trackClick = async (domain) => {
     try {
       await fetch("/api/log-click", {
         method: "POST",
@@ -34,7 +45,7 @@ export default function DealSlide({ item, active }) {
           title,
           score,
           category,
-          url: href, // ✅ on logge le vrai lien ouvert
+          url: finalUrl,
         }),
       });
     } catch (e) {
@@ -43,15 +54,12 @@ export default function DealSlide({ item, active }) {
   };
 
   const onSee = async () => {
-    const href = affiliateUrl || url || link; // ✅ lien final
-    if (!href) return;
-
+    if (!finalUrl) return;
     try {
-      const domain = new URL(href).hostname;
-      await trackClick(domain, href);
+      const domain = new URL(finalUrl).hostname;
+      await trackClick(domain);
     } catch {}
-
-    openLink(href);
+    openLink(finalUrl);
   };
 
   const onAnalyze = () => {
@@ -60,12 +68,12 @@ export default function DealSlide({ item, active }) {
   };
 
   const onShare = async () => {
-    const href = affiliateUrl || url || link || "";
+    const l = finalUrl || "";
     try {
       if (navigator.share) {
-        await navigator.share({ title, text: title, url: href });
+        await navigator.share({ title, text: title, url: l });
       } else {
-        await navigator.clipboard.writeText(href);
+        await navigator.clipboard.writeText(l);
         alert("Lien copié ✅");
       }
     } catch (e) {
@@ -82,17 +90,20 @@ export default function DealSlide({ item, active }) {
     <div className="deal-slide">
       {/* Media background */}
       <div className="deal-media">
-        {image ? (
+        {finalImage ? (
           <Image
-            src={image}
+            src={finalImage}
             alt={title}
             fill
             priority={active}
             sizes="100vw"
+            onError={() => setImgOk(false)}
             style={{ objectFit: "cover" }}
           />
         ) : (
-          <div className="deal-media-fallback">PHOTO / MINI-VIDÉO</div>
+          <div className="deal-media-fallback">
+            {image ? "Image indisponible" : "PHOTO / MINI-VIDÉO"}
+          </div>
         )}
         <div className="deal-gradient" />
       </div>
@@ -118,7 +129,7 @@ export default function DealSlide({ item, active }) {
         <button className="action-btn" onClick={onAnalyze}>
           🧠<span>Analyse</span>
         </button>
-        <button className="action-btn" onClick={onSee}>
+        <button className="action-btn" onClick={onSee} disabled={!finalUrl}>
           🔗<span>Voir</span>
         </button>
       </div>
@@ -173,7 +184,7 @@ export default function DealSlide({ item, active }) {
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          opacity: 0.5;
+          opacity: 0.6;
         }
         .deal-gradient {
           position: absolute;
@@ -239,6 +250,9 @@ export default function DealSlide({ item, active }) {
           font-size: 11px;
           opacity: 0.9;
           font-weight: 600;
+        }
+        .action-btn:disabled{
+          opacity:.5; cursor:not-allowed;
         }
 
         .deal-bottom {
