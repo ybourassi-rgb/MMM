@@ -1,5 +1,5 @@
-import { saveDeal } from "./saveLog.js"; // Step A (tu l'as déjà)
-import fetch from "node-fetch"; // si pas déjà présent (Node18+ peut s'en passer)
+import { saveDeal } from "./saveLog.js"; // Step A
+import fetch from "node-fetch"; // Node18+ peut s'en passer, mais OK
 
 const TG_TOKEN_AUTO = process.env.TELEGRAM_BOT_TOKEN_AUTO;
 const TG_CHAT_AUTO = process.env.TELEGRAM_CHAT_ID_AUTO;
@@ -23,11 +23,13 @@ async function sendTelegram({ token, chatId, text, image }) {
       parse_mode: "HTML",
       disable_web_page_preview: false,
     };
+
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+
     return r.json();
   } else {
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
@@ -37,11 +39,13 @@ async function sendTelegram({ token, chatId, text, image }) {
       parse_mode: "HTML",
       disable_web_page_preview: false,
     };
+
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+
     return r.json();
   }
 }
@@ -55,6 +59,14 @@ export async function publishDeal(deal, mode = "deals") {
   // 1) Save deal canonique
   const saved = await saveDeal(deal);
 
+  // ✅ LOG 1 : confirme que Redis a bien enregistré
+  console.log("✅ Saved deal to Redis:", {
+    id: saved.id,
+    title: saved.title,
+    category: saved.category,
+    ts: saved.ts,
+  });
+
   // 2) Construire un message lisible + parseable
   const text = buildTelegramMessage(saved);
 
@@ -64,11 +76,19 @@ export async function publishDeal(deal, mode = "deals") {
   const chatId = isAuto ? TG_CHAT_AUTO : TG_CHAT_DEALS;
 
   // 4) Envoi Telegram
-  await sendTelegram({
+  const tgRes = await sendTelegram({
     token,
     chatId,
     text,
     image: saved.image,
+  });
+
+  // ✅ LOG 2 : confirme Telegram OK
+  console.log("✅ Sent deal to Telegram:", {
+    ok: tgRes?.ok,
+    chatId,
+    mode,
+    tgMessageId: tgRes?.result?.message_id,
   });
 
   return saved;
@@ -80,7 +100,13 @@ export async function publishDeal(deal, mode = "deals") {
  */
 function buildTelegramMessage(d) {
   const link = d.affiliateUrl || d.url || "";
-  const halalBadge = d.halal === true ? "✅ Halal" : d.halal === false ? "⚠️ Non Halal" : "ℹ️ Halal ?";
+  const halalBadge =
+    d.halal === true
+      ? "✅ Halal"
+      : d.halal === false
+      ? "⚠️ Non Halal"
+      : "ℹ️ Halal ?";
+
   const score = d.score ?? d.yscore ?? "?";
 
   return `
