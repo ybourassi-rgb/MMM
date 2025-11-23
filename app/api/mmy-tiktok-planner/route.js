@@ -1,7 +1,8 @@
+// app/api/mmy-tiktok-planner/route.js
 import { NextResponse } from "next/server";
 import { AMAZON_PRODUCTS } from "../../../lib/amazonProducts.js";
 
-export const runtime = "nodejs"; // OK ici (pas besoin edge)
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function json(data, status = 200) {
@@ -95,7 +96,10 @@ function buildVideoPlan(productUrl, index) {
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const count = Math.max(1, Math.min(5, Number(searchParams.get("count") || 3)));
+    const count = Math.max(
+      1,
+      Math.min(5, Number(searchParams.get("count") || 3))
+    );
 
     if (!AMAZON_PRODUCTS?.length) {
       return json({ ok: false, error: "AMAZON_PRODUCTS empty" }, 500);
