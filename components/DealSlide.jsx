@@ -18,7 +18,7 @@ export default function DealSlide({ item, active }) {
     link,          // dealabs
     affiliateUrl,
     halal,
-    summary,        // <-- on affiche le résumé si présent
+    summary,        // résumé si présent
   } = item || {};
 
   // lien final robuste
@@ -99,7 +99,7 @@ export default function DealSlide({ item, active }) {
             priority={active}
             sizes="100vw"
             onError={() => setImgOk(false)}
-            style={{ objectFit: "contain" }}  // <- mieux pour éviter le gros zoom
+            style={{ objectFit: "contain" }} // évite le gros zoom
           />
         ) : (
           <div className="deal-media-fallback">
@@ -135,17 +135,13 @@ export default function DealSlide({ item, active }) {
         </button>
       </div>
 
-      {/* CONTENT BOTTOM (texte article mieux lisible) */}
+      {/* CONTENT BOTTOM */}
       <div className="deal-content">
         <h2 className="deal-title">{title}</h2>
 
         {price && <p className="deal-price">Prix: {price}</p>}
 
-        {summary && (
-          <p className="deal-summary">
-            {summary}
-          </p>
-        )}
+        {summary && <p className="deal-summary">{summary}</p>}
 
         <div className="deal-metrics">
           {margin && (
@@ -186,7 +182,7 @@ export default function DealSlide({ item, active }) {
         .deal-media {
           position: relative;
           width: 100%;
-          height: 45vh; /* <- baisse à 40vh si tu veux encore plus petit */
+          height: 45vh; /* baisse à 40vh si tu veux plus petit */
           background: #0b1020;
           overflow: hidden;
         }
@@ -233,11 +229,11 @@ export default function DealSlide({ item, active }) {
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
         }
 
-        /* ===== ACTIONS ===== */
+        /* ===== ACTIONS (REMONTÉES) ===== */
         .deal-actions {
           position: absolute;
           right: 10px;
-          top: calc(45vh + 10px);
+          top: calc(45vh - 60px); /* ✅ icônes remontées */
           display: flex;
           flex-direction: column;
           gap: 12px;
@@ -274,12 +270,12 @@ export default function DealSlide({ item, active }) {
         .deal-content {
           position: relative;
           flex: 1;
-          padding: 12px 78px 18px 14px; /* right space for buttons */
-          overflow: auto;               /* scroll si texte long */
+          padding: 12px 78px 18px 14px; /* espace à droite pour les boutons */
+          overflow: auto;
         }
 
         .deal-title {
-          font-size: 18px;  /* <- écriture article un peu plus petite */
+          font-size: 18px;
           font-weight: 800;
           line-height: 1.2;
           margin: 0;
@@ -297,7 +293,7 @@ export default function DealSlide({ item, active }) {
           font-size: 13px;
           line-height: 1.45;
           color: rgba(255,255,255,0.8);
-          max-height: 6.5em;          /* ~4-5 lignes */
+          max-height: 6.5em;
           overflow: hidden;
           display: -webkit-box;
           -webkit-line-clamp: 5;
