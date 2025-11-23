@@ -12,33 +12,48 @@ const parser = new Parser({
   },
 });
 
-// upgrade simple vers HD si possible
-function toHighRes(url) {
+// ✅ Dealabs met souvent des miniatures :
+// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
+// → on veut l’original :
+// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/ID_1.jpg
+
+function upgradeDealabsImage(url) {
   if (!url) return url;
 
-  let u = url;
+  try {
+    const u = new URL(url);
 
-  // Dealabs/HotUKDeals CDN : souvent /thread_small/ ou /thread_medium/
-  u = u.replace("/thread_small/", "/thread_large/");
-  u = u.replace("/thread_medium/", "/thread_large/");
+    // thumb pepper dealabs
+    if (u.hostname.includes("static-pepper.dealabs.com")) {
+      // supprime le bloc /re/150x150/qt/55/
+      u.pathname = u.pathname.replace(
+        /\/re\/\d+x\d+\/qt\/\d+\//i,
+        "/"
+      );
+      return u.toString();
+    }
 
-  // parfois ils ont /width/xxx/ dans l’URL
-  u = u.replace(/\/width\/\d+\//, "/width/1200/");
-
-  return u;
+    return url;
+  } catch {
+    return url;
+  }
 }
 
-// extraire image d’un item RSS
+// petite util pour extraire une image d’un item RSS
 function pickImage(it) {
+  // 1) media:content url
   const mc = it.mediaContent;
-  if (mc?.$?.url) return toHighRes(mc.$.url);
-  if (Array.isArray(mc) && mc[0]?.$?.url) return toHighRes(mc[0].$?.url);
+  if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
+  if (Array.isArray(mc) && mc[0]?.$?.url)
+    return upgradeDealabsImage(mc[0].$?.url);
 
-  if (it.enclosure?.url) return toHighRes(it.enclosure.url);
+  // 2) enclosure url
+  if (it.enclosure?.url) return upgradeDealabsImage(it.enclosure.url);
 
+  // 3) parfois dans content HTML => cherche un <img src="...">
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (match?.[1]) return toHighRes(match[1]);
+  if (match?.[1]) return upgradeDealabsImage(match[1]);
 
   return null;
 }
@@ -50,15 +65,25 @@ function normalizeItem(raw, i = 0) {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
     url,
-    link: raw.link || null,
+    link: raw.link || null, // on garde link aussi si dispo
     image: pickImage(raw),
+
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
     category: raw.category || raw.type || "autre",
-    margin: raw.yscore ? `${raw.yscore.opportunityScore ?? "—"}%` : raw.margin,
-    risk: raw.yscore ? `${raw.yscore.riskScore ?? "—"}/100` : raw.risk,
+
+    margin: raw.yscore
+      ? `${raw.yscore.opportunityScore ?? "—"}%`
+      : raw.margin,
+    risk: raw.yscore
+      ? `${raw.yscore.riskScore ?? "—"}/100`
+      : raw.risk,
     horizon: raw.horizon || "court terme",
-    halal: raw.yscore ? raw.yscore.halalScore >= 80 : raw.halal ?? null,
+
+    halal: raw.yscore
+      ? raw.yscore.halalScore >= 80
+      : raw.halal ?? null,
+
     affiliateUrl: raw.affiliateUrl || null,
     source: raw.source || "rss",
     publishedAt: raw.publishedAt || raw.isoDate || null,
@@ -70,9 +95,12 @@ export async function GET() {
   try {
     const SOURCES = [
       "https://www.dealabs.com/rss/hot",
+      // ajoute tes flux ici
     ];
 
-    const feeds = await Promise.all(SOURCES.map((u) => parser.parseURL(u)));
+    const feeds = await Promise.all(
+      SOURCES.map((u) => parser.parseURL(u))
+    );
 
     const items = feeds
       .flatMap((f) => f.items || [])
