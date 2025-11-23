@@ -1,328 +1,299 @@
 "use client";
 
-import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import DealSlide from "@/components/DealSlide";
 
-export default function DealSlide({ item, active }) {
-  const {
-    title = "Opportunité",
-    image,
-    price,
-    score,
-    city,
-    category,
-    margin,
-    risk,
-    horizon,
-    url,
-    link,
-    affiliateUrl,
-    halal,
-  } = item || {};
+export default function Page() {
+  const [items, setItems] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [cursor, setCursor] = useState(null);
 
-  // Choix du lien final (affiliate > url > link)
-  const finalUrl = useMemo(
-    () => affiliateUrl || url || link || null,
-    [affiliateUrl, url, link]
-  );
+  const feedRef = useRef(null);
 
-  // Gestion erreurs images
-  const [imgOk, setImgOk] = useState(true);
-  const [forceNativeImg, setForceNativeImg] = useState(false);
+  // 1) Load initial feed
+  useEffect(() => {
+    fetch("/api/feed", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const firstItems = d.items || d || [];
+        setItems(firstItems);
+        if (d.cursor) setCursor(d.cursor);
+      })
+      .catch(() => setItems([]));
+  }, []);
 
-  const finalImage = imgOk ? image : null;
+  // 2) Detect active slide
+  useEffect(() => {
+    if (!feedRef.current) return;
 
-  const openLink = (l) => {
-    if (!l) return;
-    window.open(l, "_blank", "noopener,noreferrer");
-  };
+    const slides = [...feedRef.current.querySelectorAll("[data-slide]")];
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
 
-  const trackClick = async (domain) => {
+        const idx = Number(visible.target.getAttribute("data-index"));
+        if (!Number.isNaN(idx)) setActiveIndex(idx);
+      },
+      { root: feedRef.current, threshold: [0.6, 0.8, 1] }
+    );
+
+    slides.forEach((s) => io.observe(s));
+    return () => io.disconnect();
+  }, [items]);
+
+  // 3) Fetch more when near end
+  const fetchMore = useCallback(async () => {
+    if (loading) return;
+    if (activeIndex < items.length - 3) return;
+
+    setLoading(true);
     try {
-      await fetch("/api/log-click", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain,
-          title,
-          score,
-          category,
-          url: finalUrl,
-        }),
-      });
-    } catch (e) {
-      console.error("track error", e);
-    }
-  };
+      const url = cursor
+        ? `/api/feed?cursor=${cursor}`
+        : `/api/feed?cursor=next`;
 
-  const onSee = async () => {
-    if (!finalUrl) return;
-    try {
-      const domain = new URL(finalUrl).hostname;
-      await trackClick(domain);
-    } catch {}
-    openLink(finalUrl);
-  };
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
 
-  const onAnalyze = () => {
-    console.log("Analyze:", item);
-  };
+      const nextItems = Array.isArray(data) ? data : data.items;
+      const nextCursor = Array.isArray(data) ? null : data.cursor;
 
-  const onShare = async () => {
-    const l = finalUrl || "";
-    try {
-      if (navigator.share) {
-        await navigator.share({ title, text: title, url: l });
-      } else {
-        await navigator.clipboard.writeText(l);
-        alert("Lien copié ✅");
+      if (nextItems?.length) {
+        setItems((prev) => [...prev, ...nextItems]);
+        if (nextCursor) setCursor(nextCursor);
       }
     } catch (e) {
-      console.error("share error", e);
+      console.error("fetchMore error", e);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [activeIndex, items.length, loading, cursor]);
 
-  const onFav = () => {
-    console.log("Fav:", item);
-  };
+  useEffect(() => {
+    fetchMore();
+  }, [fetchMore]);
 
   return (
-    <div className="deal-slide">
-      {/* Media background */}
-      <div className="deal-media">
-        {finalImage ? (
-          forceNativeImg ? (
-            // ✅ fallback ultime : pas de block domaine
-            <img
-              src={finalImage}
-              alt={title}
-              onError={() => setImgOk(false)}
-              className="native-img"
-            />
-          ) : (
-            // ✅ Next/Image si domaine autorisé
-            <Image
-              src={finalImage}
-              alt={title}
-              fill
-              priority={active}
-              sizes="100vw"
-              quality={100}
-              onError={() => {
-                // si Next bloque en prod => on passe en <img>
-                setForceNativeImg(true);
-              }}
-              style={{ objectFit: "cover" }}
-            />
-          )
-        ) : (
-          <div className="deal-media-fallback">
-            {image ? "Image indisponible" : "PHOTO / MINI-VIDÉO"}
-          </div>
-        )}
-        <div className="deal-gradient" />
-      </div>
-
-      {/* Top chips */}
-      <div className="deal-top">
-        {score != null && <div className="deal-chip">Y-Score {score}</div>}
-        {category && <div className="deal-chip">{category}</div>}
-        {city && <div className="deal-chip">{city}</div>}
-        {halal != null && (
-          <div className="deal-chip">{halal ? "Halal ✅" : "Non Halal ⚠️"}</div>
-        )}
-      </div>
-
-      {/* Right actions */}
-      <div className="deal-actions">
-        <button className="action-btn" onClick={onFav}>
-          ❤️<span>Favori</span>
-        </button>
-        <button className="action-btn" onClick={onShare}>
-          📤<span>Partager</span>
-        </button>
-        <button className="action-btn" onClick={onAnalyze}>
-          🧠<span>Analyse</span>
-        </button>
-        <button className="action-btn" onClick={onSee} disabled={!finalUrl}>
-          🔗<span>Voir</span>
-        </button>
-      </div>
-
-      {/* Bottom infos */}
-      <div className="deal-bottom">
-        <h2 className="deal-title">{title}</h2>
-        {price && <p className="deal-price">Prix: {price}</p>}
-
-        <div className="deal-metrics">
-          {margin && (
-            <div className="metric">
-              <div className="metric-title">Marge</div>
-              <div className="metric-value green">{margin}</div>
-            </div>
-          )}
-
-          {risk && (
-            <div className="metric">
-              <div className="metric-title">Risque</div>
-              <div className="metric-value orange">{risk}</div>
-            </div>
-          )}
-
-          {horizon && (
-            <div className="metric">
-              <div className="metric-title">Horizon</div>
-              <div className="metric-value">{horizon}</div>
-            </div>
-          )}
+    <div className="app">
+      {/* TOP BAR */}
+      <header className="topbar">
+        <div className="brand">
+          <div className="logo" />
+          <span>Money Motor Y</span>
         </div>
+        <div className="status">
+          IA en ligne<span className="dot" />
+        </div>
+      </header>
+
+      {/* CHIPS FILTER */}
+      <div className="chips">
+        {[
+          "🔥 Bonnes affaires",
+          "🚗 Auto",
+          "🏠 Immo",
+          "₿ Crypto",
+          "🧰 Business",
+          "📈 Marchés",
+        ].map((t, i) => (
+          <button
+            key={t}
+            className={`chip ${i === 0 ? "active" : ""}`}
+            onClick={() => {
+              /* filtre bientôt */
+            }}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
-      <style jsx>{`
-        .deal-slide {
-          height: 100%;
-          width: 100%;
-          position: relative;
-          color: #fff;
-        }
+      {/* FEED TikTok */}
+      <main ref={feedRef} className="tiktok-feed">
+        {items.map((it, i) => (
+          <section
+            key={it.id || `${it.title}-${i}`}
+            data-slide
+            data-index={i}
+            className="tiktok-slide"
+          >
+            <DealSlide item={it} active={i === activeIndex} />
+          </section>
+        ))}
 
-        .deal-media {
-          position: absolute;
-          inset: 0;
-          background: #0b1020;
-        }
+        {!items.length && !loading && (
+          <div className="empty">Aucune opportunité pour l’instant.</div>
+        )}
 
-        .native-img{
-          position:absolute; inset:0;
-          width:100%; height:100%;
-          object-fit:cover;
-        }
+        {loading && <div className="tiktok-loading">Chargement...</div>}
+      </main>
 
-        .deal-media-fallback {
-          position: absolute;
-          inset: 0;
+      {/* BOTTOM NAV */}
+      <nav className="bottomnav">
+        <div className="navitem active">Feed</div>
+        <div className="navitem">Y-Score</div>
+        <div className="navitem">Publier</div>
+        <div className="navitem">Affiliation</div>
+        <div className="navitem">Profil</div>
+      </nav>
+
+      {/* Styles */}
+      <style jsx global>{`
+        :root {
+          --bg: #07090f;
+          --card: #0f1422;
+          --muted: #8b93a7;
+          --text: #e9ecf5;
+          --accent: #4ea3ff;
+          --good: #18d47b;
+          --warn: #ffb454;
+          --bad: #ff6b6b;
+        }
+        * {
+          box-sizing: border-box;
+        }
+        body {
+          margin: 0;
+          background: var(--bg);
+          color: var(--text);
+          font-family: system-ui;
+        }
+        .app {
+          height: 100svh;
           display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          opacity: 0.6;
+          flex-direction: column;
         }
-        .deal-gradient {
-          position: absolute;
-          inset: 0;
+
+        .topbar {
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 14px;
+          background: linear-gradient(
+            180deg,
+            rgba(7, 9, 15, 0.98),
+            rgba(7, 9, 15, 0.6),
+            transparent
+          );
+          backdrop-filter: blur(8px);
+        }
+        .brand {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          font-weight: 800;
+        }
+        .logo {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
           background: radial-gradient(
-              900px 600px at 50% 0%,
-              rgba(0, 0, 0, 0.15),
+              circle at 30% 30%,
+              #6d7bff,
+              transparent 60%
+            ),
+            radial-gradient(
+              circle at 70% 70%,
+              #22e6a5,
               transparent 55%
             ),
-            linear-gradient(
-              180deg,
-              rgba(0, 0, 0, 0.05),
-              rgba(0, 0, 0, 0.85)
-            );
+            #0b1020;
         }
-
-        .deal-top {
-          position: absolute;
-          top: 72px;
-          left: 14px;
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          z-index: 2;
-        }
-        .deal-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 0.35rem 0.6rem;
+        .status {
+          font-size: 12px;
+          background: #0e1322;
+          border: 1px solid #1a2340;
+          padding: 6px 10px;
           border-radius: 999px;
-          font-weight: 700;
-          font-size: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          background: rgba(0, 0, 0, 0.45);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        }
+        .dot {
+          display: inline-block;
+          width: 6px;
+          height: 6px;
+          background: var(--good);
+          border-radius: 50%;
+          margin-left: 6px;
         }
 
-        .deal-actions {
-          position: absolute;
-          right: 10px;
-          bottom: 150px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          z-index: 2;
-        }
-        .action-btn {
-          background: rgba(0, 0, 0, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          color: #fff;
-          border-radius: 14px;
-          padding: 10px 8px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          font-size: 18px;
-          min-width: 56px;
-          backdrop-filter: blur(6px);
-        }
-        .action-btn span {
-          font-size: 11px;
-          opacity: 0.9;
-          font-weight: 600;
-        }
-        .action-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .deal-bottom {
-          position: absolute;
-          left: 14px;
-          right: 78px;
-          bottom: 90px;
-          z-index: 2;
-        }
-
-        .deal-title {
-          font-size: 20px;
-          font-weight: 800;
-          line-height: 1.15;
-          text-shadow: 0 6px 18px rgba(0, 0, 0, 0.8);
-        }
-        .deal-price {
-          margin-top: 6px;
-          font-size: 14px;
-          opacity: 0.9;
-        }
-
-        .deal-metrics {
-          margin-top: 10px;
+        .chips {
           display: flex;
           gap: 8px;
-          flex-wrap: wrap;
+          overflow: auto;
+          padding: 6px 10px 8px;
+          scrollbar-width: none;
         }
-        .metric {
-          background: rgba(0, 0, 0, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          padding: 10px;
-          border-radius: 12px;
-          min-width: 95px;
+        .chip {
+          flex: 0 0 auto;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: #0e1322;
+          border: 1px solid #1a2340;
+          color: #c6cce0;
+          font-size: 13px;
         }
-        .metric-title {
+        .chip.active {
+          background: #14203a;
+          border-color: #27406f;
+          color: #fff;
+        }
+
+        .tiktok-feed {
+          flex: 1;
+          height: 100%;
+          overflow-y: auto;
+          scroll-snap-type: y mandatory;
+          scroll-behavior: smooth;
+          scrollbar-width: none;
+          background: #05060a;
+        }
+        .tiktok-feed::-webkit-scrollbar {
+          display: none;
+        }
+        .tiktok-slide {
+          height: 100vh;
+          scroll-snap-align: start;
+          scroll-snap-stop: always;
+          position: relative;
+        }
+
+        .empty {
+          height: 100%;
+          display: grid;
+          place-items: center;
+          color: var(--muted);
+        }
+        .tiktok-loading {
+          position: sticky;
+          bottom: 0;
+          text-align: center;
+          padding: 10px 0;
+          background: rgba(0, 0, 0, 0.6);
+          font-size: 13px;
+        }
+
+        .bottomnav {
+          position: sticky;
+          bottom: 0;
+          border-top: 1px solid #141b33;
+          background: #07090f;
+          display: flex;
+          justify-content: space-around;
+          padding: 10px 0;
+        }
+        .navitem {
           font-size: 12px;
-          opacity: 0.8;
+          color: #aeb6cc;
         }
-        .metric-value {
-          font-weight: 800;
-          margin-top: 4px;
-        }
-        .metric-value.green {
-          color: #00e389;
-        }
-        .metric-value.orange {
-          color: #ffbb55;
+        .navitem.active {
+          color: #fff;
+          font-weight: 700;
         }
       `}</style>
     </div>
