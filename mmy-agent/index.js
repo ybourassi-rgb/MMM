@@ -8,7 +8,7 @@ import { hasBeenPosted, markPosted } from "./utils/saveLog.js";
 
 import { Redis } from "@upstash/redis";
 
-// --- Redis ping (debug) ---
+// --- Redis client ---
 const redisPing = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN,
@@ -50,14 +50,19 @@ async function isAlive(url) {
   }
 }
 
-// ✅ fonction exportée pour Vercel / Railway
-export async function runAgentCycle() {
+// ✅ IMPORTANT : on exporte une fonction, on ne lance plus rien au top-level
+export async function runAgent() {
   console.log("🚀 MMY Agent : cycle démarré");
 
+  // ping redis (au runtime uniquement)
   await testRedis();
 
   const items = await fetchFeeds();
   console.log(`📡 ${items.length} éléments récupérés`);
+
+  let published = 0;
+  let skipped = 0;
+  let errors = 0;
 
   for (const item of items) {
     try {
@@ -66,7 +71,7 @@ export async function runAgentCycle() {
       // Anti-doublon global
       const already = await hasBeenPosted(item.link);
       if (already) {
-        console.log("⏩ Déjà publié, on skip :", item.link);
+        skipped++;
         continue;
       }
 
@@ -74,7 +79,6 @@ export async function runAgentCycle() {
       if (sourceType === "news") {
         const summary = await summarize(item);
         const category = await classify(summary);
-
         const yscore = await score(item.link, summary, category).catch(() => null);
 
         await publishTelegram({
@@ -86,20 +90,22 @@ export async function runAgentCycle() {
         });
 
         await markPosted(item.link);
-        console.log("📰 News publiée");
+        published++;
         continue;
       }
 
       // -------- DEAL --------
       if (sourceType === "deal") {
+        // allowlist
         if (!isDealDomain(item.link)) {
-          console.log("🧹 Deal rejeté (domaine non autorisé):", item.link);
+          skipped++;
           continue;
         }
 
+        // lien vivant
         const ok = await isAlive(item.link);
         if (!ok) {
-          console.log("🧹 Deal rejeté (lien mort):", item.link);
+          skipped++;
           continue;
         }
 
@@ -114,7 +120,7 @@ export async function runAgentCycle() {
         const minScore = isAmazon ? 85 : 75;
 
         if (globalScore < minScore) {
-          console.log(`🟡 Deal ignoré (${globalScore} < ${minScore})`);
+          skipped++;
           continue;
         }
 
@@ -127,22 +133,26 @@ export async function runAgentCycle() {
         });
 
         await markPosted(item.link);
-        console.log("🔥 Deal publié");
+        published++;
         continue;
       }
 
-      console.log("⚠️ Item ignoré (type inconnu):", sourceType, item.link);
+      skipped++;
     } catch (error) {
+      errors++;
       console.error("❌ Erreur sur un item :", error);
     }
   }
 
-  console.log("✨ Cycle terminé");
+  console.log("✨ Cycle terminé", { published, skipped, errors });
+
+  return { ok: true, published, skipped, errors };
 }
 
-// ✅ si tu l’exécutes en CLI/Railway
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runAgentCycle().catch((e) =>
-    console.error("❌ Erreur globale MMY Agent :", e)
-  );
+// ✅ si tu veux pouvoir lancer en local/railway en node :
+// node mmy-agent/index.js
+if (process.env.RUN_AS_STANDALONE === "true") {
+  runAgent().catch((e) => {
+    console.error("❌ Erreur globale MMY Agent :", e);
+  });
 }
