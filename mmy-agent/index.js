@@ -4,9 +4,10 @@ import classify from "./utils/classify.js";
 import score from "./utils/score.js";
 import publishTelegram from "./utils/publishTelegram.js";
 import { hasBeenPosted, markPosted } from "./utils/saveLog.js";
+
 import { Redis } from "@upstash/redis";
 
-// --- Redis ping (debug) ---
+// --- Redis ping (debug Railway) ---
 const redisPing = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN,
@@ -14,6 +15,14 @@ const redisPing = new Redis({
 
 async function testRedis() {
   try {
+    const urlOk = !!(
+      process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL
+    );
+    const tokenOk = !!(
+      process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN
+    );
+    console.log("[redis] env url?", urlOk, "token?", tokenOk);
+
     const pong = await redisPing.ping();
     console.log("[redis ping ✅]", pong);
 
@@ -24,6 +33,7 @@ async function testRedis() {
   }
 }
 
+// --- Helpers deals clean ---
 const DEAL_DOMAINS = ["amazon.", "aliexpress.", "ebay.", "dealabs.", "pepper."];
 
 function isDealDomain(url = "") {
@@ -41,7 +51,6 @@ async function isAlive(url) {
 
 async function main() {
   console.log("🚀 MMY Agent : cycle démarré");
-
   await testRedis();
 
   const items = await fetchFeeds();
@@ -51,9 +60,14 @@ async function main() {
     try {
       const type = item.type || "news";
 
+      // Anti-doublon global
       const already = await hasBeenPosted(item.link);
-      if (already) continue;
+      if (already) {
+        console.log("⏩ Déjà publié, on skip :", item.link);
+        continue;
+      }
 
+      // -------- NEWS --------
       if (type === "news") {
         const summary = await summarize(item);
         const category = await classify(summary);
@@ -73,11 +87,18 @@ async function main() {
         continue;
       }
 
+      // -------- DEAL --------
       if (type === "deal") {
-        if (!isDealDomain(item.link)) continue;
+        if (!isDealDomain(item.link)) {
+          console.log("🧹 Deal rejeté (domaine non autorisé):", item.link);
+          continue;
+        }
 
         const ok = await isAlive(item.link);
-        if (!ok) continue;
+        if (!ok) {
+          console.log("🧹 Deal rejeté (lien mort):", item.link);
+          continue;
+        }
 
         const summary = await summarize(item);
         const category = await classify(summary);
@@ -89,7 +110,10 @@ async function main() {
         const isAmazon = item.link.toLowerCase().includes("amazon.");
         const minScore = isAmazon ? 85 : 75;
 
-        if (globalScore < minScore) continue;
+        if (globalScore < minScore) {
+          console.log(`🟡 Deal ignoré (${globalScore} < ${minScore})`);
+          continue;
+        }
 
         await publishTelegram({
           ...item,
@@ -103,12 +127,16 @@ async function main() {
         console.log("🔥 Deal publié");
         continue;
       }
-    } catch (e) {
-      console.error("❌ Erreur item:", e);
+
+      console.log("⚠️ Item ignoré (type inconnu):", type, item.link);
+    } catch (error) {
+      console.error("❌ Erreur sur un item :", error);
     }
   }
 
   console.log("✨ Cycle terminé");
 }
 
-main().catch((e) => console.error("❌ Erreur globale:", e));
+main().catch((e) => {
+  console.error("❌ Erreur globale MMY Agent :", e);
+});
