@@ -1,51 +1,48 @@
-export const runtime = "edge";
+import { Redis } from "@upstash/redis";
 
-export async function GET() {
-  const items = [
-    {
-      id: "deal-auto-1",
-      type: "Auto",
-      city: "Marrakech",
-      score: 84,
-      title: "Dacia Duster 2021 • 72 000 km",
-      subtitle: "Prix demandé: 145 000 MAD • Estimé MMY: 165 000 MAD",
-      margin: "+20 000 MAD",
-      risk: "Moyen",
-      horizon: "2–4 sem.",
-      tags: ["Historique OK","Marché tendu","2 acheteurs actifs"],
-      mediaLabel: "PHOTO / MINI-VIDÉO",
-      url: "/api/r?u=https://www.avito.ma&s=auto"
-    },
-    {
-      id: "deal-crypto-1",
-      type: "Crypto",
-      score: 77,
-      title: "BTC en zone d’achat tactique",
-      subtitle: "Signal: peur extrême + support majeur",
-      margin: "+12%",
-      risk: "Contrôlé",
-      horizon: "2–6 sem.",
-      tags: ["Volume en hausse","Retour sur support"],
-      mediaLabel: "CHART / SIGNAL",
-      url: "/api/r?u=https://coindesk.com&s=crypto"
-    },
-    {
-      id: "deal-immo-1",
-      type: "Immo",
-      city: "Gueliz",
-      score: 69,
-      title: "Studio • 38 m²",
-      subtitle: "Prix: 520 000 MAD • Loyer estimé: 4 200 MAD/mois",
-      margin: "Rent. 9.7%",
-      risk: "Faible",
-      horizon: "Long terme",
-      tags: ["Quartier demandé","Bonne liquidité"],
-      mediaLabel: "PHOTO IMMO",
-      url: "/api/r?u=https://www.mubawab.ma&s=immo"
-    }
-  ];
+export const runtime = "nodejs"; 
+// important : Upstash SDK + fetch OK en node runtime
 
-  return Response.json({ ok: true, items }, {
-    headers: { "Cache-Control": "no-store" }
-  });
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
+export async function GET(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const category = searchParams.get("category"); // optional
+    const limit = Number(searchParams.get("limit") || 20);
+    const cursor = searchParams.get("cursor"); // optional pour pagination simple
+
+    // clé cible
+    const key = category
+      ? `deals:${category.toLowerCase()}`
+      : "deals:all";
+
+    // Pagination simple par offset
+    const offset = cursor ? Number(cursor) : 0;
+    const raw = await redis.lrange(key, offset, offset + limit - 1);
+
+    const items = raw
+      .map((x) => {
+        try {
+          return JSON.parse(x);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    // Nouveau cursor (offset suivant)
+    const nextCursor = offset + items.length;
+
+    return Response.json({
+      items,
+      cursor: items.length ? String(nextCursor) : null,
+    });
+  } catch (e) {
+    console.error("feed error", e);
+    return Response.json({ items: [], cursor: null }, { status: 200 });
+  }
 }
