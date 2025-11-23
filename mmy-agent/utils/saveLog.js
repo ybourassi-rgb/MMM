@@ -1,66 +1,42 @@
-// mmy-agent/utils/saveLog.js
 import { Redis } from "@upstash/redis";
 
-const url = process.env.UPSTASH_REDIS_URL;
-const token = process.env.UPSTASH_REDIS_TOKEN;
+// ✅ on accepte les 2 noms, comme /api/feed
+const url =
+  process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL;
+const token =
+  process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN;
 
-let redis = null;
-
-if (url && token) {
-  redis = new Redis({ url, token });
-  console.log("✅ Redis initialisé pour MMY Agent");
-} else {
-  console.warn(
-    "⚠️ UPSTASH_REDIS_URL ou UPSTASH_REDIS_TOKEN manquant → Redis désactivé"
-  );
+if (!url || !token) {
+  console.warn("[saveDeal] Upstash env missing", {
+    hasUrl: !!url,
+    hasToken: !!token,
+  });
 }
 
-/**
- * Vérifie si un lien a déjà été publié.
- * Retourne true / false.
- */
-export async function hasBeenPosted(link) {
-  if (!redis) return false;
+const redis = new Redis({ url, token });
 
-  try {
-    const result = await redis.sismember("mmy:posted_links", link);
-    return result === 1 || result === true;
-  } catch (err) {
-    console.error("Erreur hasBeenPosted Redis:", err.message);
-    return false;
-  }
-}
+export async function saveDeal(deal) {
+  const id =
+    deal.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-/**
- * Marque un lien comme publié dans l'ensemble Redis.
- */
-export async function markPosted(link) {
-  if (!redis) return;
-
-  try {
-    await redis.sadd("mmy:posted_links", link);
-  } catch (err) {
-    console.error("Erreur markPosted Redis:", err.message);
-  }
-}
-
-/**
- * Sauvegarde un log dans Redis (et log console en fallback).
- */
-export default async function saveLog(data) {
-  const payload = {
-    ...data,
+  const item = {
+    ...deal,
+    id,
     ts: Date.now(),
   };
 
-  // Toujours loguer en console
-  console.log("📝 Log:", payload);
+  const payload = JSON.stringify(item);
 
-  if (!redis) return;
+  // ✅ liste globale lue par /api/feed
+  await redis.lpush("deals:all", payload);
+  await redis.ltrim("deals:all", 0, 300);
 
-  try {
-    await redis.lpush("mmy:logs", JSON.stringify(payload));
-  } catch (err) {
-    console.error("Erreur saveLog Redis:", err.message);
+  // ✅ listes par catégorie (+ trim anti-bombe)
+  if (item.category) {
+    const key = `deals:${String(item.category).toLowerCase()}`;
+    await redis.lpush(key, payload);
+    await redis.ltrim(key, 0, 200);
   }
+
+  return item;
 }
