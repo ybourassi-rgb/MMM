@@ -1,40 +1,78 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import DealCard from "./components/DealCard";
+import { useEffect, useState, useRef, useCallback } from "react";
+import DealSlide from "./DealSlide"; 
+// ou adapte le chemin si DealSlide est ailleurs
 
 export default function HomeFeed() {
   const [items, setItems] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [cursor, setCursor] = useState(null);
+
   const feedRef = useRef(null);
 
+  // 1) load initial
   useEffect(() => {
     fetch("/api/feed", { cache: "no-store" })
       .then(r => r.json())
-      .then(d => setItems(d.items || []))
+      .then(d => {
+        const first = d.items || d || [];
+        setItems(first);
+        if (d.cursor) setCursor(d.cursor);
+      })
       .catch(() => setItems([]));
   }, []);
 
-  // détecter la carte active
+  // 2) observer slide actif
   useEffect(() => {
     if (!feedRef.current) return;
-    const cards = [...feedRef.current.querySelectorAll("[data-card]")];
+    const slides = [...feedRef.current.querySelectorAll("[data-slide]")];
 
     const io = new IntersectionObserver(
       entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting) {
-            const idx = Number(e.target.getAttribute("data-index"));
-            setActiveIndex(idx);
-          }
-        });
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        const idx = Number(visible.target.getAttribute("data-index"));
+        if (!Number.isNaN(idx)) setActiveIndex(idx);
       },
-      { threshold: 0.6 }
+      { root: feedRef.current, threshold: [0.6, 0.8, 1] }
     );
 
-    cards.forEach(c => io.observe(c));
+    slides.forEach(s => io.observe(s));
     return () => io.disconnect();
   }, [items]);
+
+  // 3) fetch more (infinite)
+  const fetchMore = useCallback(async () => {
+    if (loading) return;
+    if (activeIndex < items.length - 3) return;
+
+    setLoading(true);
+    try {
+      const url = cursor ? `/api/feed?cursor=${cursor}` : `/api/feed?cursor=next`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+
+      const nextItems = Array.isArray(data) ? data : data.items;
+      const nextCursor = Array.isArray(data) ? null : data.cursor;
+
+      if (nextItems?.length) {
+        setItems(prev => [...prev, ...nextItems]);
+        if (nextCursor) setCursor(nextCursor);
+      }
+    } catch (e) {
+      console.error("fetchMore error", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeIndex, items.length, loading, cursor]);
+
+  useEffect(() => {
+    fetchMore();
+  }, [fetchMore]);
 
   return (
     <div className="app">
@@ -60,24 +98,26 @@ export default function HomeFeed() {
         ))}
       </div>
 
-      {/* FEED */}
-      <main ref={feedRef} className="feed">
+      {/* FEED TikTok */}
+      <main ref={feedRef} className="tiktok-feed">
         {items.map((it, i) => (
           <section
-            key={it.id}
-            data-card
+            key={it.id || `${it.title}-${i}`}
+            data-slide
             data-index={i}
-            className="snap-card"
+            className="tiktok-slide"
           >
-            <DealCard item={it} active={i===activeIndex} />
+            <DealSlide item={it} active={i===activeIndex} />
           </section>
         ))}
 
-        {!items.length && (
+        {!items.length && !loading && (
           <div className="empty">
             Aucune opportunité pour l’instant.
           </div>
         )}
+
+        {loading && <div className="tiktok-loading">Chargement...</div>}
       </main>
 
       {/* BOTTOM NAV */}
@@ -120,17 +160,32 @@ export default function HomeFeed() {
         }
         .chip.active{background:#14203a;border-color:#27406f;color:#fff;}
 
-        .feed{
-          flex:1;overflow:auto;
+        /* TikTok FEED fullscreen */
+        .tiktok-feed{
+          flex:1;
+          height:100%;
+          overflow-y:auto;
           scroll-snap-type:y mandatory;
-          padding-bottom:8px;
+          scroll-behavior:smooth;
+          scrollbar-width:none;
+          background:#05060a;
+          padding-bottom:0;
         }
-        .snap-card{
+        .tiktok-feed::-webkit-scrollbar{display:none;}
+
+        .tiktok-slide{
+          height:100vh;
           scroll-snap-align:start;
-          height:calc(100svh - 140px);
-          margin:0 10px 12px;
+          scroll-snap-stop:always;
+          position:relative;
         }
+
         .empty{height:100%;display:grid;place-items:center;color:var(--muted)}
+        .tiktok-loading{
+          position:sticky;bottom:0;text-align:center;padding:10px 0;
+          background:rgba(0,0,0,.6);font-size:13px;
+        }
+
         .bottomnav{
           position:sticky;bottom:0;border-top:1px solid #141b33;
           background:#07090f;display:flex;justify-content:space-around;padding:10px 0;
