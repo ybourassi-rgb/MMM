@@ -1,8 +1,5 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
 import { Redis } from "@upstash/redis";
-import { applyAffiliation } from "@/lib/affiliations";
+import { applyAffiliation } from "../../../lib/affiliations.js";
 
 // --- Helpers ---
 function pickParam(urlObj, keys = []) {
@@ -15,9 +12,7 @@ function pickParam(urlObj, keys = []) {
 
 function safeParseUrl(raw) {
   if (!raw) return null;
-
   const normalized = Array.isArray(raw) ? raw[0] : raw;
-
   try {
     return new URL(normalized).toString();
   } catch {
@@ -58,7 +53,6 @@ async function initRedis() {
 
 async function logClick(redis, entry) {
   if (!redis) return;
-
   const domain = entry.domain || "unknown";
   const source = entry.source || "unknown";
   const campaign = entry.campaign || "unknown";
@@ -78,10 +72,7 @@ async function logClick(redis, entry) {
 export async function GET(req) {
   const urlObj = new URL(req.url);
 
-  // Healthcheck (pas de u/url)
-  const rawUrlParam =
-    pickParam(urlObj, ["u", "url"]) || null;
-
+  const rawUrlParam = pickParam(urlObj, ["u", "url"]) || null;
   if (!rawUrlParam) {
     return new Response(
       JSON.stringify({ ok: true, message: "Redirect API fonctionne 🔥" }),
@@ -89,19 +80,12 @@ export async function GET(req) {
     );
   }
 
-  // source / campaign
-  const source =
-    pickParam(urlObj, ["source"]) || "telegram";
-  const campaign =
-    pickParam(urlObj, ["campaign"]) || "MMY_DEALS";
+  const source = pickParam(urlObj, ["source"]) || "telegram";
+  const campaign = pickParam(urlObj, ["campaign"]) || "MMY_DEALS";
 
-  // URL cible
   const target = safeParseUrl(rawUrlParam);
-  if (!target) {
-    return Response.redirect("https://google.com", 302);
-  }
+  if (!target) return Response.redirect("https://google.com", 302);
 
-  // Application affiliation
   let affiliationInfo = {
     finalUrl: target,
     applied: false,
@@ -119,7 +103,6 @@ export async function GET(req) {
 
   const urlAfterAffiliation = affiliationInfo.finalUrl || target;
 
-  // Ajout UTM global
   let finalUrl = urlAfterAffiliation;
   try {
     const u = new URL(urlAfterAffiliation);
@@ -131,7 +114,6 @@ export async function GET(req) {
     finalUrl = urlAfterAffiliation;
   }
 
-  // Redis log (non bloquant)
   const redis = await initRedis();
   if (redis) {
     const logEntry = {
@@ -150,15 +132,12 @@ export async function GET(req) {
         reason: affiliationInfo.reason || "unknown",
       },
     };
-
     logClick(redis, logEntry);
   }
 
-  console.log("🔀 Redirect →", finalUrl, affiliationInfo);
   return Response.redirect(finalUrl, 302);
 }
 
 export async function POST(req) {
-  // on accepte aussi POST si jamais tu l’appelles comme ça
   return GET(req);
 }
