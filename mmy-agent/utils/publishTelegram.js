@@ -1,5 +1,5 @@
-import { saveDeal } from "./saveLog.js"; // Step A
-import fetch from "node-fetch"; // Node18+ peut s'en passer, mais OK
+import { saveDeal } from "./saveLog.js";
+import fetch from "node-fetch";
 
 const TG_TOKEN_AUTO = process.env.TELEGRAM_BOT_TOKEN_AUTO;
 const TG_CHAT_AUTO = process.env.TELEGRAM_CHAT_ID_AUTO;
@@ -8,86 +8,93 @@ const TG_TOKEN_DEALS = process.env.TELEGRAM_BOT_TOKEN_DEALS;
 const TG_CHAT_DEALS = process.env.TELEGRAM_CHAT_ID_DEALS;
 
 /**
- * Envoie un message Telegram (simple et robuste)
+ * Envoie un message Telegram
  */
 async function sendTelegram({ token, chatId, text, image }) {
   if (!token || !chatId) throw new Error("Telegram env missing");
 
-  // Si image → sendPhoto, sinon sendMessage
   if (image) {
     const url = `https://api.telegram.org/bot${token}/sendPhoto`;
     const body = {
       chat_id: chatId,
       photo: image,
-      caption: text?.slice(0, 1024) || "", // Telegram limite caption
+      caption: text?.slice(0, 1024) || "",
       parse_mode: "HTML",
       disable_web_page_preview: false,
     };
-
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
-    return r.json();
-  } else {
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    const body = {
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: false,
-    };
-
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
     return r.json();
   }
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const body = {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+    disable_web_page_preview: false,
+  };
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json();
 }
 
 /**
- * PUBLIC: publier un deal
- * - 1) save Redis (canonique)
- * - 2) push Telegram (diffusion)
+ * Publie un item (news ou deal)
+ * - news => Telegram AUTO (pas de Redis deals)
+ * - deal => Redis deals + Telegram DEALS
  */
-export async function publishDeal(deal, mode = "deals") {
-  // 1) Save deal canonique
-  const saved = await saveDeal(deal);
+export async function publishDeal(item, mode = "deals") {
+  const isNews = item?.sourceType === "news";
 
-  // ✅ LOG 1 : confirme que Redis a bien enregistré
-  console.log("✅ Saved deal to Redis:", {
+  // ✅ 1) News → pas de saveDeal, juste Telegram AUTO
+  if (isNews) {
+    const text = buildTelegramMessage(item, true);
+
+    const tgRes = await sendTelegram({
+      token: TG_TOKEN_AUTO,
+      chatId: TG_CHAT_AUTO,
+      text,
+      image: item.image,
+    });
+
+    console.log("✅ Sent NEWS to Telegram:", {
+      ok: tgRes?.ok,
+      mode: "auto",
+      tgMessageId: tgRes?.result?.message_id,
+    });
+
+    return { ...item, publishedTo: "auto" };
+  }
+
+  // ✅ 2) Deal → save Redis canonique + Telegram DEALS
+  const saved = await saveDeal(item);
+
+  console.log("✅ Saved DEAL to Redis:", {
     id: saved.id,
     title: saved.title,
     category: saved.category,
     ts: saved.ts,
   });
 
-  // 2) Construire un message lisible + parseable
-  const text = buildTelegramMessage(saved);
+  const text = buildTelegramMessage(saved, false);
 
-  // 3) Choix canal
-  const isAuto = mode === "auto";
-  const token = isAuto ? TG_TOKEN_AUTO : TG_TOKEN_DEALS;
-  const chatId = isAuto ? TG_CHAT_AUTO : TG_CHAT_DEALS;
-
-  // 4) Envoi Telegram
   const tgRes = await sendTelegram({
-    token,
-    chatId,
+    token: TG_TOKEN_DEALS,
+    chatId: TG_CHAT_DEALS,
     text,
     image: saved.image,
   });
 
-  // ✅ LOG 2 : confirme Telegram OK
-  console.log("✅ Sent deal to Telegram:", {
+  console.log("✅ Sent DEAL to Telegram:", {
     ok: tgRes?.ok,
-    chatId,
-    mode,
+    mode: "deals",
     tgMessageId: tgRes?.result?.message_id,
   });
 
@@ -95,11 +102,21 @@ export async function publishDeal(deal, mode = "deals") {
 }
 
 /**
- * Message Telegram standardisé 2026
- * lisible humain + stable machine
+ * Export default pour matcher:
+ * import publishTelegram from "./utils/publishTelegram.js"
  */
-function buildTelegramMessage(d) {
-  const link = d.affiliateUrl || d.url || "";
+export default async function publishTelegram(item) {
+  // auto-routing
+  return publishDeal(item, item?.sourceType === "news" ? "auto" : "deals");
+}
+
+/**
+ * Message Telegram standardisé 2026
+ */
+function buildTelegramMessage(d, isNews = false) {
+  const link = d.affiliateUrl || d.url || d.link || "";
+
+  const badgeType = isNews ? "📰 Actu" : "🔥 Deal";
   const halalBadge =
     d.halal === true
       ? "✅ Halal"
@@ -107,19 +124,16 @@ function buildTelegramMessage(d) {
       ? "⚠️ Non Halal"
       : "ℹ️ Halal ?";
 
-  const score = d.score ?? d.yscore ?? "?";
+  const score = d.score ?? d.yscore?.globalScore ?? d.yscore ?? "?";
 
   return `
 <b>${d.title || "Opportunité"}</b>
+<b>Type:</b> ${badgeType}
 <b>Y-Score:</b> ${score} | ${halalBadge}
-<b>Prix:</b> ${d.price || "?"}
-<b>Catégorie:</b> ${d.category || "Deals"}
-<b>Ville:</b> ${d.city || "-"}
 
-<b>Marge:</b> ${d.margin || "-"} 
-<b>Risque:</b> ${d.risk || "-"}
-<b>Horizon:</b> ${d.horizon || "-"} 
+<b>Catégorie:</b> ${d.category || (isNews ? "News" : "Deals")}
+<b>Source:</b> ${d.source || "-"}
 
-${link ? `<a href="${link}">🔗 Voir l'opportunité</a>` : ""}
+${link ? `<a href="${link}">🔗 Ouvrir</a>` : ""}
 `.trim();
 }
