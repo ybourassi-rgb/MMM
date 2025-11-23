@@ -1,148 +1,81 @@
-// mmy-agent/index.js
-import fetchFeeds from "./utils/fetchFeeds.js";
-import summarize from "./utils/summarize.js";
-import classify from "./utils/classify.js";
-import score from "./utils/score.js";
-import publishTelegram from "./utils/publishTelegram.js";
-import { hasBeenPosted, markPosted } from "./utils/saveLog.js";
-
+// mmy-agent/utils/saveLog.js
 import { Redis } from "@upstash/redis";
 
-// --- Redis ping (debug) ---
-const redisPing = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN,
-});
+// ✅ on accepte les 2 noms d'env
+const url =
+  process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL;
+const token =
+  process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN;
 
-async function testRedis() {
-  try {
-    const urlOk = !!(
-      process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REST_URL
-    );
-    const tokenOk = !!(
-      process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REST_TOKEN
-    );
-    console.log("[redis] env url?", urlOk, "token?", tokenOk);
+if (!url || !token) {
+  console.warn("[saveLog] Upstash env missing", {
+    hasUrl: !!url,
+    hasToken: !!token,
+  });
+}
 
-    const pong = await redisPing.ping();
-    console.log("[redis ping ✅]", pong);
+const redis = new Redis({ url, token });
 
-    const len = await redisPing.llen("deals:all");
-    console.log("[redis] deals:all length =", len);
-  } catch (e) {
-    console.error("[redis ping ❌]", e);
+/**
+ * Sauvegarde un deal dans Redis (canonique)
+ */
+export async function saveDeal(deal) {
+  const id =
+    deal.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const item = {
+    ...deal,
+    id,
+    ts: Date.now(),
+  };
+
+  const payload = JSON.stringify(item);
+
+  // ✅ liste globale lue par /api/feed
+  await redis.lpush("deals:all", payload);
+  await redis.ltrim("deals:all", 0, 300);
+
+  // ✅ listes par catégorie
+  if (item.category) {
+    const key = `deals:${String(item.category).toLowerCase()}`;
+    await redis.lpush(key, payload);
+    await redis.ltrim(key, 0, 200);
   }
+
+  return item;
 }
 
-// --- Helpers deals clean ---
-const DEAL_DOMAINS = ["amazon.", "aliexpress.", "ebay.", "dealabs.", "pepper."];
-
-function isDealDomain(url = "") {
-  return DEAL_DOMAINS.some((d) => url.toLowerCase().includes(d));
-}
-
-async function isAlive(url) {
+/**
+ * Anti-doublon global (news + deals)
+ * On stocke les liens déjà postés dans un SET.
+ */
+export async function hasBeenPosted(link) {
+  if (!link) return false;
   try {
-    const r = await fetch(url, { method: "HEAD", redirect: "follow" });
-    return r.ok;
-  } catch {
+    const r = await redis.sismember("posted:links", link);
+    return !!r;
+  } catch (e) {
+    console.warn("[hasBeenPosted] err", e?.message);
     return false;
   }
 }
 
-// ✅ fonction exportée pour Vercel / Railway
-export async function runAgentCycle() {
-  console.log("🚀 MMY Agent : cycle démarré");
-
-  await testRedis();
-
-  const items = await fetchFeeds();
-  console.log(`📡 ${items.length} éléments récupérés`);
-
-  for (const item of items) {
-    try {
-      const sourceType = item.type || "news";
-
-      // Anti-doublon global
-      const already = await hasBeenPosted(item.link);
-      if (already) {
-        console.log("⏩ Déjà publié, on skip :", item.link);
-        continue;
-      }
-
-      // -------- NEWS --------
-      if (sourceType === "news") {
-        const summary = await summarize(item);
-        const category = await classify(summary);
-
-        const yscore = await score(item.link, summary, category).catch(() => null);
-
-        await publishTelegram({
-          ...item,
-          summary,
-          category,
-          yscore,
-          type: "news",
-        });
-
-        await markPosted(item.link);
-        console.log("📰 News publiée");
-        continue;
-      }
-
-      // -------- DEAL --------
-      if (sourceType === "deal") {
-        if (!isDealDomain(item.link)) {
-          console.log("🧹 Deal rejeté (domaine non autorisé):", item.link);
-          continue;
-        }
-
-        const ok = await isAlive(item.link);
-        if (!ok) {
-          console.log("🧹 Deal rejeté (lien mort):", item.link);
-          continue;
-        }
-
-        const summary = await summarize(item);
-        const category = await classify(summary);
-
-        const yscore = await score(item.link, summary, category);
-        const globalScore =
-          typeof yscore?.globalScore === "number" ? yscore.globalScore : 0;
-
-        const isAmazon = item.link.toLowerCase().includes("amazon.");
-        const minScore = isAmazon ? 85 : 75;
-
-        if (globalScore < minScore) {
-          console.log(`🟡 Deal ignoré (${globalScore} < ${minScore})`);
-          continue;
-        }
-
-        await publishTelegram({
-          ...item,
-          summary,
-          category,
-          yscore,
-          type: "deal",
-        });
-
-        await markPosted(item.link);
-        console.log("🔥 Deal publié");
-        continue;
-      }
-
-      console.log("⚠️ Item ignoré (type inconnu):", sourceType, item.link);
-    } catch (error) {
-      console.error("❌ Erreur sur un item :", error);
+/**
+ * Marque un lien comme posté.
+ * On garde le set propre avec un TTL (optionnel).
+ */
+export async function markPosted(link) {
+  if (!link) return false;
+  try {
+    await redis.sadd("posted:links", link);
+    // TTL 30 jours sur le set (si pas déjà défini)
+    const ttl = await redis.ttl("posted:links");
+    if (ttl < 0) {
+      await redis.expire("posted:links", 60 * 60 * 24 * 30);
     }
+    return true;
+  } catch (e) {
+    console.warn("[markPosted] err", e?.message);
+    return false;
   }
-
-  console.log("✨ Cycle terminé");
-}
-
-// ✅ si tu l’exécutes en CLI/Railway
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runAgentCycle().catch((e) =>
-    console.error("❌ Erreur globale MMY Agent :", e)
-  );
 }
