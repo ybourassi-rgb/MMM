@@ -1,15 +1,19 @@
+// next.config.mjs
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-
   images: {
     remotePatterns: [
+      // Dealabs + CDN
       { protocol: "https", hostname: "www.dealabs.com" },
-      { protocol: "https", hostname: "*.dealabs.com" },
       { protocol: "https", hostname: "static-hotukdeals.akamaized.net" },
+      { protocol: "https", hostname: "**.dealabs.com" },
 
-      { protocol: "https", hostname: "*.amazon.com" },
-      { protocol: "https", hostname: "*.amazon.fr" },
+      // Amazon images (souvent .media-amazon / images-eu)
+      { protocol: "https", hostname: "**.amazon.com" },
+      { protocol: "https", hostname: "**.amazon.fr" },
+      { protocol: "https", hostname: "**.media-amazon.com" },
 
+      // autres classiques
       { protocol: "https", hostname: "i.imgur.com" },
       { protocol: "https", hostname: "img.leboncoin.fr" },
     ],
