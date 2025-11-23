@@ -20,13 +20,13 @@ export default function DealSlide({ item, active }) {
     halal,
   } = item || {};
 
-  // 1) On choisit le bon lien même si l’API renvoie "link"
+  // ✅ lien final sûr
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // 2) Gestion image cassée → fallback propre
+  // ✅ fallback image si cassée
   const [imgOk, setImgOk] = useState(true);
   const finalImage = imgOk ? image : null;
 
@@ -64,7 +64,6 @@ export default function DealSlide({ item, active }) {
 
   const onAnalyze = () => {
     console.log("Analyze:", item);
-    // Plus tard: ouvrir modal Y-Score
   };
 
   const onShare = async () => {
@@ -83,7 +82,6 @@ export default function DealSlide({ item, active }) {
 
   const onFav = () => {
     console.log("Fav:", item);
-    // Plus tard: save profil Upstash
   };
 
   return (
@@ -97,6 +95,7 @@ export default function DealSlide({ item, active }) {
             fill
             priority={active}
             sizes="100vw"
+            quality={90}
             onError={() => setImgOk(false)}
             style={{ objectFit: "cover" }}
           />
@@ -163,7 +162,7 @@ export default function DealSlide({ item, active }) {
         </div>
       </div>
 
-      {/* Styles DealSlide (isolés) */}
+      {/* Styles */}
       <style jsx>{`
         .deal-slide {
           height: 100%;
@@ -171,7 +170,6 @@ export default function DealSlide({ item, active }) {
           position: relative;
           color: #fff;
         }
-
         .deal-media {
           position: absolute;
           inset: 0;
@@ -200,7 +198,6 @@ export default function DealSlide({ item, active }) {
               rgba(0, 0, 0, 0.85)
             );
         }
-
         .deal-top {
           position: absolute;
           top: 72px;
@@ -222,7 +219,6 @@ export default function DealSlide({ item, active }) {
           background: rgba(0, 0, 0, 0.45);
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
         }
-
         .deal-actions {
           position: absolute;
           right: 10px;
@@ -251,10 +247,10 @@ export default function DealSlide({ item, active }) {
           opacity: 0.9;
           font-weight: 600;
         }
-        .action-btn:disabled{
-          opacity:.5; cursor:not-allowed;
+        .action-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
-
         .deal-bottom {
           position: absolute;
           left: 14px;
@@ -273,7 +269,6 @@ export default function DealSlide({ item, active }) {
           font-size: 14px;
           opacity: 0.9;
         }
-
         .deal-metrics {
           margin-top: 10px;
           display: flex;
