@@ -1,267 +1,299 @@
-// app/api/feed/route.js
-import { NextResponse } from "next/server";
-import Parser from "rss-parser";
-import { Redis } from "@upstash/redis";
+"use client";
 
-export const runtime = "nodejs"; // ✅ stabilité (RSS + Redis)
+import { useEffect, useState, useRef, useCallback } from "react";
+import DealSlide from "@/components/DealSlide";
+import BottomNav from "@/components/BottomNav";
 
-const redis = Redis.fromEnv();
+export default function Page() {
+  const [items, setItems] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [cursor, setCursor] = useState(null);
 
-const parser = new Parser({
-  customFields: {
-    item: [
-      ["media:content", "mediaContent"],
-      ["enclosure", "enclosure"],
-      ["content:encoded", "contentEncoded"],
-    ],
-  },
-});
+  const feedRef = useRef(null);
 
-// ====================================
-// 1) Pepper thumbnails -> full quality
-// ====================================
-function upgradePepperImage(url) {
-  if (!url) return url;
+  // 1) Load initial feed
+  useEffect(() => {
+    let cancelled = false;
 
-  try {
-    const u = new URL(url);
-    const host = u.hostname;
+    (async () => {
+      try {
+        const r = await fetch("/api/feed", { cache: "no-store" });
+        const d = await r.json();
 
-    const isPepper =
-      host.includes("static-pepper.") ||
-      host.includes("static-hotukdeals.") ||
-      host.includes("static-mydealz.") ||
-      host.includes("pepper.") ||
-      host.includes("chollometro.") ||
-      host.includes("dealabs.");
+        if (cancelled) return;
 
-    if (isPepper) {
-      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
-      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
-      return u.toString();
-    }
+        if (d?.ok === false) {
+          console.error("Feed error:", d.error);
+          setItems([]);
+          return;
+        }
 
-    return url;
-  } catch {
-    return url;
-  }
-}
-
-// ====================================
-// 2) Extract image from RSS item
-// ====================================
-function pickImage(it) {
-  const mc = it.mediaContent;
-
-  if (mc?.$?.url) return upgradePepperImage(mc.$.url);
-  if (Array.isArray(mc) && mc[0]?.$?.url) {
-    return upgradePepperImage(mc[0].$?.url);
-  }
-
-  if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
-
-  const html = it.contentEncoded || it.content || "";
-  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (match?.[1]) return upgradePepperImage(match[1]);
-
-  return null;
-}
-
-// ====================================
-// 3) Filter NO/LOW images
-// ====================================
-function isValidImage(img) {
-  if (!img) return false;
-  const lower = img.toLowerCase();
-
-  if (lower.endsWith(".svg")) return false;
-  if (lower.includes("default-voucher")) return false;
-  if (lower.includes("placeholder")) return false;
-
-  if (lower.match(/\/re\/\d+x\d+\//i)) return false;
-  if (lower.match(/\/qt\/\d+\//i)) return false;
-
-  const smallSizes = [
-    "100x100",
-    "120x120",
-    "150x150",
-    "160x160",
-    "180x180",
-    "200x150",
-  ];
-  if (smallSizes.some((s) => lower.includes(s))) return false;
-
-  if (lower.includes("thumbnail")) return false;
-  if (lower.includes("thumbs")) return false;
-  if (lower.includes("/small/")) return false;
-  if (lower.includes("_small")) return false;
-
-  return true;
-}
-
-// ====================================
-// 4) Normalize item
-// ====================================
-function normalizeItem(raw, i = 0, source = "rss") {
-  const url = raw.link || raw.url || raw.guid || "";
-  const image = pickImage(raw);
-
-  return {
-    id: raw.id || raw.guid || `${Date.now()}-${i}`,
-    title: raw.title?.trim() || "Opportunité",
-    url,
-    link: raw.link || null,
-    image,
-
-    price: raw.price || null,
-    score: raw.yscore?.globalScore ?? raw.score ?? null,
-    category: raw.category || raw.type || "autre",
-
-    margin: raw.yscore
-      ? `${raw.yscore.opportunityScore ?? "—"}%`
-      : raw.margin,
-    risk: raw.yscore
-      ? `${raw.yscore.riskScore ?? "—"}/100`
-      : raw.risk,
-    horizon: raw.horizon || "court terme",
-
-    halal: raw.yscore
-      ? raw.yscore.halalScore >= 80
-      : raw.halal ?? null,
-
-    affiliateUrl: raw.affiliateUrl || null,
-    source,
-    publishedAt: raw.publishedAt || raw.isoDate || null,
-    summary: raw.summary || raw.contentSnippet || null,
-  };
-}
-
-// ====================================
-// 5) Bucketize (travel / tech / general)
-// ====================================
-function bucketize(item) {
-  const s = (item.source || "").toLowerCase();
-  const c = (item.category || "").toLowerCase();
-  const t = (item.title || "").toLowerCase();
-
-  if (
-    s.includes("travel") ||
-    c.includes("voyage") ||
-    c.includes("reise") ||
-    t.includes("vol ") ||
-    t.includes("hotel") ||
-    t.includes("flight")
-  ) return "travel";
-
-  if (
-    s.includes("tech") ||
-    s.includes("gaming") ||
-    c.includes("tech") ||
-    c.includes("informatique") ||
-    t.includes("pc") ||
-    t.includes("ssd") ||
-    t.includes("ryzen")
-  ) return "tech";
-
-  if (
-    s.includes("community") ||
-    s.includes("dealabs") ||
-    s.includes("hukd") ||
-    s.includes("mydealz") ||
-    s.includes("pepper") ||
-    s.includes("chollo")
-  ) return "general";
-
-  return "other";
-}
-
-// ====================================
-// 6) Interleave TikTok style
-// ====================================
-function interleaveBuckets(buckets) {
-  const order = ["travel", "general", "general", "tech", "general", "other"];
-  const out = [];
-
-  let guard = 0;
-  while (guard < 5000) {
-    guard++;
-    let pushed = false;
-
-    for (const key of order) {
-      const arr = buckets[key];
-      if (arr && arr.length) {
-        out.push(arr.shift());
-        pushed = true;
+        const firstItems = d.items || d || [];
+        setItems(firstItems);
+        if (d.cursor) setCursor(d.cursor);
+      } catch (e) {
+        if (!cancelled) setItems([]);
       }
-    }
-    if (!pushed) break;
-  }
+    })();
 
-  return out;
-}
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-export async function GET() {
-  try {
-    const SOURCES = [
-      { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
-      { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
+  // 2) Detect active slide
+  useEffect(() => {
+    if (!feedRef.current) return;
 
-      { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
-      { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
-      { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
+    const slides = [...feedRef.current.querySelectorAll("[data-slide]")];
+    if (!slides.length) return;
 
-      { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
-      { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
-      { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
-      { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
 
-      { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
-      { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
-      { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
-    ];
-
-    const settled = await Promise.allSettled(
-      SOURCES.map((s) => parser.parseURL(s.url))
+        const idx = Number(visible.target.getAttribute("data-index"));
+        if (!Number.isNaN(idx)) setActiveIndex(idx);
+      },
+      { root: feedRef.current, threshold: [0.6, 0.8, 1] }
     );
 
-    const feeds = settled
-      .map((res, idx) => {
-        if (res.status !== "fulfilled") return null;
-        return { feed: res.value, meta: SOURCES[idx] };
-      })
-      .filter(Boolean);
+    slides.forEach((s) => io.observe(s));
+    return () => io.disconnect();
+  }, [items]);
 
-    let items = feeds
-      .flatMap(({ feed, meta }) =>
-        (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
-      )
-      .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image));
+  // 3) Fetch more when near end
+  const fetchMore = useCallback(async () => {
+    if (loading) return;
+    if (activeIndex < items.length - 3) return;
 
-    // ✅ Community deals DIRECT Redis (plus de fetch relatif instable)
-    let community = [];
+    setLoading(true);
     try {
-      community = (await redis.lrange("community:deals", 0, 199)) || [];
-    } catch {
-      community = [];
+      const url = cursor
+        ? `/api/feed?cursor=${cursor}`
+        : `/api/feed?cursor=next`;
+
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+
+      if (data?.ok === false) {
+        console.error("fetchMore error:", data.error);
+        return;
+      }
+
+      const nextItems = Array.isArray(data) ? data : data.items;
+      const nextCursor = Array.isArray(data) ? null : data.cursor;
+
+      if (nextItems?.length) {
+        setItems((prev) => [...prev, ...nextItems]);
+        if (nextCursor) setCursor(nextCursor);
+      }
+    } catch (e) {
+      console.error("fetchMore error", e);
+    } finally {
+      setLoading(false);
     }
+  }, [activeIndex, items.length, loading, cursor]);
 
-    items = [...community, ...items];
+  useEffect(() => {
+    fetchMore();
+  }, [fetchMore]);
 
-    const buckets = { travel: [], general: [], tech: [], other: [] };
-    for (const it of items) buckets[bucketize(it)].push(it);
+  return (
+    <div className="app">
+      {/* TOP BAR */}
+      <header className="topbar">
+        <div className="brand">
+          <div className="logo" />
+          <span>Le Bon Souk</span>
+        </div>
+        <div className="status">
+          IA en ligne<span className="dot" />
+        </div>
+      </header>
 
-    for (const k of Object.keys(buckets)) {
-      buckets[k].sort(() => Math.random() - 0.5);
-    }
+      {/* CHIPS FILTER */}
+      <div className="chips">
+        {[
+          "🔥 Bonnes affaires",
+          "🚗 Auto",
+          "🏠 Immo",
+          "₿ Crypto",
+          "🧰 Business",
+          "📈 Marchés",
+        ].map((t, i) => (
+          <button
+            key={t}
+            className={`chip ${i === 0 ? "active" : ""}`}
+            onClick={() => {
+              /* filtre bientôt */
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
 
-    const mixed = interleaveBuckets(buckets);
+      {/* FEED TikTok */}
+      <main ref={feedRef} className="tiktok-feed">
+        {items.map((it, i) => (
+          <section
+            key={it.id || `${it.title}-${i}`}
+            data-slide
+            data-index={i}
+            className="tiktok-slide"
+          >
+            <DealSlide item={it} active={i === activeIndex} />
+          </section>
+        ))}
 
-    return NextResponse.json({ ok: true, items: mixed, cursor: null });
-  } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e?.message || "Feed error", items: [] },
-      { status: 500 }
-    );
-  }
+        {!items.length && !loading && (
+          <div className="empty">Aucune opportunité pour l’instant.</div>
+        )}
+
+        {loading && <div className="tiktok-loading">Chargement...</div>}
+      </main>
+
+      {/* ✅ BOTTOM NAV cliquable */}
+      <BottomNav />
+
+      {/* Styles globaux */}
+      <style jsx global>{`
+        :root {
+          --bg: #07090f;
+          --card: #0f1422;
+          --muted: #8b93a7;
+          --text: #e9ecf5;
+          --accent: #4ea3ff;
+          --good: #18d47b;
+          --warn: #ffb454;
+          --bad: #ff6b6b;
+        }
+        * { box-sizing: border-box; }
+        body {
+          margin: 0;
+          background: var(--bg);
+          color: var(--text);
+          font-family: system-ui;
+        }
+        .app {
+          height: 100svh;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .topbar {
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 14px;
+          background: linear-gradient(
+            180deg,
+            rgba(7, 9, 15, 0.98),
+            rgba(7, 9, 15, 0.6),
+            transparent
+          );
+          backdrop-filter: blur(8px);
+        }
+        .brand {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          font-weight: 800;
+        }
+        .logo {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: radial-gradient(
+              circle at 30% 30%,
+              #6d7bff,
+              transparent 60%
+            ),
+            radial-gradient(
+              circle at 70% 70%,
+              #22e6a5,
+              transparent 55%
+            ),
+            #0b1020;
+        }
+        .status {
+          font-size: 12px;
+          background: #0e1322;
+          border: 1px solid #1a2340;
+          padding: 6px 10px;
+          border-radius: 999px;
+        }
+        .dot {
+          display: inline-block;
+          width: 6px;
+          height: 6px;
+          background: var(--good);
+          border-radius: 50%;
+          margin-left: 6px;
+        }
+
+        .chips {
+          display: flex;
+          gap: 8px;
+          overflow: auto;
+          padding: 6px 10px 8px;
+          scrollbar-width: none;
+        }
+        .chip {
+          flex: 0 0 auto;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: #0e1322;
+          border: 1px solid #1a2340;
+          color: #c6cce0;
+          font-size: 13px;
+        }
+        .chip.active {
+          background: #14203a;
+          border-color: #27406f;
+          color: #fff;
+        }
+
+        .tiktok-feed {
+          flex: 1;
+          height: 100%;
+          overflow-y: auto;
+          scroll-snap-type: y mandatory;
+          scroll-behavior: smooth;
+          scrollbar-width: none;
+          background: #05060a;
+        }
+        .tiktok-feed::-webkit-scrollbar { display: none; }
+        .tiktok-slide {
+          height: 100vh;
+          scroll-snap-align: start;
+          scroll-snap-stop: always;
+          position: relative;
+        }
+
+        .empty {
+          height: 100%;
+          display: grid;
+          place-items: center;
+          color: var(--muted);
+        }
+        .tiktok-loading {
+          position: sticky;
+          bottom: 64px; /* évite de passer sous la bottom nav */
+          text-align: center;
+          padding: 10px 0;
+          background: rgba(0, 0, 0, 0.6);
+          font-size: 13px;
+        }
+      `}</style>
+    </div>
+  );
 }
