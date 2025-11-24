@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+
+const FALLBACK_IMG = "/placeholders/IMG_2362.png";
 
 export default function DealSlide({ item, active }) {
   const {
@@ -26,8 +28,13 @@ export default function DealSlide({ item, active }) {
     [affiliateUrl, url, link]
   );
 
-  const [imgOk, setImgOk] = useState(true);
-  const finalImage = imgOk ? image : null;
+  // ✅ source d'image avec fallback
+  const [imgSrc, setImgSrc] = useState(image || FALLBACK_IMG);
+
+  // au cas où item.image change sans remount (sécurité)
+  useEffect(() => {
+    setImgSrc(image || FALLBACK_IMG);
+  }, [image]);
 
   const openLink = (l) => {
     if (!l) return;
@@ -83,22 +90,16 @@ export default function DealSlide({ item, active }) {
     <div className="deal-slide">
       {/* ===== MEDIA TOP ===== */}
       <div className="deal-media">
-        {finalImage ? (
-          <Image
-            src={finalImage}
-            alt={title}
-            fill
-            priority={active}
-            sizes="100vw"
-            onError={() => setImgOk(false)}
-            style={{ objectFit: "contain" }}
-            unoptimized   // ✅ IMPORTANT : stop Next optimizer
-          />
-        ) : (
-          <div className="deal-media-fallback">
-            {image ? "Image indisponible" : "Visuel disponible dans le lien 🔗"}
-          </div>
-        )}
+        <Image
+          src={imgSrc}
+          alt={title}
+          fill
+          priority={active}
+          sizes="100vw"
+          onError={() => setImgSrc(FALLBACK_IMG)} // ✅ fallback auto
+          style={{ objectFit: "contain" }}
+          unoptimized   // ✅ IMPORTANT : stop Next optimizer
+        />
 
         <div className="deal-gradient" />
 
@@ -174,16 +175,6 @@ export default function DealSlide({ item, active }) {
           height: 45vh;
           background: #0b1020;
           overflow: hidden;
-        }
-
-        .deal-media-fallback {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          opacity: 0.7;
         }
 
         .deal-gradient {
@@ -296,7 +287,7 @@ export default function DealSlide({ item, active }) {
 
         .metric {
           background: rgba(0, 0, 0, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(255,  255, 255, 0.12);
           padding: 10px;
           border-radius: 12px;
           min-width: 95px;
