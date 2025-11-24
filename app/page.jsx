@@ -1,57 +1,39 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import DealSlide from "@/components/DealSlide";
 import BottomNav from "@/components/BottomNav";
+import Link from "next/link";
 
 export default function Page() {
   const [items, setItems] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
+
+  // ✅ filtre local simple
+  const [filter, setFilter] = useState("all"); 
+  // all | community | travel | auto | immo | tech | home | family | lifestyle
 
   const feedRef = useRef(null);
 
   // 1) Load initial feed
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const r = await fetch("/api/feed", { cache: "no-store" });
-        const d = await r.json();
-
-        if (cancelled) return;
-
-        const firstItems = d?.items || d || [];
+    fetch("/api/feed", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const firstItems = d.items || d || [];
         setItems(firstItems);
-
-        if (d?.cursor) setCursor(d.cursor);
-
-        // si rien au départ, on stop le infinite
-        if (!firstItems.length) setHasMore(false);
-      } catch (e) {
-        if (!cancelled) {
-          console.error("Initial feed error", e);
-          setItems([]);
-          setHasMore(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+        if (d.cursor) setCursor(d.cursor);
+      })
+      .catch(() => setItems([]));
   }, []);
 
   // 2) Detect active slide
   useEffect(() => {
     if (!feedRef.current) return;
-    if (!items.length) return;
 
     const slides = [...feedRef.current.querySelectorAll("[data-slide]")];
-
     const io = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -69,35 +51,19 @@ export default function Page() {
     return () => io.disconnect();
   }, [items]);
 
-  // helper: fetch avec timeout
-  const fetchWithTimeout = (url, ms = 15000) =>
-    Promise.race([
-      fetch(url, { cache: "no-store" }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
-    ]);
-
   // 3) Fetch more when near end
   const fetchMore = useCallback(async () => {
-    // ✅ garde-fous
-    if (loading || !hasMore) return;
-    if (!items.length) return;                 // évite boucle au démarrage
+    if (loading) return;
     if (activeIndex < items.length - 3) return;
 
     setLoading(true);
-
     try {
       const url = cursor
-        ? `/api/feed?cursor=${encodeURIComponent(cursor)}`
+        ? `/api/feed?cursor=${cursor}`
         : `/api/feed?cursor=next`;
 
-      const res = await fetchWithTimeout(url);
+      const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
-
-      if (!data || data.ok === false) {
-        console.warn("Feed returned ok:false", data);
-        setHasMore(false);
-        return;
-      }
 
       const nextItems = Array.isArray(data) ? data : data.items;
       const nextCursor = Array.isArray(data) ? null : data.cursor;
@@ -105,22 +71,51 @@ export default function Page() {
       if (nextItems?.length) {
         setItems((prev) => [...prev, ...nextItems]);
         if (nextCursor) setCursor(nextCursor);
-      } else {
-        // ✅ plus rien => stop infinite
-        setHasMore(false);
       }
     } catch (e) {
       console.error("fetchMore error", e);
-      // si erreur réseau, on évite boucle infinie
-      setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, [activeIndex, items.length, items, loading, cursor, hasMore]);
+  }, [activeIndex, items.length, loading, cursor]);
 
   useEffect(() => {
     fetchMore();
   }, [fetchMore]);
+
+  // ✅ items filtrés (front only)
+  const filteredItems = useMemo(() => {
+    if (filter === "all") return items;
+
+    if (filter === "community")
+      return items.filter((it) =>
+        String(it.source || "").toLowerCase().includes("community")
+      );
+
+    // sinon on filtre par catégorie/bucket
+    return items.filter((it) => {
+      const c = String(it.category || "").toLowerCase();
+      const s = String(it.source || "").toLowerCase();
+      const t = String(it.title || "").toLowerCase();
+
+      if (filter === "travel")
+        return s.includes("travel") || c.includes("voyage") || t.includes("vol ") || t.includes("hotel");
+      if (filter === "auto")
+        return c.includes("auto") || t.includes("voiture") || t.includes("moto");
+      if (filter === "immo")
+        return c.includes("immo") || c.includes("immobilier") || t.includes("appartement");
+      if (filter === "tech")
+        return c.includes("tech") || t.includes("pc") || t.includes("ps5");
+      if (filter === "home")
+        return c.includes("maison") || c.includes("jardin") || t.includes("meuble") || t.includes("bricolage");
+      if (filter === "family")
+        return c.includes("bébé") || c.includes("enfant") || t.includes("jouet");
+      if (filter === "lifestyle")
+        return c.includes("mode") || c.includes("sport") || c.includes("beauté");
+
+      return true;
+    });
+  }, [items, filter]);
 
   return (
     <div className="app">
@@ -138,26 +133,29 @@ export default function Page() {
       {/* CHIPS FILTER */}
       <div className="chips">
         {[
-          "🔥 Bonnes affaires",
-          "🚗 Auto",
-          "🏠 Immo",
-          "₿ Crypto",
-          "🧰 Business",
-          "📈 Marchés",
-        ].map((t, i) => (
+          { key: "all", label: "🔥 Tout" },
+          { key: "community", label: "🧑‍🤝‍🧑 Communauté" },
+          { key: "travel", label: "🌍 Voyage" },
+          { key: "auto", label: "🚗 Auto" },
+          { key: "immo", label: "🏠 Immo" },
+          { key: "tech", label: "🕹️ Tech" },
+          { key: "home", label: "🛠️ Maison" },
+          { key: "family", label: "👶 Famille" },
+          { key: "lifestyle", label: "👟 Mode/Sport" },
+        ].map((f) => (
           <button
-            key={t}
-            className={`chip ${i === 0 ? "active" : ""}`}
-            onClick={() => {}}
+            key={f.key}
+            className={`chip ${filter === f.key ? "active" : ""}`}
+            onClick={() => setFilter(f.key)}
           >
-            {t}
+            {f.label}
           </button>
         ))}
       </div>
 
       {/* FEED TikTok */}
       <main ref={feedRef} className="tiktok-feed">
-        {items.map((it, i) => (
+        {filteredItems.map((it, i) => (
           <section
             key={it.id || `${it.title}-${i}`}
             data-slide
@@ -168,16 +166,17 @@ export default function Page() {
           </section>
         ))}
 
-        {!items.length && !loading && (
+        {!filteredItems.length && !loading && (
           <div className="empty">Aucune opportunité pour l’instant.</div>
         )}
 
         {loading && <div className="tiktok-loading">Chargement...</div>}
-
-        {!hasMore && items.length > 0 && (
-          <div className="tiktok-loading">Fin du feed ✅</div>
-        )}
       </main>
+
+      {/* ✅ bouton Publier flottant */}
+      <Link href="/publish" className="fab">
+        ＋ Publier un deal
+      </Link>
 
       <BottomNav />
 
@@ -189,8 +188,6 @@ export default function Page() {
           --text: #e9ecf5;
           --accent: #4ea3ff;
           --good: #18d47b;
-          --warn: #ffb454;
-          --bad: #ff6b6b;
         }
         * { box-sizing: border-box; }
         body {
@@ -203,7 +200,9 @@ export default function Page() {
           height: 100svh;
           display: flex;
           flex-direction: column;
+          position: relative;
         }
+
         .topbar {
           position: sticky;
           top: 0;
@@ -230,17 +229,9 @@ export default function Page() {
           width: 28px;
           height: 28px;
           border-radius: 8px;
-          background: radial-gradient(
-              circle at 30% 30%,
-              #6d7bff,
-              transparent 60%
-            ),
-            radial-gradient(
-              circle at 70% 70%,
-              #22e6a5,
-              transparent 55%
-            ),
-            #0b1020;
+          background: radial-gradient(circle at 30% 30%, #6d7bff, transparent 60%),
+                      radial-gradient(circle at 70% 70%, #22e6a5, transparent 55%),
+                      #0b1020;
         }
         .status {
           font-size: 12px;
@@ -257,6 +248,7 @@ export default function Page() {
           border-radius: 50%;
           margin-left: 6px;
         }
+
         .chips {
           display: flex;
           gap: 8px;
@@ -277,7 +269,9 @@ export default function Page() {
           background: #14203a;
           border-color: #27406f;
           color: #fff;
+          font-weight: 800;
         }
+
         .tiktok-feed {
           flex: 1;
           height: 100%;
@@ -294,6 +288,7 @@ export default function Page() {
           scroll-snap-stop: always;
           position: relative;
         }
+
         .empty {
           height: 100%;
           display: grid;
@@ -307,6 +302,24 @@ export default function Page() {
           padding: 10px 0;
           background: rgba(0,0,0,0.6);
           font-size: 13px;
+        }
+
+        /* ✅ Floating Publish Button */
+        .fab{
+          position: fixed;
+          right: 14px;
+          bottom: 84px; /* au-dessus de la bottomnav */
+          z-index: 9999;
+          background: rgba(78,163,255,0.95);
+          color: white;
+          padding: 12px 14px;
+          border-radius: 999px;
+          font-weight: 900;
+          text-decoration: none;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+          border: 1px solid rgba(255,255,255,0.25);
+          backdrop-filter: blur(6px);
+          font-size: 14px;
         }
       `}</style>
     </div>
