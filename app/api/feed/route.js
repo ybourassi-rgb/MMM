@@ -13,10 +13,24 @@ const parser = new Parser({
 });
 
 // ====================================
+// 0) Helpers base URL (server-side)
+// ====================================
+function getBaseUrl() {
+  // NEXT_PUBLIC_BASE_URL conseillé (ex: https://alpha-one.vercel.app)
+  if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;
+
+  // Vercel
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+
+  return ""; // fallback -> fetch relative (peut marcher en dev)
+}
+
+// ====================================
 // 1) Pepper thumbnails -> full quality
 // ====================================
 function upgradePepperImage(url) {
   if (!url) return url;
+
   try {
     const u = new URL(url);
     const host = u.hostname;
@@ -30,7 +44,7 @@ function upgradePepperImage(url) {
       host.includes("dealabs.");
 
     if (isPepper) {
-      // supprime tous les thumbs Pepper
+      // supprime les patterns de thumbs type /re/150x150/qt/55/
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
       return u.toString();
@@ -49,8 +63,9 @@ function pickImage(it) {
   const mc = it.mediaContent;
 
   if (mc?.$?.url) return upgradePepperImage(mc.$.url);
-  if (Array.isArray(mc) && mc[0]?.$?.url)
+  if (Array.isArray(mc) && mc[0]?.$?.url) {
     return upgradePepperImage(mc[0].$?.url);
+  }
 
   if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
 
@@ -63,6 +78,7 @@ function pickImage(it) {
 
 // ====================================
 // 3) Filter NO/LOW images
+//    => on rejette tous les deals sans image OK
 // ====================================
 function isValidImage(img) {
   if (!img) return false;
@@ -77,8 +93,9 @@ function isValidImage(img) {
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  // formats trop petits fréquents
+  // images trop petites / floues fréquentes
   const smallSizes = [
+    "80x80",
     "100x100",
     "120x120",
     "150x150",
@@ -104,23 +121,79 @@ function isAlcoholFree(item) {
   const t = `${item.title || ""} ${item.summary || ""} ${item.category || ""}`.toLowerCase();
 
   const bad = [
-    "alcool", "alcohol", "vin", "wine", "bière", "beer",
-    "whisky", "whiskey", "vodka", "rhum", "rum", "gin",
-    "champagne", "cognac", "tequila", "aperitif", "apéro",
-    "spiritueux", "liqueur", "bourbon", "rosé", "merlot",
+    "alcool", "alcohol",
+    "vin", "wine",
+    "bière", "beer",
+    "whisky", "whiskey",
+    "vodka", "rhum", "rum", "gin",
+    "champagne", "cognac", "tequila",
+    "aperitif", "apéro", "spiritueux",
+    "liqueur", "bourbon", "rosé", "merlot",
   ];
 
   return !bad.some((k) => t.includes(k));
 }
 
 // ====================================
-// 5) Normalize item
+// 5) Make affiliate URL (Amazon + AliExpress)
+// ====================================
+function makeAffiliateUrl(originalUrl) {
+  if (!originalUrl) return null;
+
+  try {
+    const u = new URL(originalUrl);
+    const host = u.hostname.toLowerCase();
+
+    // ---------- Amazon ----------
+    // si domaine Amazon (amazon.fr, amazon.com, smile.amazon.fr, etc.)
+    if (host.includes("amazon.")) {
+      const tag = process.env.AMAZON_ASSOCIATE_TAG;
+      if (tag) {
+        // si déjà un tag, on le remplace
+        u.searchParams.set("tag", tag);
+        return u.toString();
+      }
+      return originalUrl;
+    }
+
+    // ---------- AliExpress ----------
+    if (host.includes("aliexpress.")) {
+      const deep = process.env.ALIEXPRESS_AFFILIATE_LINK; // peut contenir {url}
+      const pid = process.env.ALIEXPRESS_PID;
+
+      if (deep) {
+        // si ton template AliExpress est du style "...?url={url}"
+        if (deep.includes("{url}")) return deep.replace("{url}", encodeURIComponent(originalUrl));
+        // sinon on concatène proprement
+        const sep = deep.includes("?") ? "&" : "?";
+        return `${deep}${sep}url=${encodeURIComponent(originalUrl)}`;
+      }
+
+      // fallback simple PID si pas de deep-link
+      // (ce n'est pas toujours suffisant mais ça évite de casser)
+      if (pid) {
+        const sep = originalUrl.includes("?") ? "&" : "?";
+        return `${originalUrl}${sep}aff_fcid=${pid}`;
+      }
+
+      return originalUrl;
+    }
+
+    // autres domaines => pour l’instant on laisse tel quel
+    return originalUrl;
+  } catch {
+    return originalUrl;
+  }
+}
+
+// ====================================
+// 6) Normalize item
 // ====================================
 function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
   const image = pickImage(raw);
 
-  return {
+  const item = {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
     url,
@@ -143,15 +216,20 @@ function normalizeItem(raw, i = 0, source = "rss") {
       ? raw.yscore.halalScore >= 80
       : raw.halal ?? null,
 
-    affiliateUrl: raw.affiliateUrl || null,
+    affiliateUrl: null, // rempli plus bas
     source,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
+
+  // génération affiliation (non bloquante)
+  item.affiliateUrl = makeAffiliateUrl(item.url);
+
+  return item;
 }
 
 // ====================================
-// 6) Bucketize (travel / tech / general)
+// 7) Bucketize (travel / tech / general)
 // ====================================
 function bucketize(item) {
   const s = (item.source || "").toLowerCase();
@@ -164,7 +242,9 @@ function bucketize(item) {
     c.includes("reise") ||
     t.includes("vol ") ||
     t.includes("hotel") ||
-    t.includes("flight")
+    t.includes("flight") ||
+    t.includes("booking") ||
+    t.includes("airbnb")
   ) return "travel";
 
   if (
@@ -174,11 +254,13 @@ function bucketize(item) {
     c.includes("informatique") ||
     t.includes("pc") ||
     t.includes("ssd") ||
-    t.includes("ryzen")
+    t.includes("ryzen") ||
+    t.includes("ps5") ||
+    t.includes("xbox")
   ) return "tech";
 
   if (
-    s.includes("community") || // posts users
+    s.includes("community") ||
     s.includes("dealabs") ||
     s.includes("hukd") ||
     s.includes("mydealz") ||
@@ -190,7 +272,7 @@ function bucketize(item) {
 }
 
 // ====================================
-// 7) Interleave TikTok style
+// 8) Interleave TikTok style
 // travel → general → general → tech → repeat
 // ====================================
 function interleaveBuckets(buckets) {
@@ -251,20 +333,33 @@ export async function GET() {
       })
       .filter(Boolean);
 
+    // RSS items
     let items = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image))
-      .filter((it) => isAlcoholFree(it)); // ✅ anti-alcool
+      .filter((it) => isValidImage(it.image)) // ✅ sans photo => rejeté
+      .filter(isAlcoholFree);                 // ✅ alcool => rejeté
 
     // ✅ community deals (users)
     let community = [];
     try {
-      const res = await fetch("/api/publish", { cache: "no-store" });
+      const base = getBaseUrl();
+      const res = await fetch(
+        base ? `${base}/api/publish` : "/api/publish",
+        { cache: "no-store" }
+      );
       const data = await res.json();
-      community = data.items || [];
+      community = (data.items || [])
+        .map((it, i) => ({
+          ...it,
+          affiliateUrl: makeAffiliateUrl(it.url),
+          source: it.source || "community",
+          id: it.id || `${Date.now()}-community-${i}`,
+        }))
+        .filter((it) => isValidImage(it.image))
+        .filter(isAlcoholFree);
     } catch {
       community = [];
     }
