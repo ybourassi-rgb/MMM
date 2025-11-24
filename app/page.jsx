@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import DealSlide from "@/components/DealSlide";
 import BottomNav from "@/components/BottomNav";
-import Link from "next/link";
 
 export default function Page() {
   const [items, setItems] = useState([]);
@@ -11,13 +10,41 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState(null);
 
-  // ✅ filtre local simple
-  const [filter, setFilter] = useState("all"); 
-  // all | community | travel | auto | immo | tech | home | family | lifestyle
+  // ✅ filtre chips
+  const [selected, setSelected] = useState("all");
 
   const feedRef = useRef(null);
 
+  // =========================
+  // Chips marketplace (priorités)
+  // =========================
+  const CATEGORIES = [
+    { key: "all", label: "🔥 Tous" },
+    { key: "good", label: "💥 Bonnes affaires", match: ["deal", "promo", "réduction", "soldes", "bon plan"] },
+
+    { key: "tech", label: "📱 High-Tech", match: ["tech", "high-tech", "smartphone", "iphone", "samsung", "xiaomi", "android", "apple"] },
+    { key: "it", label: "💻 Informatique", match: ["pc", "ordinateur", "laptop", "ssd", "ryzen", "intel", "ram", "gpu", "carte graphique"] },
+    { key: "gaming", label: "🎮 Gaming", match: ["ps5", "xbox", "switch", "gaming", "steam", "console", "jeu"] },
+
+    { key: "home", label: "🏠 Maison", match: ["maison", "jardin", "meuble", "canapé", "lit", "déco", "electroménager", "aspirateur"] },
+    { key: "diy", label: "🛠️ Bricolage", match: ["bricolage", "outils", "perceuse", "bosch", "makita", "jardinage"] },
+
+    { key: "auto", label: "🚗 Auto/Moto", match: ["auto", "voiture", "moto", "pneu", "carburant", "garage"] },
+
+    { key: "fashion", label: "👕 Mode/Beauté", match: ["mode", "vetement", "chaussure", "nike", "adidas", "parfum", "beaute", "cosmétique"] },
+
+    { key: "baby", label: "🍼 Bébé/Enfant", match: ["bébé", "enfant", "poussette", "jouet", "couches"] },
+
+    { key: "travel", label: "✈️ Voyage", match: ["voyage", "travel", "vol", "flight", "hotel", "airbnb", "booking", "séjour"] },
+
+    { key: "leisure", label: "🎟️ Loisirs", match: ["cinema", "concert", "sport", "sortie", "loisir", "parc"] },
+
+    { key: "free", label: "🎁 Gratuit", match: ["gratuit", "freebie", "offert", "échantillon"] },
+  ];
+
+  // =========================
   // 1) Load initial feed
+  // =========================
   useEffect(() => {
     fetch("/api/feed", { cache: "no-store" })
       .then((r) => r.json())
@@ -29,7 +56,9 @@ export default function Page() {
       .catch(() => setItems([]));
   }, []);
 
+  // =========================
   // 2) Detect active slide
+  // =========================
   useEffect(() => {
     if (!feedRef.current) return;
 
@@ -51,7 +80,9 @@ export default function Page() {
     return () => io.disconnect();
   }, [items]);
 
+  // =========================
   // 3) Fetch more when near end
+  // =========================
   const fetchMore = useCallback(async () => {
     if (loading) return;
     if (activeIndex < items.length - 3) return;
@@ -83,39 +114,21 @@ export default function Page() {
     fetchMore();
   }, [fetchMore]);
 
-  // ✅ items filtrés (front only)
+  // =========================
+  // ✅ Filtre local instantané
+  // =========================
   const filteredItems = useMemo(() => {
-    if (filter === "all") return items;
+    if (selected === "all") return items;
 
-    if (filter === "community")
-      return items.filter((it) =>
-        String(it.source || "").toLowerCase().includes("community")
-      );
+    const cat = CATEGORIES.find((c) => c.key === selected);
+    const words = cat?.match || [];
+    if (!words.length) return items;
 
-    // sinon on filtre par catégorie/bucket
     return items.filter((it) => {
-      const c = String(it.category || "").toLowerCase();
-      const s = String(it.source || "").toLowerCase();
-      const t = String(it.title || "").toLowerCase();
-
-      if (filter === "travel")
-        return s.includes("travel") || c.includes("voyage") || t.includes("vol ") || t.includes("hotel");
-      if (filter === "auto")
-        return c.includes("auto") || t.includes("voiture") || t.includes("moto");
-      if (filter === "immo")
-        return c.includes("immo") || c.includes("immobilier") || t.includes("appartement");
-      if (filter === "tech")
-        return c.includes("tech") || t.includes("pc") || t.includes("ps5");
-      if (filter === "home")
-        return c.includes("maison") || c.includes("jardin") || t.includes("meuble") || t.includes("bricolage");
-      if (filter === "family")
-        return c.includes("bébé") || c.includes("enfant") || t.includes("jouet");
-      if (filter === "lifestyle")
-        return c.includes("mode") || c.includes("sport") || c.includes("beauté");
-
-      return true;
+      const text = `${it.category || ""} ${it.title || ""} ${it.summary || ""}`.toLowerCase();
+      return words.some((w) => text.includes(w.toLowerCase()));
     });
-  }, [items, filter]);
+  }, [items, selected]);
 
   return (
     <div className="app">
@@ -130,25 +143,20 @@ export default function Page() {
         </div>
       </header>
 
-      {/* CHIPS FILTER */}
+      {/* ✅ CHIPS FILTER marketplace */}
       <div className="chips">
-        {[
-          { key: "all", label: "🔥 Tout" },
-          { key: "community", label: "🧑‍🤝‍🧑 Communauté" },
-          { key: "travel", label: "🌍 Voyage" },
-          { key: "auto", label: "🚗 Auto" },
-          { key: "immo", label: "🏠 Immo" },
-          { key: "tech", label: "🕹️ Tech" },
-          { key: "home", label: "🛠️ Maison" },
-          { key: "family", label: "👶 Famille" },
-          { key: "lifestyle", label: "👟 Mode/Sport" },
-        ].map((f) => (
+        {CATEGORIES.map((c) => (
           <button
-            key={f.key}
-            className={`chip ${filter === f.key ? "active" : ""}`}
-            onClick={() => setFilter(f.key)}
+            key={c.key}
+            className={`chip ${selected === c.key ? "active" : ""}`}
+            onClick={() => {
+              setSelected(c.key);
+              // quand tu changes de filtre on remonte en haut
+              feedRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              setActiveIndex(0);
+            }}
           >
-            {f.label}
+            {c.label}
           </button>
         ))}
       </div>
@@ -167,17 +175,13 @@ export default function Page() {
         ))}
 
         {!filteredItems.length && !loading && (
-          <div className="empty">Aucune opportunité pour l’instant.</div>
+          <div className="empty">Aucune opportunité pour cette catégorie.</div>
         )}
 
         {loading && <div className="tiktok-loading">Chargement...</div>}
       </main>
 
-      {/* ✅ bouton Publier flottant */}
-      <Link href="/publish" className="fab">
-        ＋ Publier un deal
-      </Link>
-
+      {/* ✅ BOTTOM NAV cliquable */}
       <BottomNav />
 
       <style jsx global>{`
@@ -188,6 +192,8 @@ export default function Page() {
           --text: #e9ecf5;
           --accent: #4ea3ff;
           --good: #18d47b;
+          --warn: #ffb454;
+          --bad: #ff6b6b;
         }
         * { box-sizing: border-box; }
         body {
@@ -200,7 +206,6 @@ export default function Page() {
           height: 100svh;
           display: flex;
           flex-direction: column;
-          position: relative;
         }
 
         .topbar {
@@ -229,9 +234,17 @@ export default function Page() {
           width: 28px;
           height: 28px;
           border-radius: 8px;
-          background: radial-gradient(circle at 30% 30%, #6d7bff, transparent 60%),
-                      radial-gradient(circle at 70% 70%, #22e6a5, transparent 55%),
-                      #0b1020;
+          background: radial-gradient(
+              circle at 30% 30%,
+              #6d7bff,
+              transparent 60%
+            ),
+            radial-gradient(
+              circle at 70% 70%,
+              #22e6a5,
+              transparent 55%
+            ),
+            #0b1020;
         }
         .status {
           font-size: 12px;
@@ -255,7 +268,13 @@ export default function Page() {
           overflow: auto;
           padding: 6px 10px 8px;
           scrollbar-width: none;
+          background: #07090f;
+          position: sticky;
+          top: 54px;
+          z-index: 9;
         }
+        .chips::-webkit-scrollbar { display: none; }
+
         .chip {
           flex: 0 0 auto;
           padding: 8px 12px;
@@ -264,6 +283,7 @@ export default function Page() {
           border: 1px solid #1a2340;
           color: #c6cce0;
           font-size: 13px;
+          white-space: nowrap;
         }
         .chip.active {
           background: #14203a;
@@ -300,26 +320,8 @@ export default function Page() {
           bottom: 0;
           text-align: center;
           padding: 10px 0;
-          background: rgba(0,0,0,0.6);
+          background: rgba(0, 0, 0, 0.6);
           font-size: 13px;
-        }
-
-        /* ✅ Floating Publish Button */
-        .fab{
-          position: fixed;
-          right: 14px;
-          bottom: 84px; /* au-dessus de la bottomnav */
-          z-index: 9999;
-          background: rgba(78,163,255,0.95);
-          color: white;
-          padding: 12px 14px;
-          border-radius: 999px;
-          font-weight: 900;
-          text-decoration: none;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-          border: 1px solid rgba(255,255,255,0.25);
-          backdrop-filter: blur(6px);
-          font-size: 14px;
         }
       `}</style>
     </div>
