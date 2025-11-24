@@ -5,18 +5,75 @@ import { useRouter } from "next/navigation";
 
 export default function PublishPage() {
   const router = useRouter();
+
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const [image, setImage] = useState("");
+  const [image, setImage] = useState("");        // ici on peut stocker dataURL
+  const [imagePreview, setImagePreview] = useState(""); // preview
   const [category, setCategory] = useState("autre");
-  const [type, setType] = useState("occasion");
-  const [price, setPrice] = useState("");
   const [city, setCity] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // =========================
+  // compress image from phone
+  // =========================
+  const compressImage = (file, maxW = 1080, quality = 0.8) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxW) {
+            height = Math.round((height * maxW) / width);
+            width = maxW;
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  // =========================
+  // handle file input
+  // =========================
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const dataUrl = await compressImage(file);
+      setImage(dataUrl);
+      setImagePreview(dataUrl);
+    } catch (err) {
+      console.error(err);
+      alert("Impossible de charger l'image");
+    }
+  };
+
+  // =========================
+  // submit
+  // =========================
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!title || !url) return alert("Titre + lien obligatoires");
+
+    if (!title || !url) {
+      return alert("Titre + lien obligatoires");
+    }
+    if (!image) {
+      return alert("Image obligatoire (choisis une photo)");
+    }
 
     setLoading(true);
     try {
@@ -26,10 +83,8 @@ export default function PublishPage() {
         body: JSON.stringify({
           title,
           url,
-          image,
+          image,     // ✅ dataURL ou URL classique
           category,
-          type,
-          price,
           city,
         }),
       });
@@ -39,8 +94,8 @@ export default function PublishPage() {
 
       alert("Deal publié ✅");
       router.push("/");
-    } catch (e) {
-      alert("Erreur: " + e.message);
+    } catch (err) {
+      alert("Erreur: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -72,32 +127,33 @@ export default function PublishPage() {
           />
         </label>
 
+        {/* ✅ Upload photo téléphone */}
         <label>
-          Image (optionnel)
+          Photo du deal * (obligatoire)
           <input
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            placeholder="https://image.jpg"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={onPickFile}
           />
         </label>
 
-        <label>
-          Prix (optionnel)
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Ex: 120€"
-          />
-        </label>
-
-        <label>
-          Type d’annonce
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="occasion">Occasion</option>
-            <option value="neuf">Neuf</option>
-            <option value="service">Service</option>
-          </select>
-        </label>
+        {/* ✅ Preview */}
+        {imagePreview && (
+          <div className="preview">
+            <img src={imagePreview} alt="preview" />
+            <button
+              type="button"
+              className="remove"
+              onClick={() => {
+                setImage("");
+                setImagePreview("");
+              }}
+            >
+              Retirer l'image
+            </button>
+          </div>
+        )}
 
         <label>
           Catégorie
@@ -110,8 +166,6 @@ export default function PublishPage() {
             <option value="tech">Tech</option>
             <option value="gaming">Gaming</option>
             <option value="maison">Maison</option>
-            <option value="famille">Famille</option>
-            <option value="mode">Mode / Sport</option>
           </select>
         </label>
 
@@ -120,7 +174,7 @@ export default function PublishPage() {
           <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
-            placeholder="Paris, Lyon..."
+            placeholder="Paris, Marrakech..."
           />
         </label>
 
@@ -174,6 +228,31 @@ export default function PublishPage() {
           font-size: 14px;
           outline: none;
         }
+
+        .preview {
+          margin-top: 4px;
+          background: #0f1422;
+          border: 1px solid #1b2440;
+          border-radius: 12px;
+          padding: 10px;
+          display: grid;
+          gap: 8px;
+        }
+        .preview img {
+          width: 100%;
+          height: auto;
+          border-radius: 10px;
+          object-fit: cover;
+        }
+        .remove {
+          background: #241226;
+          border: 1px solid #5a244f;
+          color: #ffb3d9;
+          padding: 8px;
+          border-radius: 10px;
+          font-weight: 700;
+        }
+
         .submit {
           margin-top: 6px;
           background: #112449;
