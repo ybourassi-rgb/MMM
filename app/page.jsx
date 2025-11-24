@@ -84,7 +84,8 @@ export default function Page() {
       <header className="topbar">
         <div className="brand">
           <div className="logo" />
-          <span>Money Motor Y</span>
+          {/* ✅ Nom app changé ici */}
+          <span>Le Bon Souk</span>
         </div>
         <div className="status">
           IA en ligne<span className="dot" />
