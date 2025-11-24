@@ -1,112 +1,68 @@
-export const runtime = "edge";
+// app/api/log-click/route.js
+import { NextResponse } from "next/server";
 
-/**
- * POST /api/log-click
- * body: { url: "https://...", category?: "crypto|auto|..." }
- * -> incr click:<domain> et clickcat:<category>
- */
+const UP_URL = process.env.UPSTASH_REST_URL;
+const UP_TOKEN = process.env.UPSTASH_REST_TOKEN;
 
-function baseHeaders() {
-  return {
-    "Cache-Control": "no-store",
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
+async function upstash(cmd, args = []) {
+  const res = await fetch(
+    `${UP_URL}/${cmd}/${args.map(encodeURIComponent).join("/")}`,
+    {
+      headers: { Authorization: `Bearer ${UP_TOKEN}` },
+      cache: "no-store",
+    }
+  );
+  const data = await res.json();
+  return data.result;
 }
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: baseHeaders(),
-  });
-}
-
-function domainOf(url = "") {
-  try {
-    const u = new URL(url);
-    return u.hostname.replace(/^www\./, "").toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
-// Optionnel: whitelist (tu peux l’aligner avec r.js)
-const ALLOW_HOSTS = [
-  "ebay.fr", "amazon.fr", "amzn.to",
-  "booking.com", "airbnb.fr",
-  "coindesk.com", "cointelegraph.com",
-  "lesechos.fr", "zonebourse.com", "boursorama.com",
-  "reuters.com", "cnbc.com",
-  "techcrunch.com", "theverge.com",
-];
-
-function isAllowed(url) {
-  try {
-    const h = new URL(url).hostname.toLowerCase();
-    return ALLOW_HOSTS.some(d => h === d || h.endsWith(`.${d}`));
-  } catch {
-    return false;
-  }
-}
-
-export async function OPTIONS() {
-  return new Response(null, { status: 200, headers: baseHeaders() });
-}
+const KEY_CLICKS = "click_counts";     // ZSET global
+const KEY_LOGS = "click_logs";        // liste historique
 
 export async function POST(req) {
-  const restUrl =
-    process.env.UPSTASH_REST_URL ||
-    process.env.UPSTASH_REDIS_REST_URL ||
-    "";
-  const restToken =
-    process.env.UPSTASH_REST_TOKEN ||
-    process.env.UPSTASH_REDIS_REST_TOKEN ||
-    "";
-
-  if (!restUrl || !restToken) {
-    return json({ ok: false, error: "Upstash non configuré." }, 400);
-  }
-
   try {
-    const body = await req.json().catch(() => ({}));
-    const url = (body?.url || "").trim();
-    const category = (body?.category || "unknown").trim().toLowerCase();
-
-    if (!url) {
-      return json({ ok: false, error: "Missing url" }, 400);
+    if (!UP_URL || !UP_TOKEN) {
+      return NextResponse.json({ ok: true }); // on ne bloque pas
     }
 
-    // sécurité minimale + cohérence avec redirect
-    if (!isAllowed(url)) {
-      return json({ ok: false, error: "Domain not allowed" }, 400);
-    }
+    const body = await req.json();
+    const {
+      id,
+      domain,
+      title,
+      score,
+      category,
+      url,
+      image,
+      source,
+    } = body || {};
 
-    const domain = domainOf(url);
-    if (!domain) {
-      return json({ ok: false, error: "URL invalide" }, 400);
-    }
+    if (!id) return NextResponse.json({ ok: true });
 
-    const auth = { Authorization: `Bearer ${restToken}` };
+    // 1) incr click score
+    await upstash("ZINCRBY", [KEY_CLICKS, 1, id]);
 
-    // incr en parallèle (plus rapide)
-    await Promise.allSettled([
-      fetch(`${restUrl}/incr/${encodeURIComponent(`click:${domain}`)}`, {
-        headers: auth,
-        cache: "no-store",
-      }),
-      fetch(`${restUrl}/incr/${encodeURIComponent(`clickcat:${category}`)}`, {
-        headers: auth,
-        cache: "no-store",
-      }),
+    // 2) log brut (option)
+    await upstash("LPUSH", [KEY_LOGS, JSON.stringify({
+      id, domain, title, score, category, url, at: Date.now()
+    })]);
+    await upstash("LTRIM", [KEY_LOGS, 0, 1000]);
+
+    // 3) store deal meta (hash)
+    const hkey = `deal:${id}`;
+    await upstash("HSET", [
+      hkey,
+      "id", id,
+      "title", title || "",
+      "url", url || "",
+      "image", image || "",
+      "category", category || "",
+      "source", source || "",
+      "updatedAt", new Date().toISOString(),
     ]);
 
-    return json({ ok: true, domain, category });
-  } catch (e) {
-    return json(
-      { ok: false, error: e?.message || "Erreur interne" },
-      500
-    );
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: true });
   }
 }
