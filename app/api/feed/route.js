@@ -13,22 +13,22 @@ const parser = new Parser({
 });
 
 // =========================
-// Dealabs thumbnails -> full
+// Pepper thumbnails -> full (Dealabs/HUKD/MyDealz/Chollometro/etc.)
+// Pattern:  .../re/150x150/qt/55/...  -> original
 // =========================
-function upgradeDealabsImage(url) {
+function upgradePepperImage(url) {
   if (!url) return url;
+
   try {
     const u = new URL(url);
 
-    if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(
-        /\/re\/\d+x\d+\/qt\/\d+\//i,
-        "/"
-      );
-      return u.toString();
-    }
+    // Pepper CDN thumb pattern (works for all Pepper sites)
+    u.pathname = u.pathname.replace(
+      /\/re\/\d+x\d+\/qt\/\d+\//i,
+      "/"
+    );
 
-    return url;
+    return u.toString();
   } catch {
     return url;
   }
@@ -38,16 +38,19 @@ function upgradeDealabsImage(url) {
 // pick image from RSS item
 // =========================
 function pickImage(it) {
+  // 1) media:content url
   const mc = it.mediaContent;
-  if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
+  if (mc?.$?.url) return upgradePepperImage(mc.$.url);
   if (Array.isArray(mc) && mc[0]?.$?.url)
-    return upgradeDealabsImage(mc[0].$?.url);
+    return upgradePepperImage(mc[0].$?.url);
 
-  if (it.enclosure?.url) return upgradeDealabsImage(it.enclosure.url);
+  // 2) enclosure url
+  if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
 
+  // 3) sometimes inside HTML content
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (match?.[1]) return upgradeDealabsImage(match[1]);
+  if (match?.[1]) return upgradePepperImage(match[1]);
 
   return null;
 }
@@ -60,12 +63,16 @@ function isValidImage(img) {
 
   const lower = img.toLowerCase();
 
-  // pas d’icônes / svg / placeholders
+  // drop icons / svg / placeholders / tracking pixels
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
+  if (lower.includes("spacer")) return false;
+  if (lower.includes("1x1")) return false;
 
-  // si Dealabs donne une miniature trop petite, on a déjà upgradé
+  // Pepper sometimes returns site-logo or "assets/img/default"
+  if (lower.includes("/assets/img/")) return false;
+
   return true;
 }
 
@@ -158,12 +165,15 @@ export async function GET() {
       })
       .filter(Boolean);
 
+    // =========================
+    // normalize + filter
+    // =========================
     let items = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)); // ✅ enlève tous ceux sans vraie image
+      .filter((it) => isValidImage(it.image)); // ✅ enlève ceux sans vraie image
 
     // =========================
     // mix everything
