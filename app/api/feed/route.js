@@ -12,34 +12,28 @@ const parser = new Parser({
   },
 });
 
-// ===============================
-// 1) Helpers images Dealabs
-// ===============================
+/* =========================
+   Helpers images Dealabs
+   ========================= */
 
 // Dealabs met souvent des miniatures :
 // https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
-// -> on veut l'original (sans /re/150x150/qt/55/)
+// → on veut l’original :
+// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/ID_1.jpg
 function upgradeDealabsImage(url) {
   if (!url) return url;
-
   try {
     const u = new URL(url);
-
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(
-        /\/re\/\d+x\d+\/qt\/\d+\//i,
-        "/"
-      );
+      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       return u.toString();
     }
-
     return url;
   } catch {
     return url;
   }
 }
 
-// petite util pour extraire une image d’un item RSS
 function pickImage(it) {
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
@@ -55,23 +49,20 @@ function pickImage(it) {
   return null;
 }
 
-// Dealabs a parfois des “images par défaut” qu’on veut jeter
 function isValidImage(url) {
   if (!url) return false;
-  const lower = url.toLowerCase();
+  const u = url.toLowerCase();
 
-  // exemples qu’on vire:
-  if (lower.includes("default-voucher")) return false;
-  if (lower.includes("default-avatar")) return false;
-  if (lower.endsWith(".svg")) return false; // souvent placeholders
+  // on jette les svg / placeholders / pixels
+  if (u.endsWith(".svg")) return false;
+  if (u.includes("default-voucher")) return false;
+  if (u.includes("placeholder")) return false;
+  if (u.includes("spacer")) return false;
 
   return true;
 }
 
-// ===============================
-// 2) Normalisation
-// ===============================
-function normalizeItem(raw, i = 0, sourceName = "rss") {
+function normalizeItem(raw, i = 0, sourceTag = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
 
   const image = pickImage(raw);
@@ -85,7 +76,7 @@ function normalizeItem(raw, i = 0, sourceName = "rss") {
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
-    category: raw.category || raw.type || sourceName || "autre",
+    category: raw.category || raw.type || "autre",
 
     margin: raw.yscore
       ? `${raw.yscore.opportunityScore ?? "—"}%`
@@ -93,7 +84,6 @@ function normalizeItem(raw, i = 0, sourceName = "rss") {
     risk: raw.yscore
       ? `${raw.yscore.riskScore ?? "—"}/100`
       : raw.risk,
-
     horizon: raw.horizon || "court terme",
 
     halal: raw.yscore
@@ -101,109 +91,127 @@ function normalizeItem(raw, i = 0, sourceName = "rss") {
       : raw.halal ?? null,
 
     affiliateUrl: raw.affiliateUrl || null,
-    source: sourceName,
+    source: sourceTag,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
 }
 
-// ===============================
-// 3) Fetch RSS robuste (évite blocage)
-// ===============================
-async function fetchTextWithTimeout(url, ms = 8000) {
+/* =========================
+   Anti-freeze feed
+   ========================= */
+
+async function parseWithTimeout(url, ms = 6000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
 
   try {
+    // rss-parser n'accepte pas le signal direct,
+    // mais parseURL utilise fetch interne Node.
+    // Donc on fait un fetch nous-mêmes + parseString.
     const res = await fetch(url, {
+      cache: "no-store",
       signal: ctrl.signal,
       headers: {
-        // Certains flux bloquent sans user-agent
-        "user-agent": "MoneyMotorYBot/1.0 (+https://mmm-alpha-one.vercel.app)",
-        accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+        "user-agent":
+          "Mozilla/5.0 (compatible; MoneyMotorY/1.0; +https://mmm-alpha-one.vercel.app)",
       },
-      cache: "no-store",
     });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
+    const text = await res.text();
+    return await parser.parseString(text);
   } finally {
     clearTimeout(t);
   }
 }
 
-async function parseFeedSafe(url, sourceName) {
-  try {
-    const xml = await fetchTextWithTimeout(url);
-    const feed = await parser.parseString(xml);
-    feed._sourceName = sourceName;
-    return feed;
-  } catch (e) {
-    console.error("Feed fail:", url, e?.message);
-    return { items: [], _sourceName: sourceName };
+/* =========================
+   Mix catégories (round robin)
+   ========================= */
+function mixByCategory(items) {
+  const buckets = new Map();
+
+  for (const it of items) {
+    const cat = (it.category || "autre").toLowerCase();
+    if (!buckets.has(cat)) buckets.set(cat, []);
+    buckets.get(cat).push(it);
   }
+
+  // petit shuffle dans chaque bucket
+  for (const arr of buckets.values()) {
+    arr.sort(() => Math.random() - 0.5);
+  }
+
+  const cats = [...buckets.keys()];
+  const mixed = [];
+  let added = true;
+
+  while (added) {
+    added = false;
+    for (const c of cats) {
+      const arr = buckets.get(c);
+      if (arr?.length) {
+        mixed.push(arr.shift());
+        added = true;
+      }
+    }
+  }
+
+  return mixed;
 }
 
-// ===============================
-// 4) Shuffle pour mélanger voyages / autres
-// ===============================
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
+/* =========================
+   GET
+   ========================= */
 
-// ===============================
-// 5) GET
-// ===============================
 export async function GET() {
   try {
-    // 🔥 Plus de sources (style marketplace)
-    // Dealabs fournit beaucoup de catégories RSS.
-    // Liste par catégorie: /rss/groupe/xxx (dont Voyages).  [oai_citation:1‡Gist](https://gist.github.com/Snipees/608a97bc81c4003991876f7d7e6dc77b?utm_source=chatgpt.com)
     const SOURCES = [
-      // général / hot
-      { name: "hot", url: "https://www.dealabs.com/rss/hot" },
-      { name: "bons-plans", url: "https://www.dealabs.com/rss/bons-plans" },
-      { name: "codes-promo", url: "https://www.dealabs.com/rss/codes-promo" },
+      // ✅ Dealabs général
+      { url: "https://www.dealabs.com/rss/hot", tag: "dealabs" },
 
-      // marketplace-like (objets / maison / tech / mode etc.)
-      { name: "maison-jardin", url: "https://www.dealabs.com/rss/groupe/maison-jardin" },
-      { name: "informatique", url: "https://www.dealabs.com/rss/groupe/informatique" },
-      { name: "telephonie", url: "https://www.dealabs.com/rss/groupe/telephonie" },
-      { name: "image-son", url: "https://www.dealabs.com/rss/groupe/image-son-video" },
-      { name: "jeux", url: "https://www.dealabs.com/rss/groupe/consoles-jeux-video" },
-      { name: "sports", url: "https://www.dealabs.com/rss/groupe/sports-plein-air" },
-      { name: "mode", url: "https://www.dealabs.com/rss/groupe/mode-accessoires" },
-      { name: "animaux", url: "https://www.dealabs.com/rss/groupe/animaux" },
-      { name: "services", url: "https://www.dealabs.com/rss/groupe/services-divers" },
+      // ✅ Autres bons plans FR / EU
+      { url: "https://www.bravodeal.com/feed/", tag: "bonsplans" },
+      { url: "https://www.promodeclic.com/feed/", tag: "bonsplans" },
+      { url: "https://www.offresdujour.fr/feed", tag: "bonsplans" },
 
-      // ✈️ VOYAGES / SORTIES / RESTAURANTS
-      { name: "voyages", url: "https://www.dealabs.com/rss/groupe/voyages-sorties-restaurants" },
+      // ✅ Tech / gaming deals
+      { url: "https://www.dealabs.com/groupe/informatique.rss", tag: "tech" },
+      { url: "https://www.dealabs.com/groupe/jeux-video.rss", tag: "gaming" },
+
+      // ✅ Auto / immo (si ça marche => top)
+      { url: "https://www.dealabs.com/groupe/auto-moto.rss", tag: "auto" },
+      { url: "https://www.dealabs.com/groupe/immobilier.rss", tag: "immo" },
+
+      // ✅ Voyage (best effort, si flux mort il est ignoré)
+      { url: "https://travelpirates.com/fr/feed/", tag: "voyage" },
+      { url: "https://www.secretflying.com/feed/", tag: "voyage" },
+      { url: "https://www.voyagepirates.com/feed/", tag: "voyage" },
+
+      // ✅ Marketplace-style deals (occasion / ventes)
+      { url: "https://www.dealabs.com/groupe/occasion.rss", tag: "occasion" },
+      { url: "https://www.dealabs.com/groupe/maison-jardin.rss", tag: "maison" },
     ];
 
-    // parse tous les feeds sans bloquer
-    const feeds = await Promise.all(
-      SOURCES.map((s) => parseFeedSafe(s.url, s.name))
+    const settled = await Promise.allSettled(
+      SOURCES.map((s) => parseWithTimeout(s.url, 7000))
     );
 
-    let items = feeds
-      .flatMap((f) =>
-        (f.items || []).map((raw, i) =>
-          normalizeItem(raw, i, f._sourceName)
-        )
-      )
+    const itemsRaw = settled.flatMap((res, idx) => {
+      if (res.status !== "fulfilled") return [];
+      const feed = res.value;
+      const tag = SOURCES[idx]?.tag || "rss";
+      return (feed.items || []).map((it, i) =>
+        normalizeItem(it, i, tag)
+      );
+    });
+
+    const itemsClean = itemsRaw
       .filter((it) => it.url)
-      // ✅ 100% sans image => on vire direct
-      .filter((it) => isValidImage(it.image));
+      .filter((it) => isValidImage(it.image)); // ✅ retire sans photo
 
-    // ✅ Mélange pour avoir voyages + autres alternés
-    items = shuffle(items);
+    const itemsMixed = mixByCategory(itemsClean);
 
-    return NextResponse.json({ ok: true, items, cursor: null });
+    return NextResponse.json({ ok: true, items: itemsMixed, cursor: null });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Feed error", items: [] },
