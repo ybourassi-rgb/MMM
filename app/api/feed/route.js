@@ -12,28 +12,31 @@ const parser = new Parser({
   },
 });
 
-/* =========================
-   Helpers images Dealabs
-   ========================= */
-
-// Dealabs met souvent des miniatures :
-// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/re/150x150/qt/55/ID_1.jpg
-// → on veut l’original :
-// https://static-pepper.dealabs.com/threads/raw/XXXX/ID_1/ID_1.jpg
+// =========================
+// Dealabs thumbnails -> full
+// =========================
 function upgradeDealabsImage(url) {
   if (!url) return url;
   try {
     const u = new URL(url);
+
     if (u.hostname.includes("static-pepper.dealabs.com")) {
-      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
+      u.pathname = u.pathname.replace(
+        /\/re\/\d+x\d+\/qt\/\d+\//i,
+        "/"
+      );
       return u.toString();
     }
+
     return url;
   } catch {
     return url;
   }
 }
 
+// =========================
+// pick image from RSS item
+// =========================
 function pickImage(it) {
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
@@ -49,30 +52,35 @@ function pickImage(it) {
   return null;
 }
 
-function isValidImage(url) {
-  if (!url) return false;
-  const u = url.toLowerCase();
+// =========================
+// filter images (remove bad)
+// =========================
+function isValidImage(img) {
+  if (!img) return false;
 
-  // on jette les svg / placeholders / pixels
-  if (u.endsWith(".svg")) return false;
-  if (u.includes("default-voucher")) return false;
-  if (u.includes("placeholder")) return false;
-  if (u.includes("spacer")) return false;
+  const lower = img.toLowerCase();
 
+  // pas d’icônes / svg / placeholders
+  if (lower.endsWith(".svg")) return false;
+  if (lower.includes("default-voucher")) return false;
+  if (lower.includes("placeholder")) return false;
+
+  // si Dealabs donne une miniature trop petite, on a déjà upgradé
   return true;
 }
 
-function normalizeItem(raw, i = 0, sourceTag = "rss") {
+// =========================
+// normalize item
+// =========================
+function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
-
-  const image = pickImage(raw);
 
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
     url,
     link: raw.link || null,
-    image,
+    image: pickImage(raw),
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
@@ -91,127 +99,78 @@ function normalizeItem(raw, i = 0, sourceTag = "rss") {
       : raw.halal ?? null,
 
     affiliateUrl: raw.affiliateUrl || null,
-    source: sourceTag,
+    source,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
 }
 
-/* =========================
-   Anti-freeze feed
-   ========================= */
-
-async function parseWithTimeout(url, ms = 6000) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-
-  try {
-    // rss-parser n'accepte pas le signal direct,
-    // mais parseURL utilise fetch interne Node.
-    // Donc on fait un fetch nous-mêmes + parseString.
-    const res = await fetch(url, {
-      cache: "no-store",
-      signal: ctrl.signal,
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (compatible; MoneyMotorY/1.0; +https://mmm-alpha-one.vercel.app)",
-      },
-    });
-    const text = await res.text();
-    return await parser.parseString(text);
-  } finally {
-    clearTimeout(t);
+// =========================
+// shuffle to mix categories
+// =========================
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [a[i], a[j]] = [a[j], a[i]];
   }
+  return a;
 }
-
-/* =========================
-   Mix catégories (round robin)
-   ========================= */
-function mixByCategory(items) {
-  const buckets = new Map();
-
-  for (const it of items) {
-    const cat = (it.category || "autre").toLowerCase();
-    if (!buckets.has(cat)) buckets.set(cat, []);
-    buckets.get(cat).push(it);
-  }
-
-  // petit shuffle dans chaque bucket
-  for (const arr of buckets.values()) {
-    arr.sort(() => Math.random() - 0.5);
-  }
-
-  const cats = [...buckets.keys()];
-  const mixed = [];
-  let added = true;
-
-  while (added) {
-    added = false;
-    for (const c of cats) {
-      const arr = buckets.get(c);
-      if (arr?.length) {
-        mixed.push(arr.shift());
-        added = true;
-      }
-    }
-  }
-
-  return mixed;
-}
-
-/* =========================
-   GET
-   ========================= */
 
 export async function GET() {
   try {
+    // =========================
+    // SOURCES : mix deals + travel
+    // =========================
     const SOURCES = [
-      // ✅ Dealabs général
-      { url: "https://www.dealabs.com/rss/hot", tag: "dealabs" },
+      // 🔥 Dealabs (France)
+      { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
+      { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // ✅ Autres bons plans FR / EU
-      { url: "https://www.bravodeal.com/feed/", tag: "bonsplans" },
-      { url: "https://www.promodeclic.com/feed/", tag: "bonsplans" },
-      { url: "https://www.offresdujour.fr/feed", tag: "bonsplans" },
+      // 🌍 Travel / voyages (Pepper network)
+      { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
+      { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
+      { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // ✅ Tech / gaming deals
-      { url: "https://www.dealabs.com/groupe/informatique.rss", tag: "tech" },
-      { url: "https://www.dealabs.com/groupe/jeux-video.rss", tag: "gaming" },
+      // 🛒 General deals (autres pays Pepper = +volume)
+      { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
+      { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
+      { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
+      { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // ✅ Auto / immo (si ça marche => top)
-      { url: "https://www.dealabs.com/groupe/auto-moto.rss", tag: "auto" },
-      { url: "https://www.dealabs.com/groupe/immobilier.rss", tag: "immo" },
-
-      // ✅ Voyage (best effort, si flux mort il est ignoré)
-      { url: "https://travelpirates.com/fr/feed/", tag: "voyage" },
-      { url: "https://www.secretflying.com/feed/", tag: "voyage" },
-      { url: "https://www.voyagepirates.com/feed/", tag: "voyage" },
-
-      // ✅ Marketplace-style deals (occasion / ventes)
-      { url: "https://www.dealabs.com/groupe/occasion.rss", tag: "occasion" },
-      { url: "https://www.dealabs.com/groupe/maison-jardin.rss", tag: "maison" },
+      // 🎮 Gaming / tech / freebies
+      { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
+      { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
+      { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
+    // =========================
+    // parse all sources safely
+    // =========================
     const settled = await Promise.allSettled(
-      SOURCES.map((s) => parseWithTimeout(s.url, 7000))
+      SOURCES.map((s) => parser.parseURL(s.url))
     );
 
-    const itemsRaw = settled.flatMap((res, idx) => {
-      if (res.status !== "fulfilled") return [];
-      const feed = res.value;
-      const tag = SOURCES[idx]?.tag || "rss";
-      return (feed.items || []).map((it, i) =>
-        normalizeItem(it, i, tag)
-      );
-    });
+    const feeds = settled
+      .map((res, idx) => {
+        if (res.status !== "fulfilled") return null;
+        return { feed: res.value, meta: SOURCES[idx] };
+      })
+      .filter(Boolean);
 
-    const itemsClean = itemsRaw
+    let items = feeds
+      .flatMap(({ feed, meta }) =>
+        (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
+      )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)); // ✅ retire sans photo
+      .filter((it) => isValidImage(it.image)); // ✅ enlève tous ceux sans vraie image
 
-    const itemsMixed = mixByCategory(itemsClean);
+    // =========================
+    // mix everything
+    // =========================
+    items = shuffleArray(items);
 
-    return NextResponse.json({ ok: true, items: itemsMixed, cursor: null });
+    return NextResponse.json({ ok: true, items, cursor: null });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Feed error", items: [] },
