@@ -40,6 +40,7 @@ function upgradePepperImage(url) {
       host.includes("dealabs.");
 
     if (isPepper) {
+      // supprime les patterns de thumbs type /re/150x150/qt/55/
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
       return u.toString();
@@ -73,18 +74,22 @@ function pickImage(it) {
 
 // ====================================
 // 3) Filter NO/LOW images
+//    => on rejette tous les deals sans image OK
 // ====================================
 function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
+  // pas d’icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
 
+  // miniatures pepper restantes
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
+  // images trop petites / floues fréquentes
   const smallSizes = [
     "80x80",
     "100x100",
@@ -96,6 +101,7 @@ function isValidImage(img) {
   ];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
+  // thumbs classiques
   if (lower.includes("thumbnail")) return false;
   if (lower.includes("thumbs")) return false;
   if (lower.includes("/small/")) return false;
@@ -134,6 +140,7 @@ function makeAffiliateUrl(originalUrl) {
     const u = new URL(originalUrl);
     const host = u.hostname.toLowerCase();
 
+    // ---------- Amazon ----------
     if (host.includes("amazon.")) {
       const tag = process.env.AMAZON_ASSOCIATE_TAG;
       if (tag) {
@@ -143,12 +150,15 @@ function makeAffiliateUrl(originalUrl) {
       return originalUrl;
     }
 
+    // ---------- AliExpress ----------
     if (host.includes("aliexpress.")) {
-      const deep = process.env.ALIEXPRESS_AFFILIATE_LINK;
+      const deep = process.env.ALIEXPRESS_AFFILIATE_LINK; // peut contenir {url}
       const pid = process.env.ALIEXPRESS_PID;
 
       if (deep) {
-        if (deep.includes("{url}")) return deep.replace("{url}", encodeURIComponent(originalUrl));
+        if (deep.includes("{url}")) {
+          return deep.replace("{url}", encodeURIComponent(originalUrl));
+        }
         const sep = deep.includes("?") ? "&" : "?";
         return `${deep}${sep}url=${encodeURIComponent(originalUrl)}`;
       }
@@ -161,6 +171,7 @@ function makeAffiliateUrl(originalUrl) {
       return originalUrl;
     }
 
+    // autres domaines
     return originalUrl;
   } catch {
     return originalUrl;
@@ -282,7 +293,7 @@ export async function GET() {
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // ✅ NOUVELLES SOURCES FR “marketplace”
+      // ✅ FR “marketplace / catégories fortes”
       { url: "https://www.dealabs.com/rss/tag/auto", source: "dealabs-auto" },
       { url: "https://www.dealabs.com/rss/tag/immobilier", source: "dealabs-immo" },
       { url: "https://www.dealabs.com/rss/tag/voyage", source: "dealabs-voyage" },
@@ -306,6 +317,7 @@ export async function GET() {
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
+    // parse sources safely
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
     );
@@ -323,8 +335,8 @@ export async function GET() {
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image))
-      .filter(isAlcoholFree);
+      .filter((it) => isValidImage(it.image)) // ✅ sans photo => rejeté
+      .filter(isAlcoholFree);                 // ✅ alcool => rejeté
 
     // ✅ community deals (users)
     let community = [];
@@ -335,6 +347,7 @@ export async function GET() {
         { cache: "no-store" }
       );
       const data = await res.json();
+
       community = (data.items || [])
         .map((it, i) => ({
           ...it,
@@ -348,12 +361,14 @@ export async function GET() {
       community = [];
     }
 
+    // merge community + rss
     items = [...community, ...items];
 
     // buckets
     const buckets = { travel: [], general: [], tech: [], other: [] };
     for (const it of items) buckets[bucketize(it)].push(it);
 
+    // shuffle each bucket
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
