@@ -13,20 +13,29 @@ const parser = new Parser({
 });
 
 // =========================
-// Pepper thumbnails -> full (Dealabs/HUKD/MyDealz/Chollometro/etc.)
-// Pattern:  .../re/150x150/qt/55/...  -> original
+// upgrade image urls
+// (Pepper thumbnails -> full + Amazon size tokens)
 // =========================
-function upgradePepperImage(url) {
+function upgradeImage(url) {
   if (!url) return url;
 
   try {
     const u = new URL(url);
+    const host = u.hostname;
 
-    // Pepper CDN thumb pattern (works for all Pepper sites)
+    // ✅ Pepper CDN (Dealabs / HUKD / MyDealz / Chollometro / Pepper NL etc.)
+    // supprime le bloc /re/150x150/qt/55/
     u.pathname = u.pathname.replace(
       /\/re\/\d+x\d+\/qt\/\d+\//i,
       "/"
     );
+
+    // ✅ Amazon: force HD quand un token small est présent
+    // ex: ..._SL150_.jpg or ..._SX160_.jpg
+    if (host.includes("amazon.")) {
+      u.pathname = u.pathname.replace(/_S[XL]\d+_/gi, "_SL1000_");
+      u.pathname = u.pathname.replace(/_AC_[A-Z]{2}\d+_/gi, "_AC_SL1000_");
+    }
 
     return u.toString();
   } catch {
@@ -40,38 +49,43 @@ function upgradePepperImage(url) {
 function pickImage(it) {
   // 1) media:content url
   const mc = it.mediaContent;
-  if (mc?.$?.url) return upgradePepperImage(mc.$.url);
+  if (mc?.$?.url) return upgradeImage(mc.$.url);
   if (Array.isArray(mc) && mc[0]?.$?.url)
-    return upgradePepperImage(mc[0].$?.url);
+    return upgradeImage(mc[0].$?.url);
 
   // 2) enclosure url
-  if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
+  if (it.enclosure?.url) return upgradeImage(it.enclosure.url);
 
-  // 3) sometimes inside HTML content
+  // 3) dans HTML encoded => cherche <img src="">
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (match?.[1]) return upgradePepperImage(match[1]);
+  if (match?.[1]) return upgradeImage(match[1]);
 
   return null;
 }
 
 // =========================
-// filter images (remove bad)
+// filter images (remove bad / low-res patterns)
 // =========================
 function isValidImage(img) {
   if (!img) return false;
-
   const lower = img.toLowerCase();
 
-  // drop icons / svg / placeholders / tracking pixels
+  // ❌ icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
-  if (lower.includes("spacer")) return false;
-  if (lower.includes("1x1")) return false;
-
-  // Pepper sometimes returns site-logo or "assets/img/default"
   if (lower.includes("/assets/img/")) return false;
+
+  // ❌ patterns de miniatures trop petites
+  if (lower.includes("150x150")) return false;
+  if (lower.includes("120x120")) return false;
+  if (lower.includes("200x200")) return false;
+  if (lower.includes("thumb")) return false;
+
+  // ❌ Amazon mini patterns (si pas déjà upgradé)
+  if (lower.match(/_s[xy]\d+_/i)) return false; // _SX160_ etc
+  if (lower.match(/_sl\d+_/i) && !lower.includes("_sl1000_")) return false;
 
   return true;
 }
@@ -81,13 +95,14 @@ function isValidImage(img) {
 // =========================
 function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
+  const image = pickImage(raw);
 
   return {
     id: raw.id || raw.guid || `${Date.now()}-${i}`,
     title: raw.title?.trim() || "Opportunité",
     url,
     link: raw.link || null,
-    image: pickImage(raw),
+    image,
 
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
@@ -134,18 +149,18 @@ export async function GET() {
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // 🌍 Travel / voyages (Pepper network)
+      // 🌍 Travel / voyages
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // 🛒 General deals (autres pays Pepper = +volume)
+      // 🛒 General deals (Pepper network)
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // 🎮 Gaming / tech / freebies
+      // 🎮 Gaming / tech
       { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
@@ -165,15 +180,12 @@ export async function GET() {
       })
       .filter(Boolean);
 
-    // =========================
-    // normalize + filter
-    // =========================
     let items = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)); // ✅ enlève ceux sans vraie image
+      .filter((it) => isValidImage(it.image)); // ✅ enlève les images null/mini/placeholder
 
     // =========================
     // mix everything
