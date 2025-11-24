@@ -26,6 +26,7 @@ function getBaseUrl() {
 // ====================================
 function upgradePepperImage(url) {
   if (!url) return url;
+
   try {
     const u = new URL(url);
     const host = u.hostname;
@@ -43,6 +44,7 @@ function upgradePepperImage(url) {
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
       return u.toString();
     }
+
     return url;
   } catch {
     return url;
@@ -70,11 +72,9 @@ function pickImage(it) {
 }
 
 // ====================================
-// 3) Filter images
-// strict = ton filtre actuel (qualité)
-// relaxed = juste enlève null/svg/placeholder
+// 3) Filter NO/LOW images
 // ====================================
-function isValidImageStrict(img) {
+function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
@@ -86,8 +86,13 @@ function isValidImageStrict(img) {
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
   const smallSizes = [
-    "80x80","100x100","120x120","150x150",
-    "160x160","180x180","200x150",
+    "80x80",
+    "100x100",
+    "120x120",
+    "150x150",
+    "160x160",
+    "180x180",
+    "200x150",
   ];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
@@ -97,17 +102,6 @@ function isValidImageStrict(img) {
   if (lower.includes("_small")) return false;
 
   return true;
-}
-
-function isValidImageRelaxed(img) {
-  if (!img) return false;
-  const lower = img.toLowerCase();
-
-  if (lower.endsWith(".svg")) return false;
-  if (lower.includes("default-voucher")) return false;
-  if (lower.includes("placeholder")) return false;
-
-  return true; // on accepte même si petite
 }
 
 // ====================================
@@ -154,8 +148,7 @@ function makeAffiliateUrl(originalUrl) {
       const pid = process.env.ALIEXPRESS_PID;
 
       if (deep) {
-        if (deep.includes("{url}"))
-          return deep.replace("{url}", encodeURIComponent(originalUrl));
+        if (deep.includes("{url}")) return deep.replace("{url}", encodeURIComponent(originalUrl));
         const sep = deep.includes("?") ? "&" : "?";
         return `${deep}${sep}url=${encodeURIComponent(originalUrl)}`;
       }
@@ -263,11 +256,12 @@ function bucketize(item) {
 function interleaveBuckets(buckets) {
   const order = ["travel", "general", "general", "tech", "general", "other"];
   const out = [];
-  let guard = 0;
 
+  let guard = 0;
   while (guard < 5000) {
     guard++;
     let pushed = false;
+
     for (const key of order) {
       const arr = buckets[key];
       if (arr && arr.length) {
@@ -277,30 +271,41 @@ function interleaveBuckets(buckets) {
     }
     if (!pushed) break;
   }
+
   return out;
 }
 
 export async function GET() {
   try {
     const SOURCES = [
+      // 🔥 Dealabs FR (main)
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
+      // ✅ NOUVELLES SOURCES FR “marketplace”
+      { url: "https://www.dealabs.com/rss/tag/auto", source: "dealabs-auto" },
+      { url: "https://www.dealabs.com/rss/tag/immobilier", source: "dealabs-immo" },
+      { url: "https://www.dealabs.com/rss/tag/voyage", source: "dealabs-voyage" },
+      { url: "https://www.dealabs.com/rss/tag/high-tech", source: "dealabs-tech-fr" },
+      { url: "https://www.dealabs.com/rss/tag/maison-jardin", source: "dealabs-maison" },
+
+      // 🌍 Voyages (Pepper autres pays pour volume)
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
+      // 🛒 Volume autres pays
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
+      // 🎮 Tech / gaming
       { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
-    // parse sources safely
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
     );
@@ -312,23 +317,16 @@ export async function GET() {
       })
       .filter(Boolean);
 
-    // RSS items raw
-    const rssRaw = feeds
+    // RSS items
+    let items = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
+      .filter((it) => isValidImage(it.image))
       .filter(isAlcoholFree);
 
-    // 1) strict images d'abord
-    let rssItems = rssRaw.filter((it) => isValidImageStrict(it.image));
-
-    // 2) si trop peu, on relâche un peu (sinon feed vide)
-    if (rssItems.length < 8) {
-      rssItems = rssRaw.filter((it) => isValidImageRelaxed(it.image));
-    }
-
-    // community deals
+    // ✅ community deals (users)
     let community = [];
     try {
       const base = getBaseUrl();
@@ -344,17 +342,18 @@ export async function GET() {
           source: it.source || "community",
           id: it.id || `${Date.now()}-community-${i}`,
         }))
-        .filter(isAlcoholFree)
-        .filter((it) => isValidImageRelaxed(it.image)); // on garde même si petite
+        .filter((it) => isValidImage(it.image))
+        .filter(isAlcoholFree);
     } catch {
       community = [];
     }
 
-    let items = [...community, ...rssItems];
+    items = [...community, ...items];
 
-    // buckets + shuffle
+    // buckets
     const buckets = { travel: [], general: [], tech: [], other: [] };
     for (const it of items) buckets[bucketize(it)].push(it);
+
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
