@@ -1,71 +1,128 @@
 // app/api/publish/route.js
 import { NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
 
-export const runtime = "nodejs"; // évite edge ici (plus stable)
+const UP_URL = process.env.UPSTASH_REST_URL;
+const UP_TOKEN = process.env.UPSTASH_REST_TOKEN;
 
-const redis = Redis.fromEnv();
+// clé Redis
+const KEY = "community_deals";
 
-const KEY = "community:deals";
-const MAX_ITEMS = 200; // limite pour pas gonfler
-
-function normalizeCommunityDeal(raw) {
-  const now = new Date().toISOString();
-  return {
-    id: raw.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    title: (raw.title || "Opportunité").trim(),
-    url: raw.url || raw.link || "",
-    link: raw.url || raw.link || "",
-    image: raw.image || null,
-    category: raw.category || "autre",
-    city: raw.city || null,
-    price: raw.price || null,
-    score: raw.score || null,
-    margin: raw.margin || null,
-    risk: raw.risk || null,
-    horizon: raw.horizon || "court terme",
-    halal: raw.halal ?? null,
-    affiliateUrl: raw.affiliateUrl || null,
-    summary: raw.summary || null,
-    source: "community",
-    publishedAt: raw.publishedAt || now,
-  };
+async function upstash(cmd, args = []) {
+  const res = await fetch(
+    `${UP_URL}/${cmd}/${args.map(encodeURIComponent).join("/")}`,
+    {
+      headers: { Authorization: `Bearer ${UP_TOKEN}` },
+      cache: "no-store",
+    }
+  );
+  const data = await res.json();
+  return data.result;
 }
 
-export async function POST(req) {
+// =========================
+// GET : récupérer les deals communauté
+// =========================
+export async function GET() {
   try {
-    const body = await req.json();
-
-    if (!body?.title || !body?.url) {
-      return NextResponse.json(
-        { ok: false, error: "Titre et lien obligatoires" },
-        { status: 400 }
-      );
+    if (!UP_URL || !UP_TOKEN) {
+      return NextResponse.json({ ok: true, items: [] });
     }
 
-    const deal = normalizeCommunityDeal(body);
+    const raw = await upstash("LRANGE", [KEY, 0, 100]); // 100 derniers
+    const items = (raw || [])
+      .map((x) => {
+        try {
+          return JSON.parse(x);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
 
-    // push en tête
-    await redis.lpush(KEY, deal);
-    // trim pour garder MAX_ITEMS
-    await redis.ltrim(KEY, 0, MAX_ITEMS - 1);
-
-    return NextResponse.json({ ok: true, item: deal });
+    return NextResponse.json({ ok: true, items });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Publish error" },
+      { ok: false, error: e?.message || "Publish GET error", items: [] },
       { status: 500 }
     );
   }
 }
 
-export async function GET() {
+// =========================
+// POST : publier un deal communauté
+// =========================
+export async function POST(req) {
   try {
-    const items = (await redis.lrange(KEY, 0, MAX_ITEMS - 1)) || [];
-    return NextResponse.json({ ok: true, items });
+    if (!UP_URL || !UP_TOKEN) {
+      return NextResponse.json(
+        { ok: false, error: "Upstash non configuré" },
+        { status: 400 }
+      );
+    }
+
+    const body = await req.json();
+    let { title, url, image, category, city } = body || {};
+
+    if (!title || !url) {
+      return NextResponse.json(
+        { ok: false, error: "Titre + lien obligatoires" },
+        { status: 400 }
+      );
+    }
+
+    title = String(title).trim();
+    url = String(url).trim();
+    image = image?.trim() || null;
+    category = category || "autre";
+    city = city || null;
+
+    // ✅ force https si lien collé sans protocole
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+
+    // ✅ bloque deals sans image
+    if (!image) {
+      return NextResponse.json(
+        { ok: false, error: "Image obligatoire pour publier un deal." },
+        { status: 400 }
+      );
+    }
+
+    // ✅ filtre anti-alcool
+    const text = `${title} ${category}`.toLowerCase();
+    const bad = [
+      "alcool","alcohol","vin","wine","bière","beer","whisky","whiskey",
+      "vodka","rhum","rum","gin","champagne","cognac","tequila",
+      "aperitif","apéro","spiritueux","liqueur","bourbon",
+    ];
+    if (bad.some((k) => text.includes(k))) {
+      return NextResponse.json(
+        { ok: false, error: "Deals alcool refusés." },
+        { status: 400 }
+      );
+    }
+
+    const item = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      title,
+      url,
+      link: url,
+      image,
+      category,
+      city,
+      source: "community",
+      publishedAt: new Date().toISOString(),
+      summary: null,
+    };
+
+    await upstash("LPUSH", [KEY, JSON.stringify(item)]);
+    await upstash("LTRIM", [KEY, 0, 300]); // garde max 300
+
+    return NextResponse.json({ ok: true, item });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Fetch publish error", items: [] },
+      { ok: false, error: e?.message || "Publish POST error" },
       { status: 500 }
     );
   }
