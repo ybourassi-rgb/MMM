@@ -26,7 +26,6 @@ function getBaseUrl() {
 // ====================================
 function upgradePepperImage(url) {
   if (!url) return url;
-
   try {
     const u = new URL(url);
     const host = u.hostname;
@@ -40,7 +39,6 @@ function upgradePepperImage(url) {
       host.includes("dealabs.");
 
     if (isPepper) {
-      // supprime les patterns de thumbs type /re/150x150/qt/55/
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
       return u.toString();
@@ -74,22 +72,18 @@ function pickImage(it) {
 
 // ====================================
 // 3) Filter NO/LOW images
-//    => on rejette tous les deals sans image OK
 // ====================================
 function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
-  // pas d’icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
 
-  // miniatures pepper restantes
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  // images trop petites / floues fréquentes
   const smallSizes = [
     "80x80",
     "100x100",
@@ -101,7 +95,6 @@ function isValidImage(img) {
   ];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
-  // thumbs classiques
   if (lower.includes("thumbnail")) return false;
   if (lower.includes("thumbs")) return false;
   if (lower.includes("/small/")) return false;
@@ -115,18 +108,12 @@ function isValidImage(img) {
 // ====================================
 function isAlcoholFree(item) {
   const t = `${item.title || ""} ${item.summary || ""} ${item.category || ""}`.toLowerCase();
-
   const bad = [
-    "alcool", "alcohol",
-    "vin", "wine",
-    "bière", "beer",
-    "whisky", "whiskey",
-    "vodka", "rhum", "rum", "gin",
-    "champagne", "cognac", "tequila",
-    "aperitif", "apéro", "spiritueux",
-    "liqueur", "bourbon", "rosé", "merlot",
+    "alcool","alcohol","vin","wine","bière","beer",
+    "whisky","whiskey","vodka","rhum","rum","gin",
+    "champagne","cognac","tequila","aperitif","apéro",
+    "spiritueux","liqueur","bourbon","rosé","merlot",
   ];
-
   return !bad.some((k) => t.includes(k));
 }
 
@@ -140,7 +127,7 @@ function makeAffiliateUrl(originalUrl) {
     const u = new URL(originalUrl);
     const host = u.hostname.toLowerCase();
 
-    // ---------- Amazon ----------
+    // Amazon
     if (host.includes("amazon.")) {
       const tag = process.env.AMAZON_ASSOCIATE_TAG;
       if (tag) {
@@ -150,7 +137,7 @@ function makeAffiliateUrl(originalUrl) {
       return originalUrl;
     }
 
-    // ---------- AliExpress ----------
+    // AliExpress
     if (host.includes("aliexpress.")) {
       const deep = process.env.ALIEXPRESS_AFFILIATE_LINK; // peut contenir {url}
       const pid = process.env.ALIEXPRESS_PID;
@@ -171,7 +158,6 @@ function makeAffiliateUrl(originalUrl) {
       return originalUrl;
     }
 
-    // autres domaines
     return originalUrl;
   } catch {
     return originalUrl;
@@ -196,17 +182,11 @@ function normalizeItem(raw, i = 0, source = "rss") {
     score: raw.yscore?.globalScore ?? raw.score ?? null,
     category: raw.category || raw.type || "autre",
 
-    margin: raw.yscore
-      ? `${raw.yscore.opportunityScore ?? "—"}%`
-      : raw.margin,
-    risk: raw.yscore
-      ? `${raw.yscore.riskScore ?? "—"}/100`
-      : raw.risk,
+    margin: raw.yscore ? `${raw.yscore.opportunityScore ?? "—"}%` : raw.margin,
+    risk: raw.yscore ? `${raw.yscore.riskScore ?? "—"}/100` : raw.risk,
     horizon: raw.horizon || "court terme",
 
-    halal: raw.yscore
-      ? raw.yscore.halalScore >= 80
-      : raw.halal ?? null,
+    halal: raw.yscore ? raw.yscore.halalScore >= 80 : raw.halal ?? null,
 
     affiliateUrl: null,
     source,
@@ -219,57 +199,97 @@ function normalizeItem(raw, i = 0, source = "rss") {
 }
 
 // ====================================
-// 7) Bucketize (travel / tech / general)
+// 7) Bucketize (plus riche maintenant)
 // ====================================
 function bucketize(item) {
   const s = (item.source || "").toLowerCase();
   const c = (item.category || "").toLowerCase();
   const t = (item.title || "").toLowerCase();
 
+  // Travel / Vacances
   if (
     s.includes("travel") ||
-    c.includes("voyage") ||
-    c.includes("reise") ||
-    t.includes("vol ") ||
-    t.includes("hotel") ||
-    t.includes("flight") ||
-    t.includes("booking") ||
-    t.includes("airbnb")
+    c.includes("voyage") || c.includes("reise") ||
+    t.includes("vol ") || t.includes("hotel") ||
+    t.includes("flight") || t.includes("booking") ||
+    t.includes("airbnb") || t.includes("séjour")
   ) return "travel";
 
+  // Auto / Moto
   if (
-    s.includes("tech") ||
-    s.includes("gaming") ||
-    c.includes("tech") ||
-    c.includes("informatique") ||
-    t.includes("pc") ||
-    t.includes("ssd") ||
-    t.includes("ryzen") ||
-    t.includes("ps5") ||
-    t.includes("xbox")
+    s.includes("auto") || c.includes("auto") || c.includes("voiture") ||
+    t.includes("auto") || t.includes("voiture") ||
+    t.includes("moto") || t.includes("scooter")
+  ) return "auto";
+
+  // Immo / Maison
+  if (
+    s.includes("immo") || c.includes("immo") || c.includes("immobilier") ||
+    t.includes("appartement") || t.includes("maison") || t.includes("location")
+  ) return "immo";
+
+  // Tech / Gaming
+  if (
+    s.includes("tech") || s.includes("gaming") ||
+    c.includes("tech") || c.includes("informatique") ||
+    t.includes("pc") || t.includes("ssd") || t.includes("ryzen") ||
+    t.includes("ps5") || t.includes("xbox") || t.includes("switch")
   ) return "tech";
 
+  // Maison / Jardin / Bricolage / Déco
+  if (
+    s.includes("maison") || c.includes("maison") || c.includes("jardin") ||
+    t.includes("bricolage") || t.includes("déco") || t.includes("meuble")
+  ) return "home";
+
+  // Famille / Bébé / Enfants
+  if (
+    c.includes("enfant") || c.includes("bébé") ||
+    t.includes("bébé") || t.includes("poussette") || t.includes("jouet")
+  ) return "family";
+
+  // Mode / Beauté / Sport
+  if (
+    c.includes("mode") || c.includes("beauté") || c.includes("sport") ||
+    t.includes("chaussure") || t.includes("parfum") || t.includes("nike")
+  ) return "lifestyle";
+
+  // Food (hors alcool)
+  if (
+    c.includes("alimentaire") || t.includes("snack") || t.includes("restaurant")
+  ) return "food";
+
+  // Général / Pepper / Community
   if (
     s.includes("community") ||
-    s.includes("dealabs") ||
-    s.includes("hukd") ||
-    s.includes("mydealz") ||
-    s.includes("pepper") ||
-    s.includes("chollo")
+    s.includes("dealabs") || s.includes("hukd") ||
+    s.includes("mydealz") || s.includes("pepper") || s.includes("chollo")
   ) return "general";
 
   return "other";
 }
 
 // ====================================
-// 8) Interleave TikTok style
+// 8) Interleave TikTok style (mix large)
+// travel → general → auto → general → tech → home → family → lifestyle → repeat
 // ====================================
 function interleaveBuckets(buckets) {
-  const order = ["travel", "general", "general", "tech", "general", "other"];
+  const order = [
+    "travel",
+    "general",
+    "auto",
+    "general",
+    "tech",
+    "home",
+    "family",
+    "lifestyle",
+    "general",
+    "other"
+  ];
   const out = [];
 
   let guard = 0;
-  while (guard < 5000) {
+  while (guard < 8000) {
     guard++;
     let pushed = false;
 
@@ -293,14 +313,21 @@ export async function GET() {
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // ✅ FR “marketplace / catégories fortes”
+      // ✅ FR “marketplace / grosses catégories”
       { url: "https://www.dealabs.com/rss/tag/auto", source: "dealabs-auto" },
+      { url: "https://www.dealabs.com/rss/tag/moto", source: "dealabs-moto" },
       { url: "https://www.dealabs.com/rss/tag/immobilier", source: "dealabs-immo" },
       { url: "https://www.dealabs.com/rss/tag/voyage", source: "dealabs-voyage" },
       { url: "https://www.dealabs.com/rss/tag/high-tech", source: "dealabs-tech-fr" },
+      { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.dealabs.com/rss/tag/maison-jardin", source: "dealabs-maison" },
+      { url: "https://www.dealabs.com/rss/tag/bricolage-outillage", source: "dealabs-brico" },
+      { url: "https://www.dealabs.com/rss/tag/mode-beaute", source: "dealabs-mode" },
+      { url: "https://www.dealabs.com/rss/tag/bebe-enfants", source: "dealabs-family" },
+      { url: "https://www.dealabs.com/rss/tag/sport-loisirs", source: "dealabs-sport" },
+      { url: "https://www.dealabs.com/rss/tag/food", source: "dealabs-food" },
 
-      // 🌍 Voyages (Pepper autres pays pour volume)
+      // 🌍 Voyages (Pepper autres pays)
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
@@ -311,13 +338,11 @@ export async function GET() {
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // 🎮 Tech / gaming
-      { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
+      // 🎮 Tech / gaming (autres)
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
-    // parse sources safely
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
     );
@@ -347,7 +372,6 @@ export async function GET() {
         { cache: "no-store" }
       );
       const data = await res.json();
-
       community = (data.items || [])
         .map((it, i) => ({
           ...it,
@@ -365,8 +389,23 @@ export async function GET() {
     items = [...community, ...items];
 
     // buckets
-    const buckets = { travel: [], general: [], tech: [], other: [] };
-    for (const it of items) buckets[bucketize(it)].push(it);
+    const buckets = {
+      travel: [],
+      general: [],
+      auto: [],
+      immo: [],
+      tech: [],
+      home: [],
+      family: [],
+      lifestyle: [],
+      food: [],
+      other: [],
+    };
+
+    for (const it of items) {
+      const k = bucketize(it);
+      (buckets[k] || buckets.other).push(it);
+    }
 
     // shuffle each bucket
     for (const k of Object.keys(buckets)) {
