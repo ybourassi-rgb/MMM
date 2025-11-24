@@ -16,13 +16,9 @@ const parser = new Parser({
 // 0) Helpers base URL (server-side)
 // ====================================
 function getBaseUrl() {
-  // NEXT_PUBLIC_BASE_URL conseillé (ex: https://alpha-one.vercel.app)
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;
-
-  // Vercel
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-
-  return ""; // fallback -> fetch relative (peut marcher en dev)
+  return "";
 }
 
 // ====================================
@@ -30,7 +26,6 @@ function getBaseUrl() {
 // ====================================
 function upgradePepperImage(url) {
   if (!url) return url;
-
   try {
     const u = new URL(url);
     const host = u.hostname;
@@ -44,12 +39,10 @@ function upgradePepperImage(url) {
       host.includes("dealabs.");
 
     if (isPepper) {
-      // supprime les patterns de thumbs type /re/150x150/qt/55/
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
       return u.toString();
     }
-
     return url;
   } catch {
     return url;
@@ -77,41 +70,44 @@ function pickImage(it) {
 }
 
 // ====================================
-// 3) Filter NO/LOW images
-//    => on rejette tous les deals sans image OK
+// 3) Filter images
+// strict = ton filtre actuel (qualité)
+// relaxed = juste enlève null/svg/placeholder
 // ====================================
-function isValidImage(img) {
+function isValidImageStrict(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
-  // pas d’icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
 
-  // miniatures pepper restantes
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  // images trop petites / floues fréquentes
   const smallSizes = [
-    "80x80",
-    "100x100",
-    "120x120",
-    "150x150",
-    "160x160",
-    "180x180",
-    "200x150",
+    "80x80","100x100","120x120","150x150",
+    "160x160","180x180","200x150",
   ];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
-  // thumbs classiques
   if (lower.includes("thumbnail")) return false;
   if (lower.includes("thumbs")) return false;
   if (lower.includes("/small/")) return false;
   if (lower.includes("_small")) return false;
 
   return true;
+}
+
+function isValidImageRelaxed(img) {
+  if (!img) return false;
+  const lower = img.toLowerCase();
+
+  if (lower.endsWith(".svg")) return false;
+  if (lower.includes("default-voucher")) return false;
+  if (lower.includes("placeholder")) return false;
+
+  return true; // on accepte même si petite
 }
 
 // ====================================
@@ -144,33 +140,26 @@ function makeAffiliateUrl(originalUrl) {
     const u = new URL(originalUrl);
     const host = u.hostname.toLowerCase();
 
-    // ---------- Amazon ----------
-    // si domaine Amazon (amazon.fr, amazon.com, smile.amazon.fr, etc.)
     if (host.includes("amazon.")) {
       const tag = process.env.AMAZON_ASSOCIATE_TAG;
       if (tag) {
-        // si déjà un tag, on le remplace
         u.searchParams.set("tag", tag);
         return u.toString();
       }
       return originalUrl;
     }
 
-    // ---------- AliExpress ----------
     if (host.includes("aliexpress.")) {
-      const deep = process.env.ALIEXPRESS_AFFILIATE_LINK; // peut contenir {url}
+      const deep = process.env.ALIEXPRESS_AFFILIATE_LINK;
       const pid = process.env.ALIEXPRESS_PID;
 
       if (deep) {
-        // si ton template AliExpress est du style "...?url={url}"
-        if (deep.includes("{url}")) return deep.replace("{url}", encodeURIComponent(originalUrl));
-        // sinon on concatène proprement
+        if (deep.includes("{url}"))
+          return deep.replace("{url}", encodeURIComponent(originalUrl));
         const sep = deep.includes("?") ? "&" : "?";
         return `${deep}${sep}url=${encodeURIComponent(originalUrl)}`;
       }
 
-      // fallback simple PID si pas de deep-link
-      // (ce n'est pas toujours suffisant mais ça évite de casser)
       if (pid) {
         const sep = originalUrl.includes("?") ? "&" : "?";
         return `${originalUrl}${sep}aff_fcid=${pid}`;
@@ -179,7 +168,6 @@ function makeAffiliateUrl(originalUrl) {
       return originalUrl;
     }
 
-    // autres domaines => pour l’instant on laisse tel quel
     return originalUrl;
   } catch {
     return originalUrl;
@@ -216,15 +204,13 @@ function normalizeItem(raw, i = 0, source = "rss") {
       ? raw.yscore.halalScore >= 80
       : raw.halal ?? null,
 
-    affiliateUrl: null, // rempli plus bas
+    affiliateUrl: null,
     source,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
 
-  // génération affiliation (non bloquante)
   item.affiliateUrl = makeAffiliateUrl(item.url);
-
   return item;
 }
 
@@ -273,17 +259,15 @@ function bucketize(item) {
 
 // ====================================
 // 8) Interleave TikTok style
-// travel → general → general → tech → repeat
 // ====================================
 function interleaveBuckets(buckets) {
   const order = ["travel", "general", "general", "tech", "general", "other"];
   const out = [];
-
   let guard = 0;
+
   while (guard < 5000) {
     guard++;
     let pushed = false;
-
     for (const key of order) {
       const arr = buckets[key];
       if (arr && arr.length) {
@@ -293,29 +277,24 @@ function interleaveBuckets(buckets) {
     }
     if (!pushed) break;
   }
-
   return out;
 }
 
 export async function GET() {
   try {
     const SOURCES = [
-      // 🔥 Dealabs FR
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // 🌍 Voyages
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // 🛒 Volume autres pays
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // 🎮 Tech / gaming
       { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
@@ -333,16 +312,23 @@ export async function GET() {
       })
       .filter(Boolean);
 
-    // RSS items
-    let items = feeds
+    // RSS items raw
+    const rssRaw = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)) // ✅ sans photo => rejeté
-      .filter(isAlcoholFree);                 // ✅ alcool => rejeté
+      .filter(isAlcoholFree);
 
-    // ✅ community deals (users)
+    // 1) strict images d'abord
+    let rssItems = rssRaw.filter((it) => isValidImageStrict(it.image));
+
+    // 2) si trop peu, on relâche un peu (sinon feed vide)
+    if (rssItems.length < 8) {
+      rssItems = rssRaw.filter((it) => isValidImageRelaxed(it.image));
+    }
+
+    // community deals
     let community = [];
     try {
       const base = getBaseUrl();
@@ -358,22 +344,17 @@ export async function GET() {
           source: it.source || "community",
           id: it.id || `${Date.now()}-community-${i}`,
         }))
-        .filter((it) => isValidImage(it.image))
-        .filter(isAlcoholFree);
+        .filter(isAlcoholFree)
+        .filter((it) => isValidImageRelaxed(it.image)); // on garde même si petite
     } catch {
       community = [];
     }
 
-    // merge community + rss
-    items = [...community, ...items];
+    let items = [...community, ...rssItems];
 
-    // buckets
+    // buckets + shuffle
     const buckets = { travel: [], general: [], tech: [], other: [] };
-    for (const it of items) {
-      buckets[bucketize(it)].push(it);
-    }
-
-    // shuffle each bucket
+    for (const it of items) buckets[bucketize(it)].push(it);
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
