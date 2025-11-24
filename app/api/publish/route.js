@@ -61,7 +61,15 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    let { title, url, image, category, city } = body || {};
+    let {
+      title,
+      url,
+      image,
+      category,
+      city,
+      price, // optionnel
+      type,  // optionnel (neuf/occasion/service)
+    } = body || {};
 
     if (!title || !url) {
       return NextResponse.json(
@@ -75,6 +83,8 @@ export async function POST(req) {
     image = image?.trim() || null;
     category = category || "autre";
     city = city || null;
+    price = price?.trim?.() || price || null;
+    type = type || "occasion";
 
     // ✅ force https si lien collé sans protocole
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -110,6 +120,8 @@ export async function POST(req) {
       link: url,
       image,
       category,
+      type,   // gardé si tu l’envoies
+      price,  // gardé si tu l’envoies
       city,
       source: "community",
       publishedAt: new Date().toISOString(),
