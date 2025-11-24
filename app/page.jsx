@@ -133,7 +133,7 @@ export default function Page() {
         {loading && <div className="tiktok-loading">Chargement...</div>}
       </main>
 
-      {/* ✅ BOTTOM NAV (cliquable) */}
+      {/* ✅ BOTTOM NAV cliquable */}
       <BottomNav />
 
       {/* Styles globaux */}
@@ -148,9 +148,7 @@ export default function Page() {
           --warn: #ffb454;
           --bad: #ff6b6b;
         }
-        * {
-          box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
         body {
           margin: 0;
           background: var(--bg);
@@ -248,9 +246,7 @@ export default function Page() {
           scrollbar-width: none;
           background: #05060a;
         }
-        .tiktok-feed::-webkit-scrollbar {
-          display: none;
-        }
+        .tiktok-feed::-webkit-scrollbar { display: none; }
         .tiktok-slide {
           height: 100vh;
           scroll-snap-align: start;
