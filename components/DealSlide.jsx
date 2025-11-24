@@ -19,21 +19,17 @@ export default function DealSlide({ item, active }) {
     affiliateUrl,
     halal,
     summary,
+    source,
+    type,   // optional (neuf/occasion/service)
   } = item || {};
 
-  // ✅ lien final = affilié si dispo sinon lien normal
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // ✅ ton placeholder (tu l'as uploadé dans public/placeholders/IMG_2362.png)
-  const FALLBACK_IMG = "/placeholders/IMG_2362.png";
-
   const [imgOk, setImgOk] = useState(true);
-
-  // ✅ si l’image RSS casse => on bascule sur placeholder
-  const finalImage = imgOk ? (image || FALLBACK_IMG) : FALLBACK_IMG;
+  const finalImage = imgOk ? image : null;
 
   const openLink = (l) => {
     if (!l) return;
@@ -85,31 +81,43 @@ export default function DealSlide({ item, active }) {
 
   const onFav = () => console.log("Fav:", item);
 
+  const isCommunity = (source || "").toLowerCase().includes("community");
+
   return (
     <div className="deal-slide">
       {/* ===== MEDIA TOP ===== */}
       <div className="deal-media">
-        <Image
-          src={finalImage}
-          alt={title}
-          fill
-          priority={active}
-          sizes="100vw"
-          onError={() => setImgOk(false)}
-          style={{ objectFit: "contain" }}
-          unoptimized // ✅ stop Next optimizer (meilleur pour RSS externes)
-        />
+        {finalImage ? (
+          <Image
+            src={finalImage}
+            alt={title}
+            fill
+            priority={active}
+            sizes="100vw"
+            onError={() => setImgOk(false)}
+            style={{ objectFit: "contain" }}
+            unoptimized
+          />
+        ) : (
+          <div className="deal-media-fallback">
+            {image ? "Image indisponible" : "Visuel disponible dans le lien 🔗"}
+          </div>
+        )}
 
         <div className="deal-gradient" />
+
+        {/* ✅ badge Communauté */}
+        {isCommunity && (
+          <div className="community-badge">🧑‍🤝‍🧑 Communauté</div>
+        )}
 
         <div className="deal-top">
           {score != null && <div className="deal-chip">Y-Score {score}</div>}
           {category && <div className="deal-chip">{category}</div>}
+          {type && <div className="deal-chip">{type}</div>}
           {city && <div className="deal-chip">{city}</div>}
           {halal != null && (
-            <div className="deal-chip">
-              {halal ? "Halal ✅" : "Non Halal ⚠️"}
-            </div>
+            <div className="deal-chip">{halal ? "Halal ✅" : "Non Halal ⚠️"}</div>
           )}
         </div>
       </div>
@@ -178,6 +186,16 @@ export default function DealSlide({ item, active }) {
           overflow: hidden;
         }
 
+        .deal-media-fallback {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          opacity: 0.7;
+        }
+
         .deal-gradient {
           position: absolute;
           inset: 0;
@@ -185,6 +203,20 @@ export default function DealSlide({ item, active }) {
             radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.15), transparent 55%),
             linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.6));
           pointer-events: none;
+        }
+
+        .community-badge{
+          position:absolute;
+          top:12px;
+          right:12px;
+          z-index:3;
+          font-size:12px;
+          font-weight:900;
+          padding:6px 10px;
+          border-radius:999px;
+          background: rgba(0,0,0,0.6);
+          border:1px solid rgba(255,255,255,0.15);
+          backdrop-filter: blur(6px);
         }
 
         .deal-top {
