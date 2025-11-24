@@ -1,6 +1,11 @@
 // app/api/feed/route.js
 import { NextResponse } from "next/server";
 import Parser from "rss-parser";
+import { Redis } from "@upstash/redis";
+
+export const runtime = "nodejs"; // ✅ stabilité (RSS + Redis)
+
+const redis = Redis.fromEnv();
 
 const parser = new Parser({
   customFields: {
@@ -22,7 +27,6 @@ function upgradePepperImage(url) {
     const u = new URL(url);
     const host = u.hostname;
 
-    // Réseaux Pepper : dealabs / hotukdeals / mydealz / nl.pepper / chollometro
     const isPepper =
       host.includes("static-pepper.") ||
       host.includes("static-hotukdeals.") ||
@@ -32,12 +36,8 @@ function upgradePepperImage(url) {
       host.includes("dealabs.");
 
     if (isPepper) {
-      // supprime les patterns de thumbs type:
-      // /re/150x150/qt/55/
-      // /re/320x320/qt/60/
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
-
       return u.toString();
     }
 
@@ -74,16 +74,13 @@ function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
-  // pas d’icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
 
-  // miniatures pepper restantes
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  // formats trop petits
   const smallSizes = [
     "100x100",
     "120x120",
@@ -94,7 +91,6 @@ function isValidImage(img) {
   ];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
-  // thumbs classiques
   if (lower.includes("thumbnail")) return false;
   if (lower.includes("thumbs")) return false;
   if (lower.includes("/small/")) return false;
@@ -168,7 +164,7 @@ function bucketize(item) {
   ) return "tech";
 
   if (
-    s.includes("community") || // posts users
+    s.includes("community") ||
     s.includes("dealabs") ||
     s.includes("hukd") ||
     s.includes("mydealz") ||
@@ -181,7 +177,6 @@ function bucketize(item) {
 
 // ====================================
 // 6) Interleave TikTok style
-// travel → general → general → tech → repeat
 // ====================================
 function interleaveBuckets(buckets) {
   const order = ["travel", "general", "general", "tech", "general", "other"];
@@ -208,28 +203,23 @@ function interleaveBuckets(buckets) {
 export async function GET() {
   try {
     const SOURCES = [
-      // 🔥 Dealabs FR
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // 🌍 Voyages
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // 🛒 Volume autres pays
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // 🎮 Tech / gaming
       { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
-    // parse sources safely
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
     );
@@ -246,28 +236,21 @@ export async function GET() {
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)); // ✅ remove no/low images
+      .filter((it) => isValidImage(it.image));
 
-    // ✅ community deals (users)
+    // ✅ Community deals DIRECT Redis (plus de fetch relatif instable)
     let community = [];
     try {
-      const res = await fetch("/api/publish", { cache: "no-store" });
-      const data = await res.json();
-      community = data.items || [];
+      community = (await redis.lrange("community:deals", 0, 199)) || [];
     } catch {
       community = [];
     }
 
-    // merge community + rss
     items = [...community, ...items];
 
-    // buckets
     const buckets = { travel: [], general: [], tech: [], other: [] };
-    for (const it of items) {
-      buckets[bucketize(it)].push(it);
-    }
+    for (const it of items) buckets[bucketize(it)].push(it);
 
-    // shuffle each bucket
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
