@@ -12,45 +12,64 @@ const parser = new Parser({
   },
 });
 
-// =========================
-// Dealabs thumbnails -> full
-// =========================
-function upgradeDealabsImage(url) {
+// ====================================
+// 1) Pepper thumbnails -> full quality
+// ====================================
+function upgradePepperImage(url) {
   if (!url) return url;
+
   try {
     const u = new URL(url);
+    const host = u.hostname;
 
-    if (u.hostname.includes("static-pepper.dealabs.com")) {
+    // Réseaux Pepper : dealabs / hotukdeals / mydealz / nl.pepper / chollometro
+    const isPepper =
+      host.includes("static-pepper.") ||
+      host.includes("static-hotukdeals.") ||
+      host.includes("static-mydealz.") ||
+      host.includes("pepper.") ||
+      host.includes("chollometro.") ||
+      host.includes("dealabs.");
+
+    if (isPepper) {
+      // supprime les patterns de thumbs type:
+      // /re/150x150/qt/55/
+      // /re/320x320/qt/60/
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
+      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
+
       return u.toString();
     }
+
     return url;
   } catch {
     return url;
   }
 }
 
-// =========================
-// pick image from RSS item
-// =========================
+// ====================================
+// 2) Extract image from RSS item
+// ====================================
 function pickImage(it) {
   const mc = it.mediaContent;
-  if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
-  if (Array.isArray(mc) && mc[0]?.$?.url)
-    return upgradeDealabsImage(mc[0].$?.url);
 
-  if (it.enclosure?.url) return upgradeDealabsImage(it.enclosure.url);
+  if (mc?.$?.url) return upgradePepperImage(mc.$.url);
+  if (Array.isArray(mc) && mc[0]?.$?.url) {
+    return upgradePepperImage(mc[0].$?.url);
+  }
+
+  if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
 
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (match?.[1]) return upgradeDealabsImage(match[1]);
+  if (match?.[1]) return upgradePepperImage(match[1]);
 
   return null;
 }
 
-// =========================
-// filter images (remove bad)
-// =========================
+// ====================================
+// 3) Filter NO/LOW images
+// ====================================
 function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
@@ -64,11 +83,16 @@ function isValidImage(img) {
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  // formats trop petits fréquents
-  if (lower.includes("100x100")) return false;
-  if (lower.includes("160x160")) return false;
-  if (lower.includes("180x180")) return false;
-  if (lower.includes("200x150")) return false;
+  // formats trop petits
+  const smallSizes = [
+    "100x100",
+    "120x120",
+    "150x150",
+    "160x160",
+    "180x180",
+    "200x150",
+  ];
+  if (smallSizes.some((s) => lower.includes(s))) return false;
 
   // thumbs classiques
   if (lower.includes("thumbnail")) return false;
@@ -79,9 +103,9 @@ function isValidImage(img) {
   return true;
 }
 
-// =========================
-// normalize item
-// =========================
+// ====================================
+// 4) Normalize item
+// ====================================
 function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
   const image = pickImage(raw);
@@ -116,9 +140,9 @@ function normalizeItem(raw, i = 0, source = "rss") {
   };
 }
 
-// =========================
-// bucket by source/category
-// =========================
+// ====================================
+// 5) Bucketize (travel / tech / general)
+// ====================================
 function bucketize(item) {
   const s = (item.source || "").toLowerCase();
   const c = (item.category || "").toLowerCase();
@@ -131,8 +155,7 @@ function bucketize(item) {
     t.includes("vol ") ||
     t.includes("hotel") ||
     t.includes("flight")
-  )
-    return "travel";
+  ) return "travel";
 
   if (
     s.includes("tech") ||
@@ -142,26 +165,24 @@ function bucketize(item) {
     t.includes("pc") ||
     t.includes("ssd") ||
     t.includes("ryzen")
-  )
-    return "tech";
+  ) return "tech";
 
   if (
-    s.includes("community") || // ✅ posts utilisateurs
+    s.includes("community") || // posts users
     s.includes("dealabs") ||
     s.includes("hukd") ||
     s.includes("mydealz") ||
     s.includes("pepper") ||
     s.includes("chollo")
-  )
-    return "general";
+  ) return "general";
 
   return "other";
 }
 
-// =========================
-// interleave TikTok style
+// ====================================
+// 6) Interleave TikTok style
 // travel → general → general → tech → repeat
-// =========================
+// ====================================
 function interleaveBuckets(buckets) {
   const order = ["travel", "general", "general", "tech", "general", "other"];
   const out = [];
@@ -169,8 +190,8 @@ function interleaveBuckets(buckets) {
   let guard = 0;
   while (guard < 5000) {
     guard++;
-
     let pushed = false;
+
     for (const key of order) {
       const arr = buckets[key];
       if (arr && arr.length) {
@@ -208,9 +229,7 @@ export async function GET() {
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
-    // =========================
     // parse sources safely
-    // =========================
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
     );
@@ -227,36 +246,28 @@ export async function GET() {
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image));
+      .filter((it) => isValidImage(it.image)); // ✅ remove no/low images
 
-    // =========================
-    // ✅ fetch community deals
-    // =========================
+    // ✅ community deals (users)
     let community = [];
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/publish`,
-        { cache: "no-store" }
-      );
+      const res = await fetch("/api/publish", { cache: "no-store" });
       const data = await res.json();
       community = data.items || [];
     } catch {
       community = [];
     }
 
-    // on merge les community deals au flux
+    // merge community + rss
     items = [...community, ...items];
 
-    // =========================
     // buckets
-    // =========================
     const buckets = { travel: [], general: [], tech: [], other: [] };
-
     for (const it of items) {
       buckets[bucketize(it)].push(it);
     }
 
-    // shuffle interne des buckets
+    // shuffle each bucket
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
