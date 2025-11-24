@@ -9,26 +9,49 @@ export default function Page() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
 
   const feedRef = useRef(null);
 
   // 1) Load initial feed
   useEffect(() => {
-    fetch("/api/feed", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
-        const firstItems = d.items || d || [];
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const r = await fetch("/api/feed", { cache: "no-store" });
+        const d = await r.json();
+
+        if (cancelled) return;
+
+        const firstItems = d?.items || d || [];
         setItems(firstItems);
-        if (d.cursor) setCursor(d.cursor);
-      })
-      .catch(() => setItems([]));
+
+        if (d?.cursor) setCursor(d.cursor);
+
+        // si rien au départ, on stop le infinite
+        if (!firstItems.length) setHasMore(false);
+      } catch (e) {
+        if (!cancelled) {
+          console.error("Initial feed error", e);
+          setItems([]);
+          setHasMore(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // 2) Detect active slide
   useEffect(() => {
     if (!feedRef.current) return;
+    if (!items.length) return;
 
     const slides = [...feedRef.current.querySelectorAll("[data-slide]")];
+
     const io = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -46,19 +69,35 @@ export default function Page() {
     return () => io.disconnect();
   }, [items]);
 
+  // helper: fetch avec timeout
+  const fetchWithTimeout = (url, ms = 15000) =>
+    Promise.race([
+      fetch(url, { cache: "no-store" }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+    ]);
+
   // 3) Fetch more when near end
   const fetchMore = useCallback(async () => {
-    if (loading) return;
+    // ✅ garde-fous
+    if (loading || !hasMore) return;
+    if (!items.length) return;                 // évite boucle au démarrage
     if (activeIndex < items.length - 3) return;
 
     setLoading(true);
+
     try {
       const url = cursor
-        ? `/api/feed?cursor=${cursor}`
+        ? `/api/feed?cursor=${encodeURIComponent(cursor)}`
         : `/api/feed?cursor=next`;
 
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetchWithTimeout(url);
       const data = await res.json();
+
+      if (!data || data.ok === false) {
+        console.warn("Feed returned ok:false", data);
+        setHasMore(false);
+        return;
+      }
 
       const nextItems = Array.isArray(data) ? data : data.items;
       const nextCursor = Array.isArray(data) ? null : data.cursor;
@@ -66,13 +105,18 @@ export default function Page() {
       if (nextItems?.length) {
         setItems((prev) => [...prev, ...nextItems]);
         if (nextCursor) setCursor(nextCursor);
+      } else {
+        // ✅ plus rien => stop infinite
+        setHasMore(false);
       }
     } catch (e) {
       console.error("fetchMore error", e);
+      // si erreur réseau, on évite boucle infinie
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, [activeIndex, items.length, loading, cursor]);
+  }, [activeIndex, items.length, items, loading, cursor, hasMore]);
 
   useEffect(() => {
     fetchMore();
@@ -84,7 +128,6 @@ export default function Page() {
       <header className="topbar">
         <div className="brand">
           <div className="logo" />
-          {/* ✅ Nom app changé ici */}
           <span>Le Bon Souk</span>
         </div>
         <div className="status">
@@ -105,9 +148,7 @@ export default function Page() {
           <button
             key={t}
             className={`chip ${i === 0 ? "active" : ""}`}
-            onClick={() => {
-              /* filtre bientôt */
-            }}
+            onClick={() => {}}
           >
             {t}
           </button>
@@ -132,12 +173,14 @@ export default function Page() {
         )}
 
         {loading && <div className="tiktok-loading">Chargement...</div>}
+
+        {!hasMore && items.length > 0 && (
+          <div className="tiktok-loading">Fin du feed ✅</div>
+        )}
       </main>
 
-      {/* ✅ BOTTOM NAV cliquable */}
       <BottomNav />
 
-      {/* Styles globaux */}
       <style jsx global>{`
         :root {
           --bg: #07090f;
@@ -161,7 +204,6 @@ export default function Page() {
           display: flex;
           flex-direction: column;
         }
-
         .topbar {
           position: sticky;
           top: 0;
@@ -215,7 +257,6 @@ export default function Page() {
           border-radius: 50%;
           margin-left: 6px;
         }
-
         .chips {
           display: flex;
           gap: 8px;
@@ -237,7 +278,6 @@ export default function Page() {
           border-color: #27406f;
           color: #fff;
         }
-
         .tiktok-feed {
           flex: 1;
           height: 100%;
@@ -254,7 +294,6 @@ export default function Page() {
           scroll-snap-stop: always;
           position: relative;
         }
-
         .empty {
           height: 100%;
           display: grid;
@@ -266,7 +305,7 @@ export default function Page() {
           bottom: 0;
           text-align: center;
           padding: 10px 0;
-          background: rgba(0, 0, 0, 0.6);
+          background: rgba(0,0,0,0.6);
           font-size: 13px;
         }
       `}</style>
