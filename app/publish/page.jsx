@@ -8,72 +8,43 @@ export default function PublishPage() {
 
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const [image, setImage] = useState("");        // ici on peut stocker dataURL
-  const [imagePreview, setImagePreview] = useState(""); // preview
+  const [imageUrl, setImageUrl] = useState(""); // lien direct si dispo
+  const [imageFile, setImageFile] = useState(null); // upload
+  const [preview, setPreview] = useState(null);
+
   const [category, setCategory] = useState("autre");
+  const [condition, setCondition] = useState("neuf");
+  const [price, setPrice] = useState("");
   const [city, setCity] = useState("");
+  const [description, setDescription] = useState("");
+
   const [loading, setLoading] = useState(false);
 
-  // =========================
-  // compress image from phone
-  // =========================
-  const compressImage = (file, maxW = 1080, quality = 0.8) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = reject;
-      reader.onload = () => {
-        const img = new Image();
-        img.onerror = reject;
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > maxW) {
-            height = Math.round((height * maxW) / width);
-            width = maxW;
-          }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const dataUrl = canvas.toDataURL("image/jpeg", quality);
-          resolve(dataUrl);
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
-
-  // =========================
-  // handle file input
-  // =========================
-  const onPickFile = async (e) => {
+  // ===== Upload téléphone -> base64 =====
+  const onPickFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      const dataUrl = await compressImage(file);
-      setImage(dataUrl);
-      setImagePreview(dataUrl);
-    } catch (err) {
-      console.error(err);
-      alert("Impossible de charger l'image");
+    // petit garde-fou taille (base64 sinon trop lourd pour Upstash)
+    if (file.size > 700 * 1024) {
+      alert("Image trop lourde. Choisis une photo plus légère (moins de 700KB).");
+      return;
     }
+
+    setImageFile(file);
+
+    const reader = new FileReader();
+    reader.onload = () => setPreview(reader.result);
+    reader.readAsDataURL(file);
   };
 
-  // =========================
-  // submit
-  // =========================
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (!title || !url) return alert("Titre + lien obligatoires");
 
-    if (!title || !url) {
-      return alert("Titre + lien obligatoires");
-    }
-    if (!image) {
-      return alert("Image obligatoire (choisis une photo)");
-    }
+    // image soit URL soit upload
+    const finalImage = preview || imageUrl?.trim();
+    if (!finalImage) return alert("Image obligatoire (URL ou upload).");
 
     setLoading(true);
     try {
@@ -83,19 +54,22 @@ export default function PublishPage() {
         body: JSON.stringify({
           title,
           url,
-          image,     // ✅ dataURL ou URL classique
+          image: finalImage,
           category,
+          condition,
+          price,
           city,
+          description,
         }),
       });
 
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Erreur publish");
 
-      alert("Deal publié ✅");
+      alert("Annonce publiée ✅");
       router.push("/");
-    } catch (err) {
-      alert("Erreur: " + err.message);
+    } catch (e) {
+      alert("Erreur: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -105,19 +79,21 @@ export default function PublishPage() {
     <div className="wrap">
       <header className="top">
         <button onClick={() => router.back()} className="back">←</button>
-        <h1>Publier un deal</h1>
+        <h1>Publier une annonce</h1>
       </header>
 
       <form className="form" onSubmit={onSubmit}>
+        {/* ===== Titre ===== */}
         <label>
           Titre *
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: iPhone 15 Pro - super prix"
+            placeholder="Ex: iPhone 15 Pro neuf moins cher"
           />
         </label>
 
+        {/* ===== Lien deal ===== */}
         <label>
           Lien *
           <input
@@ -127,56 +103,90 @@ export default function PublishPage() {
           />
         </label>
 
-        {/* ✅ Upload photo téléphone */}
+        {/* ===== Prix ===== */}
         <label>
-          Photo du deal * (obligatoire)
+          Prix (€)
           <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={onPickFile}
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Ex: 799"
+            inputMode="numeric"
           />
         </label>
 
-        {/* ✅ Preview */}
-        {imagePreview && (
-          <div className="preview">
-            <img src={imagePreview} alt="preview" />
-            <button
-              type="button"
-              className="remove"
-              onClick={() => {
-                setImage("");
-                setImagePreview("");
-              }}
-            >
-              Retirer l'image
-            </button>
-          </div>
-        )}
+        {/* ===== Etat ===== */}
+        <label>
+          État
+          <select value={condition} onChange={(e) => setCondition(e.target.value)}>
+            <option value="neuf">Neuf</option>
+            <option value="comme-neuf">Comme neuf</option>
+            <option value="bon-etat">Bon état</option>
+            <option value="occasion">Occasion</option>
+          </select>
+        </label>
 
+        {/* ===== Catégorie ===== */}
         <label>
           Catégorie
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="autre">Autre</option>
             <option value="auto">Auto</option>
-            <option value="immo">Immo</option>
-            <option value="crypto">Crypto</option>
+            <option value="immo">Immobilier</option>
             <option value="voyage">Voyage</option>
-            <option value="tech">Tech</option>
+            <option value="tech">High-tech</option>
             <option value="gaming">Gaming</option>
-            <option value="maison">Maison</option>
+            <option value="maison">Maison / Jardin</option>
+            <option value="mode">Mode</option>
+            <option value="sport">Sport</option>
+            <option value="bebe">Bébé / Enfant</option>
+            <option value="service">Services</option>
           </select>
         </label>
 
+        {/* ===== Ville ===== */}
         <label>
           Ville (optionnel)
           <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
-            placeholder="Paris, Marrakech..."
+            placeholder="Paris, Lyon…"
           />
         </label>
+
+        {/* ===== Description ===== */}
+        <label>
+          Description (optionnel)
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Détaille l’offre : promo, état, points importants…"
+            rows={4}
+          />
+        </label>
+
+        {/* ===== Image URL ===== */}
+        <label>
+          Image (URL)
+          <input
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://image.jpg"
+          />
+        </label>
+
+        {/* ===== OU Upload fichier ===== */}
+        <label className="fileLabel">
+          Ou choisir une photo (téléphone)
+          <input type="file" accept="image/*" onChange={onPickFile} />
+        </label>
+
+        {/* preview */}
+        {preview && (
+          <div className="previewBox">
+            <img src={preview} alt="preview" />
+            <div className="previewHint">✅ Photo prête</div>
+          </div>
+        )}
 
         <button disabled={loading} className="submit">
           {loading ? "Publication..." : "Publier ✅"}
@@ -207,8 +217,9 @@ export default function PublishPage() {
         h1 {
           margin: 0;
           font-size: 18px;
-          font-weight: 800;
+          font-weight: 900;
         }
+
         .form {
           display: grid;
           gap: 12px;
@@ -219,7 +230,8 @@ export default function PublishPage() {
           font-size: 12px;
           color: #aeb6cc;
         }
-        input, select {
+
+        input, select, textarea {
           background: #0f1422;
           border: 1px solid #1b2440;
           color: white;
@@ -229,28 +241,32 @@ export default function PublishPage() {
           outline: none;
         }
 
-        .preview {
-          margin-top: 4px;
-          background: #0f1422;
-          border: 1px solid #1b2440;
-          border-radius: 12px;
-          padding: 10px;
-          display: grid;
-          gap: 8px;
-        }
-        .preview img {
-          width: 100%;
-          height: auto;
-          border-radius: 10px;
-          object-fit: cover;
-        }
-        .remove {
-          background: #241226;
-          border: 1px solid #5a244f;
-          color: #ffb3d9;
+        textarea { resize: vertical; }
+
+        .fileLabel input {
           padding: 8px;
+          background: transparent;
+          border: none;
+        }
+
+        .previewBox {
+          border: 1px dashed #27406f;
+          border-radius: 12px;
+          padding: 8px;
+          display: grid;
+          gap: 6px;
+          justify-items: center;
+        }
+        .previewBox img {
+          max-width: 100%;
+          max-height: 220px;
           border-radius: 10px;
-          font-weight: 700;
+          object-fit: contain;
+        }
+        .previewHint {
+          font-size: 12px;
+          color: #00e389;
+          font-weight: 800;
         }
 
         .submit {
@@ -263,7 +279,9 @@ export default function PublishPage() {
           font-weight: 900;
           font-size: 15px;
         }
-        .submit:disabled { opacity: .6; }
+        .submit:disabled {
+          opacity: .6;
+        }
       `}</style>
     </div>
   );
