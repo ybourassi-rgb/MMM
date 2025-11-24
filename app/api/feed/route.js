@@ -124,27 +124,49 @@ function bucketize(item) {
   const c = (item.category || "").toLowerCase();
   const t = (item.title || "").toLowerCase();
 
-  if (s.includes("travel") || c.includes("voyage") || c.includes("reise") || t.includes("vol ") || t.includes("hotel") || t.includes("flight"))
+  if (
+    s.includes("travel") ||
+    c.includes("voyage") ||
+    c.includes("reise") ||
+    t.includes("vol ") ||
+    t.includes("hotel") ||
+    t.includes("flight")
+  )
     return "travel";
 
-  if (s.includes("tech") || s.includes("gaming") || c.includes("tech") || c.includes("informatique") || t.includes("pc") || t.includes("ssd") || t.includes("ryzen"))
+  if (
+    s.includes("tech") ||
+    s.includes("gaming") ||
+    c.includes("tech") ||
+    c.includes("informatique") ||
+    t.includes("pc") ||
+    t.includes("ssd") ||
+    t.includes("ryzen")
+  )
     return "tech";
 
-  if (s.includes("dealabs") || s.includes("hukd") || s.includes("mydealz") || s.includes("pepper") || s.includes("chollo"))
+  if (
+    s.includes("community") || // ✅ posts utilisateurs
+    s.includes("dealabs") ||
+    s.includes("hukd") ||
+    s.includes("mydealz") ||
+    s.includes("pepper") ||
+    s.includes("chollo")
+  )
     return "general";
 
   return "other";
 }
 
 // =========================
-// interleave in TikTok style
+// interleave TikTok style
 // travel → general → general → tech → repeat
 // =========================
 function interleaveBuckets(buckets) {
   const order = ["travel", "general", "general", "tech", "general", "other"];
   const out = [];
 
-  let guard = 0; // sécurité anti boucle infinie
+  let guard = 0;
   while (guard < 5000) {
     guard++;
 
@@ -156,8 +178,7 @@ function interleaveBuckets(buckets) {
         pushed = true;
       }
     }
-
-    if (!pushed) break; // plus rien à pousser
+    if (!pushed) break;
   }
 
   return out;
@@ -187,6 +208,9 @@ export async function GET() {
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
+    // =========================
+    // parse sources safely
+    // =========================
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
     );
@@ -205,13 +229,34 @@ export async function GET() {
       .filter((it) => it.url)
       .filter((it) => isValidImage(it.image));
 
-    // ===== buckets
+    // =========================
+    // ✅ fetch community deals
+    // =========================
+    let community = [];
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/publish`,
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+      community = data.items || [];
+    } catch {
+      community = [];
+    }
+
+    // on merge les community deals au flux
+    items = [...community, ...items];
+
+    // =========================
+    // buckets
+    // =========================
     const buckets = { travel: [], general: [], tech: [], other: [] };
+
     for (const it of items) {
       buckets[bucketize(it)].push(it);
     }
 
-    // petit shuffle interne à chaque bucket
+    // shuffle interne des buckets
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
