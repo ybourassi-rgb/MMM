@@ -1,9 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState, useEffect } from "react";
-
-const FALLBACK_IMG = "/placeholders/IMG_2362.png";
+import { useMemo, useState } from "react";
 
 export default function DealSlide({ item, active }) {
   const {
@@ -23,18 +21,19 @@ export default function DealSlide({ item, active }) {
     summary,
   } = item || {};
 
+  // ✅ lien final = affilié si dispo sinon lien normal
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
     [affiliateUrl, url, link]
   );
 
-  // ✅ source d'image avec fallback
-  const [imgSrc, setImgSrc] = useState(image || FALLBACK_IMG);
+  // ✅ ton placeholder (tu l'as uploadé dans public/placeholders/IMG_2362.png)
+  const FALLBACK_IMG = "/placeholders/IMG_2362.png";
 
-  // au cas où item.image change sans remount (sécurité)
-  useEffect(() => {
-    setImgSrc(image || FALLBACK_IMG);
-  }, [image]);
+  const [imgOk, setImgOk] = useState(true);
+
+  // ✅ si l’image RSS casse => on bascule sur placeholder
+  const finalImage = imgOk ? (image || FALLBACK_IMG) : FALLBACK_IMG;
 
   const openLink = (l) => {
     if (!l) return;
@@ -91,14 +90,14 @@ export default function DealSlide({ item, active }) {
       {/* ===== MEDIA TOP ===== */}
       <div className="deal-media">
         <Image
-          src={imgSrc}
+          src={finalImage}
           alt={title}
           fill
           priority={active}
           sizes="100vw"
-          onError={() => setImgSrc(FALLBACK_IMG)} // ✅ fallback auto
+          onError={() => setImgOk(false)}
           style={{ objectFit: "contain" }}
-          unoptimized   // ✅ IMPORTANT : stop Next optimizer
+          unoptimized // ✅ stop Next optimizer (meilleur pour RSS externes)
         />
 
         <div className="deal-gradient" />
@@ -108,7 +107,9 @@ export default function DealSlide({ item, active }) {
           {category && <div className="deal-chip">{category}</div>}
           {city && <div className="deal-chip">{city}</div>}
           {halal != null && (
-            <div className="deal-chip">{halal ? "Halal ✅" : "Non Halal ⚠️"}</div>
+            <div className="deal-chip">
+              {halal ? "Halal ✅" : "Non Halal ⚠️"}
+            </div>
           )}
         </div>
       </div>
@@ -287,7 +288,7 @@ export default function DealSlide({ item, active }) {
 
         .metric {
           background: rgba(0, 0, 0, 0.5);
-          border: 1px solid rgba(255,  255, 255, 0.12);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           padding: 10px;
           border-radius: 12px;
           min-width: 95px;
