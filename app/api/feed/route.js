@@ -13,29 +13,18 @@ const parser = new Parser({
 });
 
 // =========================
-// upgrade image urls
-// (Pepper thumbnails -> full + Amazon size tokens)
+// Dealabs thumbnails -> full
 // =========================
-function upgradeImage(url) {
+function upgradeDealabsImage(url) {
   if (!url) return url;
-
   try {
     const u = new URL(url);
-    const host = u.hostname;
 
-    // ✅ Pepper CDN thumbnails → full
-    u.pathname = u.pathname.replace(
-      /\/re\/\d+x\d+\/qt\/\d+\//i,
-      "/"
-    );
-
-    // ✅ Amazon HD
-    if (host.includes("amazon.")) {
-      u.pathname = u.pathname.replace(/_S[XL]\d+_/gi, "_SL1000_");
-      u.pathname = u.pathname.replace(/_AC_[A-Z]{2}\d+_/gi, "_AC_SL1000_");
+    if (u.hostname.includes("static-pepper.dealabs.com")) {
+      u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
+      return u.toString();
     }
-
-    return u.toString();
+    return url;
   } catch {
     return url;
   }
@@ -46,101 +35,48 @@ function upgradeImage(url) {
 // =========================
 function pickImage(it) {
   const mc = it.mediaContent;
-  if (mc?.$?.url) return upgradeImage(mc.$.url);
+  if (mc?.$?.url) return upgradeDealabsImage(mc.$.url);
   if (Array.isArray(mc) && mc[0]?.$?.url)
-    return upgradeImage(mc[0].$?.url);
+    return upgradeDealabsImage(mc[0].$?.url);
 
-  if (it.enclosure?.url) return upgradeImage(it.enclosure.url);
+  if (it.enclosure?.url) return upgradeDealabsImage(it.enclosure.url);
 
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (match?.[1]) return upgradeImage(match[1]);
+  if (match?.[1]) return upgradeDealabsImage(match[1]);
 
   return null;
 }
 
 // =========================
-// filter images (remove bad / low-res patterns)
+// filter images (remove bad)
 // =========================
 function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
+  // pas d’icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
-  if (lower.includes("/assets/img/")) return false;
 
-  if (lower.includes("150x150")) return false;
-  if (lower.includes("120x120")) return false;
-  if (lower.includes("200x200")) return false;
-  if (lower.includes("thumb")) return false;
+  // miniatures pepper restantes
+  if (lower.match(/\/re\/\d+x\d+\//i)) return false;
+  if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  if (lower.match(/_s[xy]\d+_/i)) return false;
-  if (lower.match(/_sl\d+_/i) && !lower.includes("_sl1000_")) return false;
+  // formats trop petits fréquents
+  if (lower.includes("100x100")) return false;
+  if (lower.includes("160x160")) return false;
+  if (lower.includes("180x180")) return false;
+  if (lower.includes("200x150")) return false;
+
+  // thumbs classiques
+  if (lower.includes("thumbnail")) return false;
+  if (lower.includes("thumbs")) return false;
+  if (lower.includes("/small/")) return false;
+  if (lower.includes("_small")) return false;
 
   return true;
-}
-
-// =========================
-// tiny language guesser
-// =========================
-function looksFrench(text = "") {
-  const t = text.toLowerCase();
-  // mini heuristique : beaucoup de mots FR courants
-  const frHits = [
-    "prix", "offre", "promo", "livraison", "gratuit", "réduction",
-    "voyage", "vol", "hôtel", "location", "bon plan", "au lieu de"
-  ].filter(w => t.includes(w)).length;
-  return frHits >= 2;
-}
-
-// =========================
-// Translate to French (optional via OpenAI)
-// =========================
-async function translateToFR(text) {
-  if (!text) return text;
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return text; // pas de clé => pas de traduction
-
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Tu traduis en français simple et naturel. Garde les marques, chiffres, prix et unités. Pas d'ajout.",
-          },
-          { role: "user", content: text },
-        ],
-      }),
-    });
-
-    const data = await res.json();
-    return data?.choices?.[0]?.message?.content?.trim() || text;
-  } catch {
-    return text;
-  }
-}
-
-async function translateItemIfNeeded(item) {
-  // si déjà FR → ne touche pas
-  if (looksFrench(item.title + " " + (item.summary || ""))) return item;
-
-  const [titleFR, summaryFR] = await Promise.all([
-    translateToFR(item.title),
-    translateToFR(item.summary),
-  ]);
-
-  return { ...item, title: titleFR, summary: summaryFR };
 }
 
 // =========================
@@ -181,33 +117,65 @@ function normalizeItem(raw, i = 0, source = "rss") {
 }
 
 // =========================
-// shuffle to mix categories
+// bucket by source/category
 // =========================
-function shuffleArray(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = (Math.random() * (i + 1)) | 0;
-    [a[i], a[j]] = [a[j], a[i]];
+function bucketize(item) {
+  const s = (item.source || "").toLowerCase();
+  const c = (item.category || "").toLowerCase();
+  const t = (item.title || "").toLowerCase();
+
+  if (s.includes("travel") || c.includes("voyage") || c.includes("reise") || t.includes("vol ") || t.includes("hotel") || t.includes("flight"))
+    return "travel";
+
+  if (s.includes("tech") || s.includes("gaming") || c.includes("tech") || c.includes("informatique") || t.includes("pc") || t.includes("ssd") || t.includes("ryzen"))
+    return "tech";
+
+  if (s.includes("dealabs") || s.includes("hukd") || s.includes("mydealz") || s.includes("pepper") || s.includes("chollo"))
+    return "general";
+
+  return "other";
+}
+
+// =========================
+// interleave in TikTok style
+// travel → general → general → tech → repeat
+// =========================
+function interleaveBuckets(buckets) {
+  const order = ["travel", "general", "general", "tech", "general", "other"];
+  const out = [];
+
+  let guard = 0; // sécurité anti boucle infinie
+  while (guard < 5000) {
+    guard++;
+
+    let pushed = false;
+    for (const key of order) {
+      const arr = buckets[key];
+      if (arr && arr.length) {
+        out.push(arr.shift());
+        pushed = true;
+      }
+    }
+
+    if (!pushed) break; // plus rien à pousser
   }
-  return a;
+
+  return out;
 }
 
 export async function GET() {
   try {
-    // =========================
-    // SOURCES : deals + travel + "annonces"
-    // =========================
     const SOURCES = [
-      // 🔥 Deals France
+      // 🔥 Dealabs FR
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // 🌍 Voyages (on traduit si besoin)
+      // 🌍 Voyages
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // 🛒 Gros volume Pepper network
+      // 🛒 Volume autres pays
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
@@ -217,22 +185,8 @@ export async function GET() {
       { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
-
-      // 🧰 "Annonces" proches marketplace (RSS fiables)
-      // eBay deals (bonnes affaires type marketplace)
-      { url: "https://www.ebay.com/deals/rss", source: "ebay-deals" },
-
-      // AliExpress hot deals via Pepper tag
-      { url: "https://www.dealabs.com/rss/tag/aliexpress", source: "aliexpress-fr" },
-
-      // Auto / immo via Dealabs tags (pour attirer public Leboncoin-like)
-      { url: "https://www.dealabs.com/rss/tag/auto", source: "auto-fr" },
-      { url: "https://www.dealabs.com/rss/tag/immobilier", source: "immo-fr" },
     ];
 
-    // =========================
-    // parse sources safely
-    // =========================
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
     );
@@ -251,13 +205,20 @@ export async function GET() {
       .filter((it) => it.url)
       .filter((it) => isValidImage(it.image));
 
-    // ✅ traduction FR si besoin (optionnel)
-    items = await Promise.all(items.map(translateItemIfNeeded));
+    // ===== buckets
+    const buckets = { travel: [], general: [], tech: [], other: [] };
+    for (const it of items) {
+      buckets[bucketize(it)].push(it);
+    }
 
-    // ✅ mélange tout (voyage/deals/annonces)
-    items = shuffleArray(items);
+    // petit shuffle interne à chaque bucket
+    for (const k of Object.keys(buckets)) {
+      buckets[k].sort(() => Math.random() - 0.5);
+    }
 
-    return NextResponse.json({ ok: true, items, cursor: null });
+    const mixed = interleaveBuckets(buckets);
+
+    return NextResponse.json({ ok: true, items: mixed, cursor: null });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Feed error", items: [] },
