@@ -23,15 +23,13 @@ function upgradeImage(url) {
     const u = new URL(url);
     const host = u.hostname;
 
-    // ✅ Pepper CDN (Dealabs / HUKD / MyDealz / Chollometro / Pepper NL etc.)
-    // supprime le bloc /re/150x150/qt/55/
+    // ✅ Pepper CDN thumbnails → full
     u.pathname = u.pathname.replace(
       /\/re\/\d+x\d+\/qt\/\d+\//i,
       "/"
     );
 
-    // ✅ Amazon: force HD quand un token small est présent
-    // ex: ..._SL150_.jpg or ..._SX160_.jpg
+    // ✅ Amazon HD
     if (host.includes("amazon.")) {
       u.pathname = u.pathname.replace(/_S[XL]\d+_/gi, "_SL1000_");
       u.pathname = u.pathname.replace(/_AC_[A-Z]{2}\d+_/gi, "_AC_SL1000_");
@@ -47,16 +45,13 @@ function upgradeImage(url) {
 // pick image from RSS item
 // =========================
 function pickImage(it) {
-  // 1) media:content url
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradeImage(mc.$.url);
   if (Array.isArray(mc) && mc[0]?.$?.url)
     return upgradeImage(mc[0].$?.url);
 
-  // 2) enclosure url
   if (it.enclosure?.url) return upgradeImage(it.enclosure.url);
 
-  // 3) dans HTML encoded => cherche <img src="">
   const html = it.contentEncoded || it.content || "";
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
   if (match?.[1]) return upgradeImage(match[1]);
@@ -71,23 +66,81 @@ function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
-  // ❌ icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
   if (lower.includes("/assets/img/")) return false;
 
-  // ❌ patterns de miniatures trop petites
   if (lower.includes("150x150")) return false;
   if (lower.includes("120x120")) return false;
   if (lower.includes("200x200")) return false;
   if (lower.includes("thumb")) return false;
 
-  // ❌ Amazon mini patterns (si pas déjà upgradé)
-  if (lower.match(/_s[xy]\d+_/i)) return false; // _SX160_ etc
+  if (lower.match(/_s[xy]\d+_/i)) return false;
   if (lower.match(/_sl\d+_/i) && !lower.includes("_sl1000_")) return false;
 
   return true;
+}
+
+// =========================
+// tiny language guesser
+// =========================
+function looksFrench(text = "") {
+  const t = text.toLowerCase();
+  // mini heuristique : beaucoup de mots FR courants
+  const frHits = [
+    "prix", "offre", "promo", "livraison", "gratuit", "réduction",
+    "voyage", "vol", "hôtel", "location", "bon plan", "au lieu de"
+  ].filter(w => t.includes(w)).length;
+  return frHits >= 2;
+}
+
+// =========================
+// Translate to French (optional via OpenAI)
+// =========================
+async function translateToFR(text) {
+  if (!text) return text;
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return text; // pas de clé => pas de traduction
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Tu traduis en français simple et naturel. Garde les marques, chiffres, prix et unités. Pas d'ajout.",
+          },
+          { role: "user", content: text },
+        ],
+      }),
+    });
+
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content?.trim() || text;
+  } catch {
+    return text;
+  }
+}
+
+async function translateItemIfNeeded(item) {
+  // si déjà FR → ne touche pas
+  if (looksFrench(item.title + " " + (item.summary || ""))) return item;
+
+  const [titleFR, summaryFR] = await Promise.all([
+    translateToFR(item.title),
+    translateToFR(item.summary),
+  ]);
+
+  return { ...item, title: titleFR, summary: summaryFR };
 }
 
 // =========================
@@ -142,32 +195,43 @@ function shuffleArray(arr) {
 export async function GET() {
   try {
     // =========================
-    // SOURCES : mix deals + travel
+    // SOURCES : deals + travel + "annonces"
     // =========================
     const SOURCES = [
-      // 🔥 Dealabs (France)
+      // 🔥 Deals France
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // 🌍 Travel / voyages
+      // 🌍 Voyages (on traduit si besoin)
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // 🛒 General deals (Pepper network)
+      // 🛒 Gros volume Pepper network
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // 🎮 Gaming / tech
+      // 🎮 Tech / gaming
       { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
+
+      // 🧰 "Annonces" proches marketplace (RSS fiables)
+      // eBay deals (bonnes affaires type marketplace)
+      { url: "https://www.ebay.com/deals/rss", source: "ebay-deals" },
+
+      // AliExpress hot deals via Pepper tag
+      { url: "https://www.dealabs.com/rss/tag/aliexpress", source: "aliexpress-fr" },
+
+      // Auto / immo via Dealabs tags (pour attirer public Leboncoin-like)
+      { url: "https://www.dealabs.com/rss/tag/auto", source: "auto-fr" },
+      { url: "https://www.dealabs.com/rss/tag/immobilier", source: "immo-fr" },
     ];
 
     // =========================
-    // parse all sources safely
+    // parse sources safely
     // =========================
     const settled = await Promise.allSettled(
       SOURCES.map((s) => parser.parseURL(s.url))
@@ -185,11 +249,12 @@ export async function GET() {
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)); // ✅ enlève les images null/mini/placeholder
+      .filter((it) => isValidImage(it.image));
 
-    // =========================
-    // mix everything
-    // =========================
+    // ✅ traduction FR si besoin (optionnel)
+    items = await Promise.all(items.map(translateItemIfNeeded));
+
+    // ✅ mélange tout (voyage/deals/annonces)
     items = shuffleArray(items);
 
     return NextResponse.json({ ok: true, items, cursor: null });
