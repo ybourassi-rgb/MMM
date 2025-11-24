@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 
 const UP_URL = process.env.UPSTASH_REST_URL;
 const UP_TOKEN = process.env.UPSTASH_REST_TOKEN;
-
-// clé Redis
 const KEY = "community_deals";
 
 async function upstash(cmd, args = []) {
@@ -19,23 +17,27 @@ async function upstash(cmd, args = []) {
   return data.result;
 }
 
-// =========================
-// GET : récupérer les deals communauté
-// =========================
+// ===== anti alcool =====
+function isAlcoholText(text = "") {
+  const t = text.toLowerCase();
+  const bad = [
+    "alcool","alcohol","vin","wine","bière","beer","whisky","whiskey",
+    "vodka","rhum","rum","gin","champagne","cognac","tequila",
+    "aperitif","apéro","spiritueux","liqueur","bourbon","rosé","merlot"
+  ];
+  return bad.some((k) => t.includes(k));
+}
+
 export async function GET() {
   try {
     if (!UP_URL || !UP_TOKEN) {
       return NextResponse.json({ ok: true, items: [] });
     }
 
-    const raw = await upstash("LRANGE", [KEY, 0, 100]); // 100 derniers
+    const raw = await upstash("LRANGE", [KEY, 0, 100]);
     const items = (raw || [])
       .map((x) => {
-        try {
-          return JSON.parse(x);
-        } catch {
-          return null;
-        }
+        try { return JSON.parse(x); } catch { return null; }
       })
       .filter(Boolean);
 
@@ -48,9 +50,6 @@ export async function GET() {
   }
 }
 
-// =========================
-// POST : publier un deal communauté
-// =========================
 export async function POST(req) {
   try {
     if (!UP_URL || !UP_TOKEN) {
@@ -67,8 +66,9 @@ export async function POST(req) {
       image,
       category,
       city,
-      price, // optionnel
-      type,  // optionnel (neuf/occasion/service)
+      price,
+      condition,
+      description,
     } = body || {};
 
     if (!title || !url) {
@@ -82,33 +82,28 @@ export async function POST(req) {
     url = String(url).trim();
     image = image?.trim() || null;
     category = category || "autre";
-    city = city || null;
-    price = price?.trim?.() || price || null;
-    type = type || "occasion";
+    city = city?.trim() || null;
+    price = price?.trim() || null;
+    condition = condition || "neuf";
+    description = description?.trim() || null;
 
-    // ✅ force https si lien collé sans protocole
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
 
-    // ✅ bloque deals sans image
+    // ✅ image obligatoire
     if (!image) {
       return NextResponse.json(
-        { ok: false, error: "Image obligatoire pour publier un deal." },
+        { ok: false, error: "Image obligatoire pour publier une annonce." },
         { status: 400 }
       );
     }
 
-    // ✅ filtre anti-alcool
-    const text = `${title} ${category}`.toLowerCase();
-    const bad = [
-      "alcool","alcohol","vin","wine","bière","beer","whisky","whiskey",
-      "vodka","rhum","rum","gin","champagne","cognac","tequila",
-      "aperitif","apéro","spiritueux","liqueur","bourbon",
-    ];
-    if (bad.some((k) => text.includes(k))) {
+    // ✅ filtre alcool
+    const textToCheck = `${title} ${category} ${description || ""}`;
+    if (isAlcoholText(textToCheck)) {
       return NextResponse.json(
-        { ok: false, error: "Deals alcool refusés." },
+        { ok: false, error: "Annonces alcool refusées." },
         { status: 400 }
       );
     }
@@ -120,16 +115,17 @@ export async function POST(req) {
       link: url,
       image,
       category,
-      type,   // gardé si tu l’envoies
-      price,  // gardé si tu l’envoies
       city,
+      price,
+      condition,
+      description,
       source: "community",
       publishedAt: new Date().toISOString(),
       summary: null,
     };
 
     await upstash("LPUSH", [KEY, JSON.stringify(item)]);
-    await upstash("LTRIM", [KEY, 0, 300]); // garde max 300
+    await upstash("LTRIM", [KEY, 0, 300]);
 
     return NextResponse.json({ ok: true, item });
   } catch (e) {
