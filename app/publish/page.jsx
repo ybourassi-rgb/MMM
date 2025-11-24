@@ -9,6 +9,8 @@ export default function PublishPage() {
   const [url, setUrl] = useState("");
   const [image, setImage] = useState("");
   const [category, setCategory] = useState("autre");
+  const [type, setType] = useState("occasion");
+  const [price, setPrice] = useState("");
   const [city, setCity] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,6 +28,8 @@ export default function PublishPage() {
           url,
           image,
           category,
+          type,
+          price,
           city,
         }),
       });
@@ -34,7 +38,7 @@ export default function PublishPage() {
       if (!data.ok) throw new Error(data.error || "Erreur publish");
 
       alert("Deal publié ✅");
-      router.push("/"); // retour au feed
+      router.push("/");
     } catch (e) {
       alert("Erreur: " + e.message);
     } finally {
@@ -78,6 +82,24 @@ export default function PublishPage() {
         </label>
 
         <label>
+          Prix (optionnel)
+          <input
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Ex: 120€"
+          />
+        </label>
+
+        <label>
+          Type d’annonce
+          <select value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="occasion">Occasion</option>
+            <option value="neuf">Neuf</option>
+            <option value="service">Service</option>
+          </select>
+        </label>
+
+        <label>
           Catégorie
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="autre">Autre</option>
@@ -88,6 +110,8 @@ export default function PublishPage() {
             <option value="tech">Tech</option>
             <option value="gaming">Gaming</option>
             <option value="maison">Maison</option>
+            <option value="famille">Famille</option>
+            <option value="mode">Mode / Sport</option>
           </select>
         </label>
 
@@ -96,7 +120,7 @@ export default function PublishPage() {
           <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
-            placeholder="Paris, Marrakech..."
+            placeholder="Paris, Lyon..."
           />
         </label>
 
@@ -160,9 +184,7 @@ export default function PublishPage() {
           font-weight: 900;
           font-size: 15px;
         }
-        .submit:disabled {
-          opacity: .6;
-        }
+        .submit:disabled { opacity: .6; }
       `}</style>
     </div>
   );
