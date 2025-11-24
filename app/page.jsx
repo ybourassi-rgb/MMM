@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import DealSlide from "@/components/DealSlide";
+import BottomNav from "@/components/BottomNav";
 
 export default function Page() {
   const [items, setItems] = useState([]);
@@ -132,16 +133,10 @@ export default function Page() {
         {loading && <div className="tiktok-loading">Chargement...</div>}
       </main>
 
-      {/* BOTTOM NAV */}
-      <nav className="bottomnav">
-        <div className="navitem active">Feed</div>
-        <div className="navitem">Y-Score</div>
-        <div className="navitem">Publier</div>
-        <div className="navitem">Affiliation</div>
-        <div className="navitem">Profil</div>
-      </nav>
+      {/* ✅ BOTTOM NAV (cliquable) */}
+      <BottomNav />
 
-      {/* Styles */}
+      {/* Styles globaux */}
       <style jsx global>{`
         :root {
           --bg: #07090f;
@@ -276,24 +271,6 @@ export default function Page() {
           padding: 10px 0;
           background: rgba(0, 0, 0, 0.6);
           font-size: 13px;
-        }
-
-        .bottomnav {
-          position: sticky;
-          bottom: 0;
-          border-top: 1px solid #141b33;
-          background: #07090f;
-          display: flex;
-          justify-content: space-around;
-          padding: 10px 0;
-        }
-        .navitem {
-          font-size: 12px;
-          color: #aeb6cc;
-        }
-        .navitem.active {
-          color: #fff;
-          font-weight: 700;
         }
       `}</style>
     </div>
