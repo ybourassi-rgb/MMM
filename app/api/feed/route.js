@@ -16,13 +16,27 @@ const parser = new Parser({
 // 0) Helpers base URL (server-side)
 // ====================================
 function getBaseUrl() {
-  // NEXT_PUBLIC_BASE_URL conseillé (ex: https://alpha-one.vercel.app)
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;
-
-  // Vercel
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "";
+}
 
-  return ""; // fallback -> fetch relative (peut marcher en dev)
+// ====================================
+// 0bis) fetch RSS with timeout (anti blocage)
+// ====================================
+async function parseWithTimeout(url, ms = 8000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+
+  try {
+    // rss-parser accepte fetch custom
+    const feed = await parser.parseURL(url, {
+      signal: ctrl.signal,
+    });
+    return feed;
+  } finally {
+    clearTimeout(id);
+  }
 }
 
 // ====================================
@@ -30,7 +44,6 @@ function getBaseUrl() {
 // ====================================
 function upgradePepperImage(url) {
   if (!url) return url;
-
   try {
     const u = new URL(url);
     const host = u.hostname;
@@ -44,12 +57,10 @@ function upgradePepperImage(url) {
       host.includes("dealabs.");
 
     if (isPepper) {
-      // supprime les patterns de thumbs type /re/150x150/qt/55/
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\/qt\/\d+\//i, "/");
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
       return u.toString();
     }
-
     return url;
   } catch {
     return url;
@@ -63,9 +74,8 @@ function pickImage(it) {
   const mc = it.mediaContent;
 
   if (mc?.$?.url) return upgradePepperImage(mc.$.url);
-  if (Array.isArray(mc) && mc[0]?.$?.url) {
+  if (Array.isArray(mc) && mc[0]?.$?.url)
     return upgradePepperImage(mc[0].$?.url);
-  }
 
   if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
 
@@ -77,35 +87,49 @@ function pickImage(it) {
 }
 
 // ====================================
-// 3) Filter NO/LOW images
+// 3) Filter strict images (ta règle)
 //    => on rejette tous les deals sans image OK
 // ====================================
-function isValidImage(img) {
+function isValidImageStrict(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
 
-  // pas d’icônes / svg / placeholders
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
 
-  // miniatures pepper restantes
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  // images trop petites / floues fréquentes
   const smallSizes = [
-    "80x80",
-    "100x100",
-    "120x120",
-    "150x150",
-    "160x160",
-    "180x180",
-    "200x150",
+    "80x80","100x100","120x120","150x150",
+    "160x160","180x180","200x150",
   ];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
-  // thumbs classiques
+  if (lower.includes("thumbnail")) return false;
+  if (lower.includes("thumbs")) return false;
+  if (lower.includes("/small/")) return false;
+  if (lower.includes("_small")) return false;
+
+  return true;
+}
+
+// ====================================
+// 3bis) Filter relaxed (si feed trop vide)
+// -> accepte les images "non miniatures évidentes" même si taille inconnue
+// ====================================
+function isValidImageRelaxed(img) {
+  if (!img) return false;
+  const lower = img.toLowerCase();
+
+  if (lower.endsWith(".svg")) return false;
+  if (lower.includes("default-voucher")) return false;
+  if (lower.includes("placeholder")) return false;
+
+  // on bloque seulement les miniatures évidentes
+  if (lower.match(/\/re\/\d+x\d+\//i)) return false;
+  if (lower.match(/\/qt\/\d+\//i)) return false;
   if (lower.includes("thumbnail")) return false;
   if (lower.includes("thumbs")) return false;
   if (lower.includes("/small/")) return false;
@@ -121,14 +145,14 @@ function isAlcoholFree(item) {
   const t = `${item.title || ""} ${item.summary || ""} ${item.category || ""}`.toLowerCase();
 
   const bad = [
-    "alcool", "alcohol",
-    "vin", "wine",
-    "bière", "beer",
-    "whisky", "whiskey",
-    "vodka", "rhum", "rum", "gin",
-    "champagne", "cognac", "tequila",
-    "aperitif", "apéro", "spiritueux",
-    "liqueur", "bourbon", "rosé", "merlot",
+    "alcool","alcohol",
+    "vin","wine",
+    "bière","beer",
+    "whisky","whiskey",
+    "vodka","rhum","rum","gin",
+    "champagne","cognac","tequila",
+    "aperitif","apéro","spiritueux",
+    "liqueur","bourbon","rosé","merlot",
   ];
 
   return !bad.some((k) => t.includes(k));
@@ -139,38 +163,29 @@ function isAlcoholFree(item) {
 // ====================================
 function makeAffiliateUrl(originalUrl) {
   if (!originalUrl) return null;
-
   try {
     const u = new URL(originalUrl);
     const host = u.hostname.toLowerCase();
 
-    // ---------- Amazon ----------
-    // si domaine Amazon (amazon.fr, amazon.com, smile.amazon.fr, etc.)
     if (host.includes("amazon.")) {
       const tag = process.env.AMAZON_ASSOCIATE_TAG;
       if (tag) {
-        // si déjà un tag, on le remplace
         u.searchParams.set("tag", tag);
         return u.toString();
       }
       return originalUrl;
     }
 
-    // ---------- AliExpress ----------
     if (host.includes("aliexpress.")) {
       const deep = process.env.ALIEXPRESS_AFFILIATE_LINK; // peut contenir {url}
       const pid = process.env.ALIEXPRESS_PID;
 
       if (deep) {
-        // si ton template AliExpress est du style "...?url={url}"
         if (deep.includes("{url}")) return deep.replace("{url}", encodeURIComponent(originalUrl));
-        // sinon on concatène proprement
         const sep = deep.includes("?") ? "&" : "?";
         return `${deep}${sep}url=${encodeURIComponent(originalUrl)}`;
       }
 
-      // fallback simple PID si pas de deep-link
-      // (ce n'est pas toujours suffisant mais ça évite de casser)
       if (pid) {
         const sep = originalUrl.includes("?") ? "&" : "?";
         return `${originalUrl}${sep}aff_fcid=${pid}`;
@@ -179,7 +194,6 @@ function makeAffiliateUrl(originalUrl) {
       return originalUrl;
     }
 
-    // autres domaines => pour l’instant on laisse tel quel
     return originalUrl;
   } catch {
     return originalUrl;
@@ -199,11 +213,9 @@ function normalizeItem(raw, i = 0, source = "rss") {
     url,
     link: raw.link || null,
     image,
-
     price: raw.price || null,
     score: raw.yscore?.globalScore ?? raw.score ?? null,
     category: raw.category || raw.type || "autre",
-
     margin: raw.yscore
       ? `${raw.yscore.opportunityScore ?? "—"}%`
       : raw.margin,
@@ -211,19 +223,16 @@ function normalizeItem(raw, i = 0, source = "rss") {
       ? `${raw.yscore.riskScore ?? "—"}/100`
       : raw.risk,
     horizon: raw.horizon || "court terme",
-
     halal: raw.yscore
       ? raw.yscore.halalScore >= 80
       : raw.halal ?? null,
-
-    affiliateUrl: null, // rempli plus bas
+    affiliateUrl: null,
     source,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
   };
 
-  // génération affiliation (non bloquante)
-  item.affiliateUrl = makeAffiliateUrl(item.url);
+  item.affiliateUrl = makeAffiliateUrl(item.url || item.link);
 
   return item;
 }
@@ -297,33 +306,44 @@ function interleaveBuckets(buckets) {
   return out;
 }
 
+// ====================================
+// 9) Deduplicate items (anti doublons)
+// ====================================
+function dedupe(items) {
+  const seen = new Set();
+  const out = [];
+  for (const it of items) {
+    const k = (it.url || it.link || it.title || "").trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(it);
+  }
+  return out;
+}
+
 export async function GET() {
   try {
     const SOURCES = [
-      // 🔥 Dealabs FR
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // 🌍 Voyages
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // 🛒 Volume autres pays
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // 🎮 Tech / gaming
       { url: "https://www.dealabs.com/rss/tag/gaming", source: "dealabs-gaming" },
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
 
-    // parse sources safely
+    // parse sources safely + timeout
     const settled = await Promise.allSettled(
-      SOURCES.map((s) => parser.parseURL(s.url))
+      SOURCES.map((s) => parseWithTimeout(s.url, 8000))
     );
 
     const feeds = settled
@@ -334,15 +354,15 @@ export async function GET() {
       .filter(Boolean);
 
     // RSS items
-    let items = feeds
+    let rssItems = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)) // ✅ sans photo => rejeté
-      .filter(isAlcoholFree);                 // ✅ alcool => rejeté
+      .filter((it) => isValidImageStrict(it.image))
+      .filter(isAlcoholFree);
 
-    // ✅ community deals (users)
+    // ✅ community deals
     let community = [];
     try {
       const base = getBaseUrl();
@@ -358,14 +378,28 @@ export async function GET() {
           source: it.source || "community",
           id: it.id || `${Date.now()}-community-${i}`,
         }))
-        .filter((it) => isValidImage(it.image))
+        .filter((it) => isValidImageStrict(it.image))
         .filter(isAlcoholFree);
     } catch {
       community = [];
     }
 
     // merge community + rss
-    items = [...community, ...items];
+    let items = dedupe([...community, ...rssItems]);
+
+    // ===== anti feed vide =====
+    // si trop peu d’items => on relâche juste le filtre image (toujours pas alcool / pas miniatures évidentes)
+    if (items.length < 12) {
+      const relaxed = feeds
+        .flatMap(({ feed, meta }) =>
+          (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
+        )
+        .filter((it) => it.url)
+        .filter((it) => isValidImageRelaxed(it.image))
+        .filter(isAlcoholFree);
+
+      items = dedupe([...community, ...relaxed]).slice(0, 120);
+    }
 
     // buckets
     const buckets = { travel: [], general: [], tech: [], other: [] };
@@ -380,7 +414,16 @@ export async function GET() {
 
     const mixed = interleaveBuckets(buckets);
 
-    return NextResponse.json({ ok: true, items: mixed, cursor: null });
+    return NextResponse.json({
+      ok: true,
+      items: mixed.slice(0, 150),
+      cursor: null,
+      stats: {
+        community: community.length,
+        rss: rssItems.length,
+        totalAfterMix: mixed.length,
+      },
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Feed error", items: [] },
