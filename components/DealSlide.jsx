@@ -28,17 +28,27 @@ export default function DealSlide({ item, active }) {
     startingBid,
     bidCount,
     endsAt,           // timestamp ou ISO
+    endAt,            // alias possible
+    currentPrice,     // alias possible
+    startingPrice,    // alias possible
+    bidStep,          // pas d’enchère
     publishedAt,
     bucket,
   } = item || {};
+
+  const finalEndsAt = endsAt || endAt || null;
+  const finalCurrent =
+    currentBid ?? currentPrice ?? null;
+  const finalStart =
+    startingBid ?? startingPrice ?? null;
 
   const isAuction =
     auction === true ||
     type === "auction" ||
     type === "enchere" ||
-    endsAt != null ||
-    currentBid != null ||
-    startingBid != null;
+    finalEndsAt != null ||
+    finalCurrent != null ||
+    finalStart != null;
 
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
@@ -53,9 +63,9 @@ export default function DealSlide({ item, active }) {
   // ✅ countdown enchère
   const [timeLeft, setTimeLeft] = useState("");
   useEffect(() => {
-    if (!isAuction || !endsAt) return;
+    if (!isAuction || !finalEndsAt) return;
 
-    const end = new Date(endsAt).getTime();
+    const end = new Date(finalEndsAt).getTime();
     if (Number.isNaN(end)) return;
 
     const tick = () => {
@@ -77,7 +87,7 @@ export default function DealSlide({ item, active }) {
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [isAuction, endsAt]);
+  }, [isAuction, finalEndsAt]);
 
   const openLink = (l) => {
     if (!l) return;
@@ -153,12 +163,49 @@ export default function DealSlide({ item, active }) {
     } catch {}
   };
 
+  // ✅ Miser (vraie enchère)
+  const onBid = async () => {
+    const step = Number(bidStep || 1);
+    const curr = Number(finalCurrent ?? finalStart ?? 0);
+    const min = curr + step;
+
+    const val = prompt(`Ta mise (min ${min}):`, String(min));
+    if (!val) return;
+
+    const amount = Number(val);
+    if (!Number.isFinite(amount) || amount < min) {
+      alert("Mise trop basse ❌");
+      return;
+    }
+
+    try {
+      const r = await fetch("/api/auctions/bid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          amount,
+          bidder: "user", // plus tard profil
+        }),
+      });
+
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d.error || "bid_failed");
+
+      alert("Mise enregistrée ✅");
+      // refresh simple pour voir le nouveau prix
+      window.location.reload();
+    } catch (e) {
+      alert("Erreur enchère: " + e.message);
+    }
+  };
+
   const displayPrice =
     isAuction
-      ? (currentBid != null
-          ? `Enchère: ${currentBid}`
-          : startingBid != null
-            ? `Départ: ${startingBid}`
+      ? (finalCurrent != null
+          ? `Enchère: ${finalCurrent} €`
+          : finalStart != null
+            ? `Départ: ${finalStart} €`
             : null
         )
       : price
@@ -202,13 +249,16 @@ export default function DealSlide({ item, active }) {
           📤<span>Partager</span>
         </button>
 
-        {/* Analyse ok pour les deux types */}
         <button className="action-btn" onClick={onAnalyze} disabled={!finalUrl}>
           🧠<span>Analyse</span>
         </button>
 
         {/* ✅ bouton adapté enchère */}
-        <button className="action-btn" onClick={onSee} disabled={!finalUrl}>
+        <button
+          className="action-btn"
+          onClick={isAuction ? onBid : onSee}
+          disabled={!finalUrl && !isAuction}
+        >
           {isAuction ? "🔨" : "🔗"}
           <span>{isAuction ? "Miser" : "Voir"}</span>
         </button>
@@ -246,11 +296,11 @@ export default function DealSlide({ item, active }) {
             </div>
           )}
 
-          {isAuction && endsAt && (
+          {isAuction && finalEndsAt && (
             <div className="metric">
               <div className="metric-title">Fin enchère</div>
               <div className="metric-value">
-                {new Date(endsAt).toLocaleString()}
+                {new Date(finalEndsAt).toLocaleString()}
               </div>
             </div>
           )}
