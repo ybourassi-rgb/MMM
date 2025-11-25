@@ -10,38 +10,57 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState(null);
 
-  // ✅ filtre chips (par bucket)
+  // ✅ filtre chips
   const [selected, setSelected] = useState("all");
   const feedRef = useRef(null);
 
   // =========================
-  // Chips marketplace (match = bucket API)
+  // Chips marketplace (avec bucket)
   // =========================
   const CATEGORIES = [
-    { key: "all", label: "🔥 Tous", bucket: "all" },
-    { key: "good", label: "💥 Bonnes affaires", bucket: "general" },
+    { key: "all", label: "🔥 Tous" },
 
-    { key: "tech", label: "📱 High-Tech", bucket: "tech" },
-    { key: "gaming", label: "🎮 Gaming", bucket: "tech" }, // gaming rangé dans tech côté API
+    { key: "good", label: "💥 Bonnes affaires", match: ["deal", "promo", "réduction", "soldes", "bon plan"] },
 
-    { key: "home", label: "🏠 Maison", bucket: "home" },
-    { key: "diy", label: "🛠️ Bricolage", bucket: "home" }, // bricolage rangé home côté API
+    { key: "tech", label: "📱 High-Tech", bucket: "tech",
+      match: ["tech","high-tech","smartphone","iphone","samsung","xiaomi","android","apple","pc","ordinateur","laptop","ssd","ryzen","intel","ram","gpu","carte graphique"],
+    },
 
-    { key: "auto", label: "🚗 Auto/Moto", bucket: "auto" },
+    { key: "gaming", label: "🎮 Gaming", bucket: "tech",
+      match: ["ps5","xbox","switch","gaming","steam","console","jeu"],
+    },
 
-    { key: "fashion", label: "👕 Mode/Beauté", bucket: "lifestyle" },
+    { key: "home", label: "🏠 Maison", bucket: "home",
+      match: ["maison","jardin","meuble","canapé","lit","déco","electroménager","aspirateur"],
+    },
 
-    { key: "baby", label: "🍼 Bébé/Enfant", bucket: "family" },
+    { key: "diy", label: "🛠️ Bricolage", bucket: "home",
+      match: ["bricolage","outils","perceuse","bosch","makita","jardinage"],
+    },
 
-    { key: "travel", label: "✈️ Voyage", bucket: "travel" },
+    { key: "auto", label: "🚗 Auto/Moto", bucket: "auto",
+      match: ["auto","voiture","moto","pneu","carburant","garage"],
+    },
 
-    { key: "leisure", label: "🎟️ Loisirs", bucket: "lifestyle" },
+    { key: "fashion", label: "👕 Mode/Beauté", bucket: "lifestyle",
+      match: ["mode","vetement","chaussure","nike","adidas","parfum","beaute","cosmétique"],
+    },
 
-    { key: "free", label: "🎁 Gratuit", bucket: "general" },
+    { key: "baby", label: "🍼 Bébé/Enfant", bucket: "family",
+      match: ["bébé","enfant","poussette","jouet","couches"],
+    },
+
+    { key: "travel", label: "✈️ Voyage", bucket: "travel",
+      match: ["voyage","travel","vol","flight","hotel","airbnb","booking","séjour"],
+    },
+
+    { key: "leisure", label: "🎟️ Loisirs", match: ["cinema","concert","sport","sortie","loisir","parc"] },
+
+    { key: "free", label: "🎁 Gratuit", match: ["gratuit","freebie","offert","échantillon"] },
   ];
 
   // =========================
-  // 1) Load initial feed (SANS glow)
+  // 1) Load initial feed
   // =========================
   useEffect(() => {
     fetch("/api/feed", { cache: "no-store" })
@@ -50,28 +69,32 @@ export default function Page() {
         const firstItems = d.items || d || [];
         setItems(firstItems);
         if (d.cursor) setCursor(d.cursor);
-        // ❌ pas de glow ici
       })
       .catch(() => setItems([]));
   }, []);
 
   // =========================
-  // ✅ Filtre par bucket API
+  // ✅ Filtre local instantané (bucket d'abord)
   // =========================
   const filteredItems = useMemo(() => {
     if (selected === "all") return items;
 
     const cat = CATEGORIES.find((c) => c.key === selected);
-    const bucket = cat?.bucket;
-    if (!bucket || bucket === "all") return items;
+    if (!cat) return items;
+
+    // ✅ priorité au bucket (fiable)
+    if (cat.bucket) {
+      const byBucket = items.filter((it) => it.bucket === cat.bucket);
+      if (byBucket.length) return byBucket;
+    }
+
+    // fallback mots-clés
+    const words = cat.match || [];
+    if (!words.length) return items;
 
     return items.filter((it) => {
-      // ✅ bucket envoyé par l’API
-      if (it.bucket) return it.bucket === bucket;
-
-      // fallback ultra-safe si un item n’a pas bucket
       const text = `${it.category || ""} ${it.title || ""} ${it.summary || ""}`.toLowerCase();
-      return text.includes(bucket);
+      return words.some((w) => text.includes(w.toLowerCase()));
     });
   }, [items, selected]);
 
@@ -101,11 +124,11 @@ export default function Page() {
 
   // =========================
   // 3) Fetch more when near end
-  // glow seulement sur "vrais" nouveaux deals
+  // ✅ basé sur items.length (PAS filtered)
   // =========================
   const fetchMore = useCallback(async () => {
     if (loading) return;
-    if (activeIndex < filteredItems.length - 3) return;
+    if (activeIndex < items.length - 3) return;
 
     setLoading(true);
     try {
@@ -120,17 +143,7 @@ export default function Page() {
       const nextCursor = Array.isArray(data) ? null : data.cursor;
 
       if (nextItems?.length) {
-        setItems((prev) => {
-          const merged = [...prev, ...nextItems];
-
-          // ✅ glow uniquement si ajout réel
-          if (typeof window !== "undefined" && merged.length > prev.length) {
-            window.dispatchEvent(new Event("lbon-souk:new-deal"));
-          }
-
-          return merged;
-        });
-
+        setItems((prev) => [...prev, ...nextItems]);
         if (nextCursor) setCursor(nextCursor);
       }
     } catch (e) {
@@ -138,7 +151,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [activeIndex, filteredItems.length, loading, cursor]);
+  }, [activeIndex, items.length, loading, cursor]);
 
   useEffect(() => {
     fetchMore();
@@ -157,7 +170,7 @@ export default function Page() {
         </div>
       </header>
 
-      {/* ✅ CHIPS FILTER marketplace */}
+      {/* CHIPS */}
       <div className="chips">
         {CATEGORIES.map((c) => (
           <button
@@ -165,8 +178,9 @@ export default function Page() {
             className={`chip ${selected === c.key ? "active" : ""}`}
             onClick={() => {
               setSelected(c.key);
-              feedRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              setLoading(false);       // ✅ stop un éventuel loading en cours
               setActiveIndex(0);
+              feedRef.current?.scrollTo({ top: 0, behavior: "smooth" });
             }}
           >
             <span className="chipLabel">{c.label}</span>
@@ -189,9 +203,7 @@ export default function Page() {
         ))}
 
         {!filteredItems.length && !loading && (
-          <div className="empty">
-            Aucune opportunité pour cette catégorie.
-          </div>
+          <div className="empty">Aucune opportunité pour cette catégorie.</div>
         )}
 
         {loading && <div className="tiktok-loading">Chargement...</div>}
@@ -199,7 +211,7 @@ export default function Page() {
 
       <BottomNav />
 
-      {/* Styles globaux + chips HD (inchangés) */}
+      {/* Styles globaux inchangés */}
       <style jsx global>{`
         :root {
           --bg: #07090f;
