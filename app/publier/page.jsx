@@ -1,62 +1,108 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default function PublierPage() {
-  const [form, setForm] = useState({
-    title: "",
-    url: "",
-    price: "",
-    category: "autre",
-    image: "",
-    city: "",
-    halal: null,
-    summary: "",
-  });
+export default function PublishPage() {
+  const router = useRouter();
+
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState(""); // lien direct si dispo
+  const [imageFile, setImageFile] = useState(null); // upload
+  const [preview, setPreview] = useState(null);
+
+  const [category, setCategory] = useState("autre");
+  const [condition, setCondition] = useState("neuf");
+  const [price, setPrice] = useState("");
+  const [city, setCity] = useState("");
+  const [description, setDescription] = useState("");
+
+  // ✅ vendeur simple (stocké localement)
+  const [sellerName, setSellerName] = useState("");
+
+  // ✅ coords pour "autour de moi"
+  const [lat, setLat] = useState(null);
+  const [lng, setLng] = useState(null);
 
   const [loading, setLoading] = useState(false);
-  const [okMsg, setOkMsg] = useState("");
-  const [errMsg, setErrMsg] = useState("");
 
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
+  // récupérer pseudo vendeur déjà utilisé
+  useEffect(() => {
+    const saved = localStorage.getItem("sellerName");
+    if (saved) setSellerName(saved);
+  }, []);
+
+  // géoloc auto (si accepté)
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude);
+        setLng(pos.coords.longitude);
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 6000 }
+    );
+  }, []);
+
+  // ===== Upload téléphone -> base64 =====
+  const onPickFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // garde-fou taille (base64 sinon trop lourd pour Upstash)
+    if (file.size > 700 * 1024) {
+      alert("Image trop lourde. Choisis une photo plus légère (moins de 700KB).");
+      return;
+    }
+
+    setImageFile(file);
+
+    const reader = new FileReader();
+    reader.onload = () => setPreview(reader.result);
+    reader.readAsDataURL(file);
   };
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    setOkMsg("");
-    setErrMsg("");
+    if (!sellerName || !title || !url)
+      return alert("Pseudo vendeur + titre + lien obligatoires");
 
-    if (!form.title.trim() || !form.url.trim()) {
-      setErrMsg("Titre et lien sont obligatoires.");
-      return;
-    }
+    // image soit URL soit upload
+    const finalImage = preview || imageUrl?.trim();
+    if (!finalImage) return alert("Image obligatoire (URL ou upload).");
 
     setLoading(true);
     try {
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          sellerName,
+          title,
+          url,
+          image: finalImage,
+          category,
+          condition,
+          price,
+          city,
+          description,
+          lat,
+          lng,
+        }),
       });
+
       const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Erreur publish");
 
-      if (!data.ok) throw new Error(data.error || "Erreur serveur");
+      // ✅ mémorise vendeur
+      localStorage.setItem("sellerName", sellerName);
 
-      setOkMsg("Deal publié ✅ Il apparaît dans le feed.");
-      setForm({
-        title: "",
-        url: "",
-        price: "",
-        category: "autre",
-        image: "",
-        city: "",
-        halal: null,
-        summary: "",
-      });
-    } catch (e2) {
-      setErrMsg(e2.message);
+      alert("Annonce publiée ✅");
+      router.push("/");
+    } catch (e) {
+      alert("Erreur: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -65,94 +111,129 @@ export default function PublierPage() {
   return (
     <div className="wrap">
       <header className="top">
-        <h1>Publier un deal</h1>
-        <p>Ajoute ton bon plan. Il sera visible dans le feed.</p>
+        <button onClick={() => router.back()} className="back">←</button>
+        <h1>Publier une annonce</h1>
       </header>
 
-      <form className="card" onSubmit={onSubmit}>
+      <form className="form" onSubmit={onSubmit}>
+
+        {/* ✅ vendeur */}
+        <label>
+          Pseudo vendeur *
+          <input
+            value={sellerName}
+            onChange={(e) => setSellerName(e.target.value)}
+            placeholder="Ex: Yassine93"
+          />
+        </label>
+
+        {/* ===== Titre ===== */}
         <label>
           Titre *
           <input
-            name="title"
-            value={form.title}
-            onChange={onChange}
-            placeholder="Ex: iPhone 15 Pro - super promo"
-            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Ex: iPhone 15 Pro neuf moins cher"
           />
         </label>
 
+        {/* ===== Lien deal ===== */}
         <label>
           Lien *
           <input
-            name="url"
-            value={form.url}
-            onChange={onChange}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
             placeholder="https://..."
-            required
           />
         </label>
 
-        <div className="row">
-          <label>
-            Prix (optionnel)
-            <input
-              name="price"
-              value={form.price}
-              onChange={onChange}
-              placeholder="Ex: 299€"
-            />
-          </label>
-
-          <label>
-            Ville (optionnel)
-            <input
-              name="city"
-              value={form.city}
-              onChange={onChange}
-              placeholder="Ex: Marrakech"
-            />
-          </label>
-        </div>
-
+        {/* ===== Prix ===== */}
         <label>
-          Catégorie
-          <select name="category" value={form.category} onChange={onChange}>
-            <option value="autre">Autre</option>
-            <option value="auto">Auto</option>
-            <option value="immo">Immo</option>
-            <option value="voyage">Voyage</option>
-            <option value="tech">Tech</option>
-            <option value="gaming">Gaming</option>
-            <option value="business">Business</option>
+          Prix (€)
+          <input
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Ex: 799"
+            inputMode="numeric"
+          />
+        </label>
+
+        {/* ===== Etat ===== */}
+        <label>
+          État
+          <select value={condition} onChange={(e) => setCondition(e.target.value)}>
+            <option value="neuf">Neuf</option>
+            <option value="comme-neuf">Comme neuf</option>
+            <option value="bon-etat">Bon état</option>
+            <option value="occasion">Occasion</option>
           </select>
         </label>
 
+        {/* ===== Catégorie ===== */}
         <label>
-          Image (URL optionnelle)
+          Catégorie
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="autre">Autre</option>
+            <option value="auto">Auto</option>
+            <option value="immo">Immobilier</option>
+            <option value="voyage">Voyage</option>
+            <option value="tech">High-tech</option>
+            <option value="gaming">Gaming</option>
+            <option value="maison">Maison / Jardin</option>
+            <option value="mode">Mode</option>
+            <option value="sport">Sport</option>
+            <option value="bebe">Bébé / Enfant</option>
+            <option value="service">Services</option>
+          </select>
+        </label>
+
+        {/* ===== Ville ===== */}
+        <label>
+          Ville (optionnel)
           <input
-            name="image"
-            value={form.image}
-            onChange={onChange}
-            placeholder="https://...jpg/png"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            placeholder="Paris, Lyon…"
           />
         </label>
 
+        {/* ===== Description ===== */}
         <label>
-          Petit résumé (optionnel)
+          Description (optionnel)
           <textarea
-            name="summary"
-            value={form.summary}
-            onChange={onChange}
-            placeholder="Explique vite fait pourquoi c’est une bonne affaire"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Détaille l’offre : promo, état, points importants…"
             rows={4}
           />
         </label>
 
-        {errMsg && <div className="err">{errMsg}</div>}
-        {okMsg && <div className="ok">{okMsg}</div>}
+        {/* ===== Image URL ===== */}
+        <label>
+          Image (URL)
+          <input
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://image.jpg"
+          />
+        </label>
 
-        <button className="btn" disabled={loading}>
-          {loading ? "Publication..." : "Publier"}
+        {/* ===== OU Upload fichier ===== */}
+        <label className="fileLabel">
+          Ou choisir une photo (téléphone)
+          <input type="file" accept="image/*" onChange={onPickFile} />
+        </label>
+
+        {/* preview */}
+        {preview && (
+          <div className="previewBox">
+            <img src={preview} alt="preview" />
+            <div className="previewHint">✅ Photo prête</div>
+          </div>
+        )}
+
+        <button disabled={loading} className="submit">
+          {loading ? "Publication..." : "Publier ✅"}
         </button>
       </form>
 
@@ -160,72 +241,90 @@ export default function PublierPage() {
         .wrap {
           min-height: 100svh;
           background: #07090f;
-          color: #e9ecf5;
+          color: white;
           padding: 14px;
         }
-        .top h1 {
-          margin: 0 0 4px 0;
-          font-size: 22px;
-          font-weight: 800;
-        }
-        .top p {
-          margin: 0 0 12px 0;
-          color: #8b93a7;
-          font-size: 13px;
-        }
-        .card {
-          background: #0f1422;
-          border: 1px solid #1b2440;
-          border-radius: 14px;
-          padding: 12px;
-          display: grid;
+        .top {
+          display: flex;
+          align-items: center;
           gap: 10px;
+          margin-bottom: 14px;
+        }
+        .back {
+          background: #0e1322;
+          border: 1px solid #1a2340;
+          color: white;
+          border-radius: 10px;
+          padding: 6px 10px;
+          font-size: 16px;
+        }
+        h1 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 900;
+        }
+
+        .form {
+          display: grid;
+          gap: 12px;
         }
         label {
           display: grid;
           gap: 6px;
           font-size: 12px;
-          color: #cbd3e7;
+          color: #aeb6cc;
         }
+
         input, select, textarea {
-          width: 100%;
-          background: #0b1020;
+          background: #0f1422;
           border: 1px solid #1b2440;
-          color: #fff;
-          border-radius: 10px;
-          padding: 10px;
-          outline: none;
+          color: white;
+          border-radius: 12px;
+          padding: 12px;
           font-size: 14px;
+          outline: none;
         }
-        .row {
+
+        textarea { resize: vertical; }
+
+        .fileLabel input {
+          padding: 8px;
+          background: transparent;
+          border: none;
+        }
+
+        .previewBox {
+          border: 1px dashed #27406f;
+          border-radius: 12px;
+          padding: 8px;
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
+          gap: 6px;
+          justify-items: center;
         }
-        .btn {
+        .previewBox img {
+          max-width: 100%;
+          max-height: 220px;
+          border-radius: 10px;
+          object-fit: contain;
+        }
+        .previewHint {
+          font-size: 12px;
+          color: #00e389;
+          font-weight: 800;
+        }
+
+        .submit {
           margin-top: 6px;
           background: #112449;
           border: 1px solid #27406f;
-          color: #e7f0ff;
+          color: white;
           padding: 12px;
           border-radius: 12px;
-          font-weight: 800;
-          cursor: pointer;
+          font-weight: 900;
+          font-size: 15px;
         }
-        .btn:disabled { opacity: .6; cursor: not-allowed; }
-        .err {
-          background: rgba(255, 80, 80, .12);
-          border: 1px solid rgba(255, 80, 80, .4);
-          padding: 8px;
-          border-radius: 10px;
-          font-size: 13px;
-        }
-        .ok {
-          background: rgba(24, 212, 123, .12);
-          border: 1px solid rgba(24, 212, 123, .4);
-          padding: 8px;
-          border-radius: 10px;
-          font-size: 13px;
+        .submit:disabled {
+          opacity: .6;
         }
       `}</style>
     </div>
