@@ -455,26 +455,27 @@ export async function GET(req) {
         cache: "no-store",
       });
       const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.items || []);
 
-      auctions = (data.items || [])
+      auctions = list
         .map((a) => {
           const img = a.images?.[0] || a.image || null;
 
           const draft = {
             ...a,
             image: img,
-            affiliateUrl: makeAffiliateUrl(a.url),
+            affiliateUrl: makeAffiliateUrl(a.url || a.link),
             source: a.source || "community-auction",
             summary: a.summary || a.description || null,
             title: a.title || "Enchère",
 
-            // ✅ alias attendus par DealSlide
+            // ✅ alias attendus par DealSlide (frontend)
             auction: true,
             type: "auction",
-            startingBid: a.startingBid ?? a.startingPrice ?? null,
+            startingBid: a.startingBid ?? a.startingPrice ?? a.startPrice ?? null,
             currentBid:
-              a.currentBid ?? a.currentPrice ?? a.startingPrice ?? null,
-            endsAt: a.endsAt ?? a.endAt ?? null,
+              a.currentBid ?? a.currentPrice ?? a.priceCurrent ?? a.startingPrice ?? null,
+            endsAt: a.endsAt ?? a.endAt ?? a.end_date ?? null,
             bidCount: a.bidCount ?? a.offers ?? a.bids ?? null,
 
             bucket: a.bucket || "other",
@@ -488,6 +489,7 @@ export async function GET(req) {
 
           return draft;
         })
+        .filter((it) => it.url)
         .filter((it) => isValidImage(it.image))
         .filter(isAlcoholFree);
     } catch {
