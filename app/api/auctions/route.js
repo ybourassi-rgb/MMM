@@ -4,75 +4,32 @@ import { redis } from "@/lib/redis";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const json = (data, status = 200) =>
-  NextResponse.json(data, {
-    status,
-    headers: { "Cache-Control": "no-store" },
-  });
-
-function safeInt(v, d = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n) : d;
-}
-
-export async function POST(req) {
+export async function GET() {
   try {
-    const body = await req.json().catch(() => ({}));
+    const now = Date.now();
 
-    const title = (body.title || "").trim();
-    const description = (body.description || "").trim();
-    const images = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
-    const category = (body.category || "autre").trim();
-    const sellerId = (body.sellerId || "anon").trim();
-
-    const startPrice = safeInt(body.startPrice, 1);
-    const minIncrement = safeInt(body.minIncrement, 1);
-    const durationHours = safeInt(body.durationHours, 24);
-    const reservePrice =
-      body.reservePrice == null ? null : safeInt(body.reservePrice, null);
-
-    if (!title || !startPrice || !durationHours) {
-      return json({ ok: false, error: "missing_fields" }, 400);
+    // ids triés par fin proche
+    const ids = await redis.zrange("auctions:live", 0, 80);
+    if (!ids?.length) {
+      return NextResponse.json({ ok: true, items: [] });
     }
 
-    const id = `auc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const endsAt = Date.now() + durationHours * 3600 * 1000;
+    const items = [];
+    for (const id of ids) {
+      const auc = await redis.get(`auction:${id}`);
+      if (!auc) continue;
 
-    const auctionItem = {
-      id,
-      type: "auction",
-      title,
-      description,
-      images,
-      category,
-      sellerId,
+      if (auc.status !== "live" || auc.endsAt <= now) {
+        // cleanup
+        await redis.zrem("auctions:live", id);
+        continue;
+      }
 
-      startPrice,
-      currentPrice: startPrice,
-      minIncrement,
-      reservePrice,
+      items.push(auc);
+    }
 
-      endsAt,
-      status: "live",
-      bidsCount: 0,
-      watchersCount: 0,
-      createdAt: Date.now(),
-      source: "community-auction",
-      bucket: body.bucket || null,
-    };
-
-    // store item
-    await redis.set(`auction:${id}`, auctionItem);
-
-    // index live auctions
-    await redis.zadd("auctions:live", {
-      score: endsAt,
-      member: id,
-    });
-
-    return json({ ok: true, item: auctionItem });
+    return NextResponse.json({ ok: true, items });
   } catch (e) {
-    console.error("auction/create", e);
-    return json({ ok: false, error: "create_failed" }, 500);
+    return NextResponse.json({ ok: false, items: [] }, { status: 500 });
   }
 }
