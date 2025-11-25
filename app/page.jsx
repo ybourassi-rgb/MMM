@@ -10,50 +10,34 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState(null);
 
-  // ✅ filtre chips
+  // ✅ filtre chips (par bucket)
   const [selected, setSelected] = useState("all");
-
   const feedRef = useRef(null);
 
   // =========================
-  // Chips marketplace (priorités)
+  // Chips marketplace (match = bucket API)
   // =========================
   const CATEGORIES = [
-    { key: "all", label: "🔥 Tous" },
-    {
-      key: "good",
-      label: "💥 Bonnes affaires",
-      match: ["deal", "promo", "réduction", "soldes", "bon plan"],
-    },
+    { key: "all", label: "🔥 Tous", bucket: "all" },
+    { key: "good", label: "💥 Bonnes affaires", bucket: "general" },
 
-    // ✅ High-Tech + Informatique fusionnés
-    {
-      key: "tech",
-      label: "📱 High-Tech",
-      match: [
-        "tech", "high-tech", "smartphone", "iphone", "samsung", "xiaomi",
-        "android", "apple",
-        "pc", "ordinateur", "laptop", "ssd", "ryzen", "intel", "ram", "gpu",
-        "carte graphique",
-      ],
-    },
+    { key: "tech", label: "📱 High-Tech", bucket: "tech" },
+    { key: "gaming", label: "🎮 Gaming", bucket: "tech" }, // gaming rangé dans tech côté API
 
-    { key: "gaming", label: "🎮 Gaming", match: ["ps5", "xbox", "switch", "gaming", "steam", "console", "jeu"] },
+    { key: "home", label: "🏠 Maison", bucket: "home" },
+    { key: "diy", label: "🛠️ Bricolage", bucket: "home" }, // bricolage rangé home côté API
 
-    { key: "home", label: "🏠 Maison", match: ["maison", "jardin", "meuble", "canapé", "lit", "déco", "electroménager", "aspirateur"] },
-    { key: "diy", label: "🛠️ Bricolage", match: ["bricolage", "outils", "perceuse", "bosch", "makita", "jardinage"] },
+    { key: "auto", label: "🚗 Auto/Moto", bucket: "auto" },
 
-    { key: "auto", label: "🚗 Auto/Moto", match: ["auto", "voiture", "moto", "pneu", "carburant", "garage"] },
+    { key: "fashion", label: "👕 Mode/Beauté", bucket: "lifestyle" },
 
-    { key: "fashion", label: "👕 Mode/Beauté", match: ["mode", "vetement", "chaussure", "nike", "adidas", "parfum", "beaute", "cosmétique"] },
+    { key: "baby", label: "🍼 Bébé/Enfant", bucket: "family" },
 
-    { key: "baby", label: "🍼 Bébé/Enfant", match: ["bébé", "enfant", "poussette", "jouet", "couches"] },
+    { key: "travel", label: "✈️ Voyage", bucket: "travel" },
 
-    { key: "travel", label: "✈️ Voyage", match: ["voyage", "travel", "vol", "flight", "hotel", "airbnb", "booking", "séjour"] },
+    { key: "leisure", label: "🎟️ Loisirs", bucket: "lifestyle" },
 
-    { key: "leisure", label: "🎟️ Loisirs", match: ["cinema", "concert", "sport", "sortie", "loisir", "parc"] },
-
-    { key: "free", label: "🎁 Gratuit", match: ["gratuit", "freebie", "offert", "échantillon"] },
+    { key: "free", label: "🎁 Gratuit", bucket: "general" },
   ];
 
   // =========================
@@ -66,24 +50,28 @@ export default function Page() {
         const firstItems = d.items || d || [];
         setItems(firstItems);
         if (d.cursor) setCursor(d.cursor);
-        // ❌ pas de glow ici (sinon spam visuel)
+        // ❌ pas de glow ici
       })
       .catch(() => setItems([]));
   }, []);
 
   // =========================
-  // ✅ Filtre local instantané
+  // ✅ Filtre par bucket API
   // =========================
   const filteredItems = useMemo(() => {
     if (selected === "all") return items;
 
     const cat = CATEGORIES.find((c) => c.key === selected);
-    const words = cat?.match || [];
-    if (!words.length) return items;
+    const bucket = cat?.bucket;
+    if (!bucket || bucket === "all") return items;
 
     return items.filter((it) => {
+      // ✅ bucket envoyé par l’API
+      if (it.bucket) return it.bucket === bucket;
+
+      // fallback ultra-safe si un item n’a pas bucket
       const text = `${it.category || ""} ${it.title || ""} ${it.summary || ""}`.toLowerCase();
-      return words.some((w) => text.includes(w.toLowerCase()));
+      return text.includes(bucket);
     });
   }, [items, selected]);
 
@@ -109,10 +97,11 @@ export default function Page() {
 
     slides.forEach((s) => io.observe(s));
     return () => io.disconnect();
-  }, [filteredItems]); // ✅ suit la liste filtrée
+  }, [filteredItems]);
 
   // =========================
-  // 3) Fetch more when near end (glow seulement sur "vrais" nouveaux deals)
+  // 3) Fetch more when near end
+  // glow seulement sur "vrais" nouveaux deals
   // =========================
   const fetchMore = useCallback(async () => {
     if (loading) return;
@@ -134,7 +123,7 @@ export default function Page() {
         setItems((prev) => {
           const merged = [...prev, ...nextItems];
 
-          // ✅ glow uniquement si on ajoute VRAIMENT des items
+          // ✅ glow uniquement si ajout réel
           if (typeof window !== "undefined" && merged.length > prev.length) {
             window.dispatchEvent(new Event("lbon-souk:new-deal"));
           }
@@ -168,7 +157,7 @@ export default function Page() {
         </div>
       </header>
 
-      {/* ✅ CHIPS FILTER marketplace (haute dimension) */}
+      {/* ✅ CHIPS FILTER marketplace */}
       <div className="chips">
         {CATEGORIES.map((c) => (
           <button
@@ -200,7 +189,9 @@ export default function Page() {
         ))}
 
         {!filteredItems.length && !loading && (
-          <div className="empty">Aucune opportunité pour cette catégorie.</div>
+          <div className="empty">
+            Aucune opportunité pour cette catégorie.
+          </div>
         )}
 
         {loading && <div className="tiktok-loading">Chargement...</div>}
@@ -208,7 +199,7 @@ export default function Page() {
 
       <BottomNav />
 
-      {/* ✅ Styles globaux + chips HD */}
+      {/* Styles globaux + chips HD (inchangés) */}
       <style jsx global>{`
         :root {
           --bg: #07090f;
@@ -280,9 +271,6 @@ export default function Page() {
           margin-left: 6px;
         }
 
-        /* =========================
-           ✅ CHIPS “HAUTE DIMENSION”
-        ========================= */
         .chips {
           display: flex;
           gap: 10px;
