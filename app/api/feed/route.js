@@ -57,7 +57,8 @@ function upgradePepperImage(url) {
 function pickImage(it) {
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradePepperImage(mc.$.url);
-  if (Array.isArray(mc) && mc[0]?.$?.url) return upgradePepperImage(mc[0].$?.url);
+  if (Array.isArray(mc) && mc[0]?.$?.url)
+    return upgradePepperImage(mc[0].$?.url);
   if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
 
   const html = it.contentEncoded || it.content || "";
@@ -80,7 +81,15 @@ function isValidImage(img) {
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  const smallSizes = ["80x80","100x100","120x120","150x150","160x160","180x180","200x150"];
+  const smallSizes = [
+    "80x80",
+    "100x100",
+    "120x120",
+    "150x150",
+    "160x160",
+    "180x180",
+    "200x150",
+  ];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
   if (lower.includes("thumbnail")) return false;
@@ -95,12 +104,32 @@ function isValidImage(img) {
 // Filter anti-alcool
 // ====================================
 function isAlcoholFree(item) {
-  const t = `${item.title || ""} ${item.summary || ""} ${item.category || ""}`.toLowerCase();
+  const t = `${item.title || ""} ${item.summary || ""} ${
+    item.category || ""
+  }`.toLowerCase();
   const bad = [
-    "alcool","alcohol","vin","wine","bière","beer",
-    "whisky","whiskey","vodka","rhum","rum","gin",
-    "champagne","cognac","tequila","aperitif","apéro",
-    "spiritueux","liqueur","bourbon","rosé","merlot",
+    "alcool",
+    "alcohol",
+    "vin",
+    "wine",
+    "bière",
+    "beer",
+    "whisky",
+    "whiskey",
+    "vodka",
+    "rhum",
+    "rum",
+    "gin",
+    "champagne",
+    "cognac",
+    "tequila",
+    "aperitif",
+    "apéro",
+    "spiritueux",
+    "liqueur",
+    "bourbon",
+    "rosé",
+    "merlot",
   ];
   return !bad.some((k) => t.includes(k));
 }
@@ -167,7 +196,9 @@ function normalizeItem(raw, i = 0, source = "rss") {
     score: raw.yscore?.globalScore ?? raw.score ?? null,
     category: raw.category || raw.type || "autre",
 
-    margin: raw.yscore ? `${raw.yscore.opportunityScore ?? "—"}%` : raw.margin,
+    margin: raw.yscore
+      ? `${raw.yscore.opportunityScore ?? "—"}%`
+      : raw.margin,
     risk: raw.yscore ? `${raw.yscore.riskScore ?? "—"}/100` : raw.risk,
     horizon: raw.horizon || "court terme",
 
@@ -193,58 +224,103 @@ function bucketize(item) {
 
   if (
     s.includes("travel") ||
-    c.includes("voyage") || c.includes("reise") ||
-    t.includes("vol ") || t.includes("hotel") ||
-    t.includes("flight") || t.includes("booking") ||
-    t.includes("airbnb") || t.includes("séjour")
-  ) return "travel";
+    c.includes("voyage") ||
+    c.includes("reise") ||
+    t.includes("vol ") ||
+    t.includes("hotel") ||
+    t.includes("flight") ||
+    t.includes("booking") ||
+    t.includes("airbnb") ||
+    t.includes("séjour")
+  )
+    return "travel";
 
   if (
-    s.includes("auto") || c.includes("auto") || c.includes("voiture") ||
-    t.includes("auto") || t.includes("voiture") ||
-    t.includes("moto") || t.includes("scooter") ||
-    t.includes("carburant") || t.includes("pneu")
-  ) return "auto";
+    s.includes("auto") ||
+    c.includes("auto") ||
+    c.includes("voiture") ||
+    t.includes("auto") ||
+    t.includes("voiture") ||
+    t.includes("moto") ||
+    t.includes("scooter") ||
+    t.includes("carburant") ||
+    t.includes("pneu")
+  )
+    return "auto";
 
   if (
-    s.includes("immo") || c.includes("immo") || c.includes("immobilier") ||
-    t.includes("appartement") || t.includes("maison") ||
-    t.includes("location") || t.includes("immobilier")
-  ) return "immo";
+    s.includes("immo") ||
+    c.includes("immo") ||
+    c.includes("immobilier") ||
+    t.includes("appartement") ||
+    t.includes("maison") ||
+    t.includes("location") ||
+    t.includes("immobilier")
+  )
+    return "immo";
 
   if (
-    s.includes("tech") || s.includes("gaming") ||
-    c.includes("tech") || c.includes("informatique") ||
-    t.includes("pc") || t.includes("ssd") || t.includes("ryzen") ||
-    t.includes("ps5") || t.includes("xbox") || t.includes("switch") ||
-    t.includes("iphone") || t.includes("samsung") || t.includes("xiaomi")
-  ) return "tech";
+    s.includes("tech") ||
+    s.includes("gaming") ||
+    c.includes("tech") ||
+    c.includes("informatique") ||
+    t.includes("pc") ||
+    t.includes("ssd") ||
+    t.includes("ryzen") ||
+    t.includes("ps5") ||
+    t.includes("xbox") ||
+    t.includes("switch") ||
+    t.includes("iphone") ||
+    t.includes("samsung") ||
+    t.includes("xiaomi")
+  )
+    return "tech";
 
   if (
-    s.includes("maison") || c.includes("maison") || c.includes("jardin") ||
-    t.includes("bricolage") || t.includes("déco") || t.includes("meuble") ||
-    t.includes("canapé") || t.includes("lit") || t.includes("aspirateur")
-  ) return "home";
+    s.includes("maison") ||
+    c.includes("maison") ||
+    c.includes("jardin") ||
+    t.includes("bricolage") ||
+    t.includes("déco") ||
+    t.includes("meuble") ||
+    t.includes("canapé") ||
+    t.includes("lit") ||
+    t.includes("aspirateur")
+  )
+    return "home";
 
   if (
-    c.includes("enfant") || c.includes("bébé") ||
-    t.includes("bébé") || t.includes("poussette") || t.includes("jouet")
-  ) return "family";
+    c.includes("enfant") ||
+    c.includes("bébé") ||
+    t.includes("bébé") ||
+    t.includes("poussette") ||
+    t.includes("jouet")
+  )
+    return "family";
 
   if (
-    c.includes("mode") || c.includes("beauté") || c.includes("sport") ||
-    t.includes("chaussure") || t.includes("parfum") ||
-    t.includes("nike") || t.includes("adidas")
-  ) return "lifestyle";
+    c.includes("mode") ||
+    c.includes("beauté") ||
+    c.includes("sport") ||
+    t.includes("chaussure") ||
+    t.includes("parfum") ||
+    t.includes("nike") ||
+    t.includes("adidas")
+  )
+    return "lifestyle";
 
   if (c.includes("alimentaire") || t.includes("snack") || t.includes("restaurant"))
     return "food";
 
   if (
     s.includes("community") ||
-    s.includes("dealabs") || s.includes("hukd") ||
-    s.includes("mydealz") || s.includes("pepper") || s.includes("chollo")
-  ) return "general";
+    s.includes("dealabs") ||
+    s.includes("hukd") ||
+    s.includes("mydealz") ||
+    s.includes("pepper") ||
+    s.includes("chollo")
+  )
+    return "general";
 
   return "other";
 }
@@ -253,7 +329,18 @@ function bucketize(item) {
 // Interleave TikTok style
 // ====================================
 function interleaveBuckets(buckets) {
-  const order = ["travel","general","auto","general","tech","home","family","lifestyle","general","other"];
+  const order = [
+    "travel",
+    "general",
+    "auto",
+    "general",
+    "tech",
+    "home",
+    "family",
+    "lifestyle",
+    "general",
+    "other",
+  ];
   const out = [];
   let guard = 0;
 
@@ -336,10 +423,9 @@ export async function GET(req) {
     let community = [];
     try {
       const base = getBaseUrl();
-      const res = await fetch(
-        base ? `${base}/api/publish` : "/api/publish",
-        { cache: "no-store" }
-      );
+      const res = await fetch(base ? `${base}/api/publish` : "/api/publish", {
+        cache: "no-store",
+      });
       const data = await res.json();
       community = (data.items || [])
         .map((it, i) => ({
@@ -356,31 +442,41 @@ export async function GET(req) {
     }
 
     // =========================
-    // Auctions live
+    // Auctions live  ✅ FIX ALIAS UI
     // =========================
     let auctions = [];
     try {
       const base = getBaseUrl();
-      const res = await fetch(
-        base ? `${base}/api/auctions` : "/api/auctions",
-        { cache: "no-store" }
-      );
+      const res = await fetch(base ? `${base}/api/auctions` : "/api/auctions", {
+        cache: "no-store",
+      });
       const data = await res.json();
 
       auctions = (data.items || [])
         .map((a) => {
           const img = a.images?.[0] || a.image || null;
+
           const draft = {
             ...a,
             image: img,
             affiliateUrl: makeAffiliateUrl(a.url),
             source: a.source || "community-auction",
-            bucket: a.bucket || "other",
             summary: a.summary || a.description || null,
             title: a.title || "Enchère",
+
+            // ✅ alias attendus par DealSlide
+            auction: true,
+            type: "auction",
+            startingBid: a.startingBid ?? a.startingPrice ?? null,
+            currentBid:
+              a.currentBid ?? a.currentPrice ?? a.startingPrice ?? null,
+            endsAt: a.endsAt ?? a.endAt ?? null,
+            bidCount: a.bidCount ?? a.offers ?? a.bids ?? null,
+
+            bucket: a.bucket || "other",
           };
 
-          draft.bucket = a.bucket || bucketize(draft);
+          draft.bucket = draft.bucket || bucketize(draft);
           return draft;
         })
         .filter((it) => isValidImage(it.image))
@@ -418,7 +514,9 @@ export async function GET(req) {
 
     // ✅ si on demande un bucket précis → retourne juste ça
     if (bucketParam !== "all") {
-      const only = (buckets[bucketParam] || []).sort(() => Math.random() - 0.5);
+      const only = (buckets[bucketParam] || []).sort(
+        () => Math.random() - 0.5
+      );
       return NextResponse.json({
         ok: true,
         items: only,
