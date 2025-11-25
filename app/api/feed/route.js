@@ -165,7 +165,7 @@ function makeAffiliateUrl(originalUrl) {
 }
 
 // ====================================
-// 6) Normalize item
+// 6) Normalize item (✅ halal supprimé)
 // ====================================
 function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
@@ -186,8 +186,6 @@ function normalizeItem(raw, i = 0, source = "rss") {
     risk: raw.yscore ? `${raw.yscore.riskScore ?? "—"}/100` : raw.risk,
     horizon: raw.horizon || "court terme",
 
-    halal: raw.yscore ? raw.yscore.halalScore >= 80 : raw.halal ?? null,
-
     affiliateUrl: null,
     source,
     publishedAt: raw.publishedAt || raw.isoDate || null,
@@ -206,7 +204,6 @@ function bucketize(item) {
   const c = (item.category || "").toLowerCase();
   const t = (item.title || "").toLowerCase();
 
-  // Travel / Vacances
   if (
     s.includes("travel") ||
     c.includes("voyage") || c.includes("reise") ||
@@ -215,20 +212,17 @@ function bucketize(item) {
     t.includes("airbnb") || t.includes("séjour")
   ) return "travel";
 
-  // Auto / Moto
   if (
     s.includes("auto") || c.includes("auto") || c.includes("voiture") ||
     t.includes("auto") || t.includes("voiture") ||
     t.includes("moto") || t.includes("scooter")
   ) return "auto";
 
-  // Immo / Maison
   if (
     s.includes("immo") || c.includes("immo") || c.includes("immobilier") ||
     t.includes("appartement") || t.includes("maison") || t.includes("location")
   ) return "immo";
 
-  // Tech / Gaming
   if (
     s.includes("tech") || s.includes("gaming") ||
     c.includes("tech") || c.includes("informatique") ||
@@ -236,30 +230,25 @@ function bucketize(item) {
     t.includes("ps5") || t.includes("xbox") || t.includes("switch")
   ) return "tech";
 
-  // Maison / Jardin / Bricolage / Déco
   if (
     s.includes("maison") || c.includes("maison") || c.includes("jardin") ||
     t.includes("bricolage") || t.includes("déco") || t.includes("meuble")
   ) return "home";
 
-  // Famille / Bébé / Enfants
   if (
     c.includes("enfant") || c.includes("bébé") ||
     t.includes("bébé") || t.includes("poussette") || t.includes("jouet")
   ) return "family";
 
-  // Mode / Beauté / Sport
   if (
     c.includes("mode") || c.includes("beauté") || c.includes("sport") ||
     t.includes("chaussure") || t.includes("parfum") || t.includes("nike")
   ) return "lifestyle";
 
-  // Food (hors alcool)
   if (
     c.includes("alimentaire") || t.includes("snack") || t.includes("restaurant")
   ) return "food";
 
-  // Général / Pepper / Community
   if (
     s.includes("community") ||
     s.includes("dealabs") || s.includes("hukd") ||
@@ -270,8 +259,7 @@ function bucketize(item) {
 }
 
 // ====================================
-// 8) Interleave TikTok style (mix large)
-// travel → general → auto → general → tech → home → family → lifestyle → repeat
+// 8) Interleave TikTok style
 // ====================================
 function interleaveBuckets(buckets) {
   const order = [
@@ -309,11 +297,9 @@ function interleaveBuckets(buckets) {
 export async function GET() {
   try {
     const SOURCES = [
-      // 🔥 Dealabs FR (main)
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
 
-      // ✅ FR “marketplace / grosses catégories”
       { url: "https://www.dealabs.com/rss/tag/auto", source: "dealabs-auto" },
       { url: "https://www.dealabs.com/rss/tag/moto", source: "dealabs-moto" },
       { url: "https://www.dealabs.com/rss/tag/immobilier", source: "dealabs-immo" },
@@ -327,18 +313,15 @@ export async function GET() {
       { url: "https://www.dealabs.com/rss/tag/sport-loisirs", source: "dealabs-sport" },
       { url: "https://www.dealabs.com/rss/tag/food", source: "dealabs-food" },
 
-      // 🌍 Voyages (Pepper autres pays)
       { url: "https://www.hotukdeals.com/rss/tag/travel", source: "travel-uk" },
       { url: "https://www.mydealz.de/rss/tag/reise", source: "travel-de" },
       { url: "https://nl.pepper.com/rss/tag/reizen", source: "travel-nl" },
 
-      // 🛒 Volume autres pays
       { url: "https://www.hotukdeals.com/rss/hot", source: "hukd-hot" },
       { url: "https://www.mydealz.de/rss/hot", source: "mydealz-hot" },
       { url: "https://nl.pepper.com/rss/hot", source: "pepper-nl-hot" },
       { url: "https://www.chollometro.com/rss/hot", source: "chollo-es" },
 
-      // 🎮 Tech / gaming (autres)
       { url: "https://www.hotukdeals.com/rss/tag/tech", source: "tech-uk" },
       { url: "https://www.mydealz.de/rss/tag/technik", source: "tech-de" },
     ];
@@ -354,16 +337,14 @@ export async function GET() {
       })
       .filter(Boolean);
 
-    // RSS items
     let items = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
       )
       .filter((it) => it.url)
-      .filter((it) => isValidImage(it.image)) // ✅ sans photo => rejeté
-      .filter(isAlcoholFree);                 // ✅ alcool => rejeté
+      .filter((it) => isValidImage(it.image))
+      .filter(isAlcoholFree);
 
-    // ✅ community deals (users)
     let community = [];
     try {
       const base = getBaseUrl();
@@ -385,10 +366,8 @@ export async function GET() {
       community = [];
     }
 
-    // merge community + rss
     items = [...community, ...items];
 
-    // buckets
     const buckets = {
       travel: [],
       general: [],
@@ -407,7 +386,6 @@ export async function GET() {
       (buckets[k] || buckets.other).push(it);
     }
 
-    // shuffle each bucket
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
