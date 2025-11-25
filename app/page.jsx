@@ -26,14 +26,13 @@ export default function Page() {
       match: ["deal", "promo", "réduction", "soldes", "bon plan"],
     },
 
-    // ✅ High-Tech + Informatique fusionnés ici
+    // ✅ High-Tech + Informatique fusionnés
     {
       key: "tech",
       label: "📱 High-Tech",
       match: [
         "tech", "high-tech", "smartphone", "iphone", "samsung", "xiaomi",
         "android", "apple",
-        // + mots Informatique
         "pc", "ordinateur", "laptop", "ssd", "ryzen", "intel", "ram", "gpu",
         "carte graphique",
       ],
@@ -109,7 +108,7 @@ export default function Page() {
 
     slides.forEach((s) => io.observe(s));
     return () => io.disconnect();
-  }, [filteredItems]);
+  }, [filteredItems]); // ✅ suit la liste filtrée
 
   // =========================
   // 3) Fetch more when near end
@@ -249,9 +248,10 @@ export default function Page() {
           width: 28px;
           height: 28px;
           border-radius: 8px;
-          background: radial-gradient(circle at 30% 30%, #6d7bff, transparent 60%),
-                      radial-gradient(circle at 70% 70%, #22e6a5, transparent 55%),
-                      #0b1020;
+          background:
+            radial-gradient(circle at 30% 30%, #6d7bff, transparent 60%),
+            radial-gradient(circle at 70% 70%, #22e6a5, transparent 55%),
+            #0b1020;
         }
         .status {
           font-size: 12px;
@@ -302,7 +302,6 @@ export default function Page() {
           font-size: 13px;
           white-space: nowrap;
           cursor: pointer;
-          transform: translateZ(0);
           transition: all .18s ease;
           box-shadow:
             0 6px 18px rgba(0,0,0,0.5),
@@ -322,7 +321,6 @@ export default function Page() {
         }
 
         .chipGlow {
-          content: "";
           position: absolute;
           inset: -40%;
           background:
