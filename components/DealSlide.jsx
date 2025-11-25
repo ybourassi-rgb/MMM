@@ -18,7 +18,6 @@ export default function DealSlide({ item, active }) {
     url,
     link,
     affiliateUrl,
-    halal,
     summary,
     source,
   } = item || {};
@@ -87,7 +86,7 @@ export default function DealSlide({ item, active }) {
     } catch {}
   };
 
-  // ✅ Analyse qui marche : envoie vers /yscore
+  // ✅ Analyse -> /yscore
   const onAnalyze = () => {
     if (!finalUrl) return;
     const q = encodeURIComponent(finalUrl);
@@ -108,6 +107,7 @@ export default function DealSlide({ item, active }) {
 
   return (
     <div className="deal-slide">
+      {/* ===== MEDIA TOP ===== */}
       <div className="deal-media">
         <Image
           src={finalImage}
@@ -123,32 +123,34 @@ export default function DealSlide({ item, active }) {
         <div className="deal-gradient" />
 
         <div className="deal-top">
-          {score != null && <div className="deal-chip score">Y-Score {score}</div>}
+          {score != null && (
+            <div className="deal-chip score">Y-Score {score}</div>
+          )}
           {category && <div className="deal-chip">{category}</div>}
           {city && <div className="deal-chip">📍 {city}</div>}
-          {halal != null && (
-            <div className={`deal-chip ${halal ? "halal" : "haram"}`}>
-              {halal ? "Halal ✅" : "Non Halal ⚠️"}
-            </div>
-          )}
         </div>
       </div>
 
+      {/* ===== ACTIONS RIGHT ===== */}
       <div className="deal-actions">
         <button className="action-btn" onClick={onFav}>
           {fav ? "❤️" : "🤍"}<span>Favori</span>
         </button>
+
         <button className="action-btn" onClick={onShare}>
           📤<span>Partager</span>
         </button>
+
         <button className="action-btn" onClick={onAnalyze} disabled={!finalUrl}>
           🧠<span>Analyse</span>
         </button>
+
         <button className="action-btn" onClick={onSee} disabled={!finalUrl}>
           🔗<span>Voir</span>
         </button>
       </div>
 
+      {/* ===== CONTENT BOTTOM ===== */}
       <div className="deal-content">
         <h2 className="deal-title">{title}</h2>
 
@@ -200,8 +202,8 @@ export default function DealSlide({ item, active }) {
           position: absolute;
           inset: 0;
           background:
-            radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.15), transparent 55%),
-            linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.7));
+            radial-gradient(900px 600px at 50% 0%, rgba(0,0,0,0.18), transparent 55%),
+            linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.75));
           pointer-events: none;
         }
 
@@ -219,7 +221,7 @@ export default function DealSlide({ item, active }) {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 0.35rem 0.7rem;
+          padding: 0.38rem 0.75rem;
           border-radius: 999px;
           font-weight: 800;
           font-size: 12px;
@@ -227,13 +229,16 @@ export default function DealSlide({ item, active }) {
           background: rgba(10,14,25,0.7);
           box-shadow: 0 6px 22px rgba(0,0,0,0.35);
           backdrop-filter: blur(6px);
+          letter-spacing: .2px;
         }
         .deal-chip.score {
-          background: linear-gradient(90deg, rgba(78,163,255,0.25), rgba(34,230,165,0.2));
-          border-color: rgba(78,163,255,0.5);
+          background: linear-gradient(
+            90deg,
+            rgba(78,163,255,0.28),
+            rgba(34,230,165,0.22)
+          );
+          border-color: rgba(78,163,255,0.55);
         }
-        .deal-chip.halal { border-color: rgba(0,227,137,0.6); }
-        .deal-chip.haram { border-color: rgba(255,107,107,0.7); }
 
         .deal-actions {
           position: absolute;
@@ -246,7 +251,7 @@ export default function DealSlide({ item, active }) {
         }
 
         .action-btn {
-          background: rgba(12,16,28,0.7);
+          background: rgba(12,16,28,0.75);
           border: 1px solid rgba(255, 255, 255, 0.12);
           color: #fff;
           border-radius: 16px;
@@ -258,7 +263,7 @@ export default function DealSlide({ item, active }) {
           font-size: 18px;
           min-width: 58px;
           backdrop-filter: blur(8px);
-          box-shadow: 0 8px 26px rgba(0,0,0,0.4);
+          box-shadow: 0 8px 26px rgba(0,0,0,0.45);
           transition: transform .15s ease, opacity .15s ease;
         }
         .action-btn:active { transform: scale(0.96); }
@@ -282,9 +287,9 @@ export default function DealSlide({ item, active }) {
         .deal-title {
           font-size: 19px;
           font-weight: 900;
-          line-height: 1.2;
+          line-height: 1.22;
           margin: 0;
-          text-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+          text-shadow: 0 8px 22px rgba(0, 0, 0, 0.65);
         }
 
         .deal-price {
@@ -297,8 +302,8 @@ export default function DealSlide({ item, active }) {
         .deal-summary {
           margin-top: 8px;
           font-size: 13px;
-          line-height: 1.45;
-          color: rgba(255,255,255,0.82);
+          line-height: 1.48;
+          color: rgba(255,255,255,0.84);
           max-height: 6.5em;
           overflow: hidden;
           display: -webkit-box;
@@ -314,7 +319,7 @@ export default function DealSlide({ item, active }) {
         }
 
         .metric {
-          background: rgba(12,16,28,0.7);
+          background: rgba(12,16,28,0.75);
           border: 1px solid rgba(255,255,255,0.12);
           padding: 10px;
           border-radius: 12px;
