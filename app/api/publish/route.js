@@ -1,4 +1,3 @@
-// app/api/publish/route.js
 import { NextResponse } from "next/server";
 
 const UP_URL = process.env.UPSTASH_REST_URL;
@@ -17,28 +16,15 @@ async function upstash(cmd, args = []) {
   return data.result;
 }
 
-// ===== anti alcool =====
-function isAlcoholText(text = "") {
-  const t = text.toLowerCase();
-  const bad = [
-    "alcool","alcohol","vin","wine","bière","beer","whisky","whiskey",
-    "vodka","rhum","rum","gin","champagne","cognac","tequila",
-    "aperitif","apéro","spiritueux","liqueur","bourbon","rosé","merlot"
-  ];
-  return bad.some((k) => t.includes(k));
-}
-
 export async function GET() {
   try {
     if (!UP_URL || !UP_TOKEN) {
       return NextResponse.json({ ok: true, items: [] });
     }
 
-    const raw = await upstash("LRANGE", [KEY, 0, 100]);
+    const raw = await upstash("LRANGE", [KEY, 0, 150]);
     const items = (raw || [])
-      .map((x) => {
-        try { return JSON.parse(x); } catch { return null; }
-      })
+      .map((x) => { try { return JSON.parse(x); } catch { return null; } })
       .filter(Boolean);
 
     return NextResponse.json({ ok: true, items });
@@ -61,67 +47,79 @@ export async function POST(req) {
 
     const body = await req.json();
     let {
+      sellerName,
       title,
       url,
       image,
       category,
-      city,
-      price,
       condition,
+      price,
+      city,
       description,
+      lat,
+      lng,
     } = body || {};
 
-    if (!title || !url) {
+    if (!sellerName || !title || !url) {
       return NextResponse.json(
-        { ok: false, error: "Titre + lien obligatoires" },
+        { ok: false, error: "Pseudo vendeur + titre + lien obligatoires" },
         { status: 400 }
       );
     }
 
+    sellerName = String(sellerName).trim();
     title = String(title).trim();
     url = String(url).trim();
     image = image?.trim() || null;
     category = category || "autre";
-    city = city?.trim() || null;
-    price = price?.trim() || null;
     condition = condition || "neuf";
+    price = price ? String(price).trim() : null;
+    city = city?.trim() || null;
     description = description?.trim() || null;
 
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
 
-    // ✅ image obligatoire
+    // ✅ bloque deals sans image
     if (!image) {
       return NextResponse.json(
-        { ok: false, error: "Image obligatoire pour publier une annonce." },
+        { ok: false, error: "Image obligatoire pour publier un deal." },
         { status: 400 }
       );
     }
 
-    // ✅ filtre alcool
-    const textToCheck = `${title} ${category} ${description || ""}`;
-    if (isAlcoholText(textToCheck)) {
+    // ✅ filtre anti-alcool
+    const text = `${title} ${category} ${description || ""}`.toLowerCase();
+    const bad = [
+      "alcool","alcohol","vin","wine","bière","beer","whisky","whiskey",
+      "vodka","rhum","rum","gin","champagne","cognac","tequila",
+      "aperitif","apéro","spiritueux","liqueur","bourbon",
+    ];
+    if (bad.some((k) => text.includes(k))) {
       return NextResponse.json(
-        { ok: false, error: "Annonces alcool refusées." },
+        { ok: false, error: "Deals alcool refusés." },
         { status: 400 }
       );
     }
 
     const item = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      sellerName,
       title,
       url,
       link: url,
       image,
       category,
-      city,
-      price,
       condition,
+      price,
+      city,
       description,
+      lat: lat ?? null,
+      lng: lng ?? null,
       source: "community",
       publishedAt: new Date().toISOString(),
-      summary: null,
+      summary: description || null,
     };
 
     await upstash("LPUSH", [KEY, JSON.stringify(item)]);
