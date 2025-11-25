@@ -1,91 +1,78 @@
-// app/api/auctions/route.js
 import { NextResponse } from "next/server";
+import { redis } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// frais Alcopa
-const FEE_RATE = 0.17;
+const json = (data, status = 200) =>
+  NextResponse.json(data, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 
-// mini helper
-const safeNum = (v) => {
-  const n = Number(String(v).replace(",", "."));
-  return Number.isFinite(n) ? n : null;
-};
-
-function normalizeAuction(raw, i=0, source="alcopa") {
-  const prix_depart = safeNum(raw.prix_depart ?? raw.price_start ?? raw.startPrice);
-  const frais = prix_depart != null ? Math.round(prix_depart * FEE_RATE) : null;
-  const prix_total = (prix_depart != null && frais != null) ? prix_depart + frais : null;
-
-  const cote = safeNum(raw.cote_argus ?? raw.argus ?? raw.marketPrice);
-  const invest_max = cote != null ? Math.round(cote * 0.7) : null;
-
-  return {
-    id: raw.lot || raw.id || `${Date.now()}-auc-${i}`,
-    title: raw.modele || raw.title || "Lot enchère",
-    image: raw.image || raw.img || null,
-    url: raw.url || raw.link || null,
-    link: raw.url || raw.link || null,
-
-    price: prix_depart != null ? `${prix_depart}€ (départ)` : null,
-    score: raw.yscore?.globalScore ?? raw.score ?? null,
-    category: "enchère",
-    bucket: "auction",
-
-    // metrics DealSlide
-    margin: cote && prix_total 
-      ? `${Math.max(0, Math.round(((cote - prix_total)/cote)*100))}%`
-      : null,
-
-    risk: prix_total && invest_max
-      ? `${prix_total <= invest_max ? 30 : 70}/100`
-      : null,
-
-    horizon: "court terme",
-
-    // champs utiles pour plus tard
-    auction: {
-      lot: raw.lot || null,
-      ville: raw.ville || raw.city || null,
-      annee: raw.annee || raw.year || null,
-      km: raw.km || raw.mileage || null,
-      prix_depart,
-      frais,
-      prix_total,
-      cote,
-      invest_max,
-    },
-
-    source,
-    summary: raw.resume || raw.summary || null,
-    publishedAt: raw.date || null,
-  };
+function safeInt(v, d = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n) : d;
 }
 
-export async function GET() {
+export async function POST(req) {
   try {
-    // TODO: pour l’instant on lit une source statique
-    // plus tard tu me donnes CSV/JSON et je branche
-    const mock = [
-      // EXEMPLE
-      {
-        lot: "A123",
-        ville: "Paris",
-        modele: "Peugeot 208",
-        annee: 2020,
-        km: 54000,
-        prix_depart: 5200,
-        cote_argus: 9000,
-        url: "https://exemple-alcopa/lot/A123",
-        image: null,
-        resume: "Bon état, CT ok.",
-      }
-    ];
+    const body = await req.json().catch(() => ({}));
 
-    const items = mock.map((r, i) => normalizeAuction(r, i));
-    return NextResponse.json({ ok: true, items });
+    const title = (body.title || "").trim();
+    const description = (body.description || "").trim();
+    const images = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
+    const category = (body.category || "autre").trim();
+    const sellerId = (body.sellerId || "anon").trim();
+
+    const startPrice = safeInt(body.startPrice, 1);
+    const minIncrement = safeInt(body.minIncrement, 1);
+    const durationHours = safeInt(body.durationHours, 24);
+    const reservePrice =
+      body.reservePrice == null ? null : safeInt(body.reservePrice, null);
+
+    if (!title || !startPrice || !durationHours) {
+      return json({ ok: false, error: "missing_fields" }, 400);
+    }
+
+    const id = `auc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const endsAt = Date.now() + durationHours * 3600 * 1000;
+
+    const auctionItem = {
+      id,
+      type: "auction",
+      title,
+      description,
+      images,
+      category,
+      sellerId,
+
+      startPrice,
+      currentPrice: startPrice,
+      minIncrement,
+      reservePrice,
+
+      endsAt,
+      status: "live",
+      bidsCount: 0,
+      watchersCount: 0,
+      createdAt: Date.now(),
+      source: "community-auction",
+      bucket: body.bucket || null,
+    };
+
+    // store item
+    await redis.set(`auction:${id}`, auctionItem);
+
+    // index live auctions
+    await redis.zadd("auctions:live", {
+      score: endsAt,
+      member: id,
+    });
+
+    return json({ ok: true, item: auctionItem });
   } catch (e) {
-    return NextResponse.json({ ok:false, error:e?.message, items:[] }, { status:500 });
+    console.error("auction/create", e);
+    return json({ ok: false, error: "create_failed" }, 500);
   }
 }
