@@ -309,7 +309,11 @@ function bucketize(item) {
   )
     return "lifestyle";
 
-  if (c.includes("alimentaire") || t.includes("snack") || t.includes("restaurant"))
+  if (
+    c.includes("alimentaire") ||
+    t.includes("snack") ||
+    t.includes("restaurant")
+  )
     return "food";
 
   if (
@@ -476,7 +480,12 @@ export async function GET(req) {
             bucket: a.bucket || "other",
           };
 
-          draft.bucket = draft.bucket || bucketize(draft);
+          // ✅ si bucket absent ou "other", on le recalcule
+          draft.bucket =
+            !draft.bucket || draft.bucket === "other"
+              ? bucketize(draft)
+              : draft.bucket;
+
           return draft;
         })
         .filter((it) => isValidImage(it.image))
