@@ -2,27 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
 export default function BottomNav() {
   const pathname = usePathname();
 
   const isActive = (href) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
-
-  // 🔥 Glow temporaire quand un nouveau deal arrive
-  const [newGlow, setNewGlow] = useState(false);
-
-  useEffect(() => {
-    // On écoute un event custom depuis le feed
-    const onNewDeal = () => {
-      setNewGlow(true);
-      setTimeout(() => setNewGlow(false), 3800);
-    };
-
-    window.addEventListener("lbon-souk:new-deal", onNewDeal);
-    return () => window.removeEventListener("lbon-souk:new-deal", onNewDeal);
-  }, []);
 
   const Item = ({ href, label, icon }) => {
     const active = isActive(href);
@@ -43,15 +28,8 @@ export default function BottomNav() {
           <Item href="/" label="Accueil" icon="🏠" />
           <Item href="/search" label="Recherche" icon="🔎" />
 
-          {/* FAB central */}
-          <Link
-            href="/publier"
-            className={[
-              "nav-fab",
-              isActive("/publier") ? "active" : "",
-              newGlow ? "new-glow" : "",
-            ].join(" ")}
-          >
+          {/* Bouton central (FAB) */}
+          <Link href="/publier" className={`nav-fab ${isActive("/publier") ? "active" : ""}`}>
             <div className="fab-ring" />
             <div className="fab-core">
               <div className="fab-plus">＋</div>
@@ -59,6 +37,7 @@ export default function BottomNav() {
             </div>
           </Link>
 
+          {/* Si tu veux l'appeler Gains mais route = /affiliation */}
           <Item href="/affiliation" label="Gains" icon="💰" />
           <Item href="/profile" label="Profil" icon="👤" />
         </div>
@@ -74,7 +53,7 @@ export default function BottomNav() {
           z-index: 50;
           display: flex;
           justify-content: center;
-          pointer-events: none;
+          pointer-events: none; /* on réactive sur les éléments internes */
         }
 
         .nav-bg {
@@ -140,13 +119,6 @@ export default function BottomNav() {
           text-decoration: none;
           transform: translateY(-18px);
           transition: transform .18s ease;
-          animation: fabPulse 2.6s ease-in-out infinite;
-        }
-
-        /* pulse fin, premium */
-        @keyframes fabPulse {
-          0%, 100% { transform: translateY(-18px) scale(1); }
-          50% { transform: translateY(-18px) scale(1.04); }
         }
 
         .fab-ring {
@@ -159,7 +131,7 @@ export default function BottomNav() {
             radial-gradient(60px 60px at 70% 80%, rgba(34,230,165,0.9), transparent 58%),
             rgba(12,16,28,0.9);
           filter: blur(10px);
-          opacity: .75;
+          opacity: .8;
         }
 
         .fab-core {
@@ -216,28 +188,7 @@ export default function BottomNav() {
             0 18px 50px rgba(34,230,165,0.25),
             0 0 0 1px rgba(34,230,165,0.35) inset;
         }
-
-        /* glow quand nouveau deal arrive */
-        .nav-fab.new-glow .fab-ring {
-          opacity: 1;
-          filter: blur(12px);
-          animation: newDealGlow 1.2s ease-in-out infinite;
-        }
-        .nav-fab.new-glow .fab-core {
-          border-color: rgba(109,123,255,0.95);
-          box-shadow:
-            0 20px 60px rgba(109,123,255,0.35),
-            0 0 0 1px rgba(109,123,255,0.5) inset;
-        }
-        @keyframes newDealGlow {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.08); }
-        }
-
-        .nav-fab:active {
-          transform: translateY(-16px) scale(0.97);
-          animation: none;
-        }
+        .nav-fab:active { transform: translateY(-16px) scale(0.97); }
       `}</style>
     </>
   );
