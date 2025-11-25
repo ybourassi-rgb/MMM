@@ -3,155 +3,211 @@
 import { useMemo } from "react";
 
 export default function YScorePanel({ data, url }) {
-  // data peut venir sous plusieurs formes => on normalise
-  const y = data?.yscore || data || {};
+  const s = data || {};
 
-  const score = y.score ?? y.total ?? y.value ?? null;
-  const margin = y.margin ?? y.profit ?? null;
-  const risk = y.risk ?? y.risque ?? null;
-  const horizon = y.horizon ?? y.term ?? null;
-  const notes = y.notes ?? y.explain ?? y.summary ?? null;
+  // compat multi-formats
+  const global =
+    s.globalScore ?? s.score ?? s.global ?? s.yscore ?? null;
 
+  const risk =
+    s.riskScore ?? s.risk ?? null;
+
+  const opp =
+    s.opportunityScore ?? s.opportunity ?? s.margin ?? null;
+
+  // horizon peut venir en texte (court terme etc.)
+  const horizon =
+    s.horizon ?? s.timeHorizon ?? s.term ?? null;
+
+  const reasoning =
+    s.reasoning ?? s.explanation ?? s.why ?? "";
+
+  // badges simples
   const badge = useMemo(() => {
-    if (score == null) return { label: "Analyse partielle", cls: "muted" };
-    if (score >= 80) return { label: "🔥 Exceptionnel", cls: "good" };
-    if (score >= 60) return { label: "✅ Très bon", cls: "good" };
-    if (score >= 40) return { label: "⭐ Correct", cls: "warn" };
-    return { label: "⚠️ Risqué", cls: "bad" };
-  }, [score]);
+    if (global == null) return "Analyse partielle";
+    if (global >= 80) return "🔥 Top deal";
+    if (global >= 60) return "✅ Bon plan";
+    if (global >= 40) return "⚠️ Moyen";
+    return "❌ Risqué";
+  }, [global]);
+
+  const fmt = (v) =>
+    v == null || Number.isNaN(Number(v)) ? "—" : Math.round(Number(v));
 
   return (
-    <div className="panel">
-      <div className="head">
-        <div>
-          <div className="title">Résultat Y-Score</div>
-          {url && (
-            <div className="url" title={url}>
-              {url}
+    <div className="ys-wrap">
+      <div className="ys-card">
+        <div className="ys-head">
+          <div>
+            <div className="ys-title">Résultat Y-Score</div>
+            {url && (
+              <div className="ys-url">
+                {url.length > 52 ? url.slice(0, 52) + "..." : url}
+              </div>
+            )}
+          </div>
+          <div className="ys-badge">{badge}</div>
+        </div>
+
+        <div className="ys-main">
+          <div className="ys-main-title">Score global</div>
+          <div className="ys-main-score">
+            {fmt(global)}
+            <span>/100</span>
+          </div>
+        </div>
+
+        <div className="ys-row">
+          <div className="ys-mini green">
+            <div className="ys-mini-title">Potentiel</div>
+            <div className="ys-mini-score">{fmt(opp)}</div>
+          </div>
+
+          <div className="ys-mini orange">
+            <div className="ys-mini-title">Risque</div>
+            <div className="ys-mini-score">{fmt(risk)}</div>
+          </div>
+
+          <div className="ys-mini">
+            <div className="ys-mini-title">Horizon</div>
+            <div className="ys-mini-score">
+              {horizon || "—"}
             </div>
-          )}
+          </div>
         </div>
-        <div className={`badge ${badge.cls}`}>{badge.label}</div>
-      </div>
 
-      <div className="scoreBox">
-        <div className="scoreLabel">Score global</div>
-        <div className="scoreValue">{score ?? "—"}</div>
-        <div className="scoreHint">/100</div>
+        {!!reasoning && (
+          <div className="ys-reason">
+            <div className="ys-reason-title">Pourquoi ?</div>
+            <div className="ys-reason-text">{reasoning}</div>
+          </div>
+        )}
       </div>
-
-      <div className="grid">
-        <Metric label="Marge" value={margin} tone="green" />
-        <Metric label="Risque" value={risk} tone="orange" />
-        <Metric label="Horizon" value={horizon} />
-      </div>
-
-      {notes && (
-        <div className="notes">
-          <div className="notesTitle">Analyse IA</div>
-          <div className="notesText">{String(notes)}</div>
-        </div>
-      )}
 
       <style jsx>{`
-        .panel {
-          background: #0f1422;
-          border: 1px solid #1b2440;
-          border-radius: 16px;
-          padding: 14px;
-          display: grid;
-          gap: 12px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+        .ys-wrap {
+          width: 100%;
+          padding: 6px 2px;
         }
-        .head {
+
+        .ys-card {
+          background: radial-gradient(
+              1000px 500px at 50% -20%,
+              rgba(78, 163, 255, 0.12),
+              transparent 60%
+            ),
+            #0f1422;
+          border: 1px solid rgba(78, 163, 255, 0.22);
+          border-radius: 18px;
+          padding: 14px;
+          box-shadow: 0 15px 45px rgba(0, 0, 0, 0.55);
+        }
+
+        .ys-head {
           display: flex;
           justify-content: space-between;
           gap: 10px;
-          align-items: center;
+          align-items: flex-start;
+          margin-bottom: 12px;
         }
-        .title {
-          font-weight: 900;
-          font-size: 17px;
-        }
-        .url {
-          font-size: 11px;
-          color: #aeb6cc;
-          max-width: 62vw;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          margin-top: 2px;
-        }
-        .badge {
-          font-size: 11px;
-          font-weight: 900;
-          padding: 6px 10px;
-          border-radius: 999px;
-          border: 1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.06);
-        }
-        .badge.good { border-color: rgba(0,227,137,0.5); color: #00e389; }
-        .badge.warn { border-color: rgba(255,180,84,0.5); color: #ffb454; }
-        .badge.bad  { border-color: rgba(255,107,107,0.55); color: #ff6b6b; }
-        .badge.muted { color:#aeb6cc; }
 
-        .scoreBox {
-          background: radial-gradient(300px 120px at 50% 0, rgba(78,163,255,0.12), transparent 70%), #0b1020;
-          border: 1px solid #1b2440;
+        .ys-title {
+          font-size: 18px;
+          font-weight: 900;
+          letter-spacing: 0.2px;
+        }
+
+        .ys-url {
+          font-size: 11px;
+          opacity: 0.7;
+          margin-top: 4px;
+          word-break: break-all;
+        }
+
+        .ys-badge {
+          font-size: 11px;
+          font-weight: 900;
+          padding: 6px 8px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ys-main {
+          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 14px;
           padding: 14px;
           text-align: center;
+          margin-bottom: 10px;
         }
-        .scoreLabel { font-size: 12px; color:#aeb6cc; font-weight: 800; }
-        .scoreValue { font-size: 42px; font-weight: 1000; letter-spacing: .5px; }
-        .scoreHint { font-size: 11px; color:#8b93a7; font-weight: 700; margin-top: -2px; }
+        .ys-main-title {
+          font-size: 12px;
+          opacity: 0.8;
+          font-weight: 700;
+        }
+        .ys-main-score {
+          margin-top: 6px;
+          font-size: 36px;
+          font-weight: 900;
+          line-height: 1;
+          letter-spacing: 0.5px;
+        }
+        .ys-main-score span {
+          font-size: 14px;
+          opacity: 0.8;
+          margin-left: 4px;
+          font-weight: 800;
+        }
 
-        .grid {
+        .ys-row {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0,1fr));
+          grid-template-columns: repeat(3, 1fr);
           gap: 8px;
         }
-        .notes {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 12px;
-          padding: 10px;
+
+        .ys-mini {
+          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
+          padding: 12px;
+          text-align: center;
         }
-        .notesTitle {
+        .ys-mini-title {
+          font-size: 12px;
+          opacity: 0.8;
+          font-weight: 800;
+        }
+        .ys-mini-score {
+          margin-top: 6px;
+          font-size: 18px;
+          font-weight: 900;
+        }
+        .ys-mini.green .ys-mini-score {
+          color: #00e389;
+        }
+        .ys-mini.orange .ys-mini-score {
+          color: #ffbb55;
+        }
+
+        .ys-reason {
+          margin-top: 12px;
+          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
+          padding: 12px;
+        }
+        .ys-reason-title {
           font-size: 12px;
           font-weight: 900;
           margin-bottom: 6px;
+          opacity: 0.9;
         }
-        .notesText {
+        .ys-reason-text {
           font-size: 13px;
           line-height: 1.5;
-          color: rgba(255,255,255,0.9);
-          white-space: pre-wrap;
+          opacity: 0.9;
         }
-      `}</style>
-    </div>
-  );
-}
-
-function Metric({ label, value, tone }) {
-  return (
-    <div className={`m ${tone || ""}`}>
-      <div className="l">{label}</div>
-      <div className="v">{value ?? "—"}</div>
-      <style jsx>{`
-        .m{
-          background:#0b1020;
-          border:1px solid #1b2440;
-          border-radius:12px;
-          padding:10px;
-          display:grid;
-          gap:4px;
-          text-align:center;
-        }
-        .l{ font-size:12px; color:#aeb6cc; font-weight:800; }
-        .v{ font-size:15px; font-weight:900; }
-        .green .v{ color:#00e389; }
-        .orange .v{ color:#ffb454; }
       `}</style>
     </div>
   );
