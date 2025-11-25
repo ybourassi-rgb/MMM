@@ -57,7 +57,7 @@ export default function Page() {
   ];
 
   // =========================
-  // 1) Load initial feed
+  // 1) Load initial feed (SANS glow)
   // =========================
   useEffect(() => {
     fetch("/api/feed", { cache: "no-store" })
@@ -66,11 +66,7 @@ export default function Page() {
         const firstItems = d.items || d || [];
         setItems(firstItems);
         if (d.cursor) setCursor(d.cursor);
-
-        // ✅ Glow FAB si on reçoit des deals au chargement
-        if (firstItems.length && typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("lbon-souk:new-deal"));
-        }
+        // ❌ pas de glow ici (sinon spam visuel)
       })
       .catch(() => setItems([]));
   }, []);
@@ -116,7 +112,7 @@ export default function Page() {
   }, [filteredItems]); // ✅ suit la liste filtrée
 
   // =========================
-  // 3) Fetch more when near end
+  // 3) Fetch more when near end (glow seulement sur "vrais" nouveaux deals)
   // =========================
   const fetchMore = useCallback(async () => {
     if (loading) return;
@@ -138,9 +134,9 @@ export default function Page() {
         setItems((prev) => {
           const merged = [...prev, ...nextItems];
 
-          // ✅ Glow FAB quand des nouveaux deals arrivent
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("lbon-souk:new-deal"));
+          // ✅ glow uniquement si on ajoute VRAIMENT des items
+          if (typeof window !== "undefined" && merged.length > prev.length) {
+            window.dispatchEvent(new Event("lbon-souk:new-deal"));
           }
 
           return merged;
