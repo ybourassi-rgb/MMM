@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function PublishPage() {
@@ -18,14 +18,40 @@ export default function PublishPage() {
   const [city, setCity] = useState("");
   const [description, setDescription] = useState("");
 
+  // ✅ vendeur simple (stocké localement)
+  const [sellerName, setSellerName] = useState("");
+
+  // ✅ coords pour "autour de moi"
+  const [lat, setLat] = useState(null);
+  const [lng, setLng] = useState(null);
+
   const [loading, setLoading] = useState(false);
+
+  // récupérer pseudo vendeur déjà utilisé
+  useEffect(() => {
+    const saved = localStorage.getItem("sellerName");
+    if (saved) setSellerName(saved);
+  }, []);
+
+  // géoloc auto (si accepté)
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude);
+        setLng(pos.coords.longitude);
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 6000 }
+    );
+  }, []);
 
   // ===== Upload téléphone -> base64 =====
   const onPickFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // petit garde-fou taille (base64 sinon trop lourd pour Upstash)
+    // garde-fou taille (base64 sinon trop lourd pour Upstash)
     if (file.size > 700 * 1024) {
       alert("Image trop lourde. Choisis une photo plus légère (moins de 700KB).");
       return;
@@ -40,7 +66,8 @@ export default function PublishPage() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!title || !url) return alert("Titre + lien obligatoires");
+    if (!sellerName || !title || !url)
+      return alert("Pseudo vendeur + titre + lien obligatoires");
 
     // image soit URL soit upload
     const finalImage = preview || imageUrl?.trim();
@@ -52,6 +79,7 @@ export default function PublishPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sellerName,
           title,
           url,
           image: finalImage,
@@ -60,11 +88,16 @@ export default function PublishPage() {
           price,
           city,
           description,
+          lat,
+          lng,
         }),
       });
 
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Erreur publish");
+
+      // ✅ mémorise vendeur
+      localStorage.setItem("sellerName", sellerName);
 
       alert("Annonce publiée ✅");
       router.push("/");
@@ -83,6 +116,17 @@ export default function PublishPage() {
       </header>
 
       <form className="form" onSubmit={onSubmit}>
+
+        {/* ✅ vendeur */}
+        <label>
+          Pseudo vendeur *
+          <input
+            value={sellerName}
+            onChange={(e) => setSellerName(e.target.value)}
+            placeholder="Ex: Yassine93"
+          />
+        </label>
+
         {/* ===== Titre ===== */}
         <label>
           Titre *
