@@ -4,86 +4,69 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export default function BottomNav() {
-  const pathname = usePathname() || "/";
+  const pathname = usePathname();
 
-  const isActive = (href) => {
-    if (href === "/") return pathname === "/";
-    return pathname.startsWith(href);
-  };
+  const tabs = [
+    { href: "/", label: "Feed", icon: "🏠" },
+    { href: "/y-score", label: "Y-Score", icon: "📊" },
+    // CTA central
+    { href: "/publish", label: "Publier", icon: "➕", cta: true },
+    { href: "/affiliation", label: "Affiliation", icon: "💰" },
+    { href: "/profile", label: "Profil", icon: "👤" },
+  ];
 
   return (
-    <nav className="bottomnav">
-      <Link href="/" className={`navitem ${isActive("/") ? "active" : ""}`}>
-        Feed
-      </Link>
-
-      <Link href="/yscore" className={`navitem ${isActive("/yscore") ? "active" : ""}`}>
-        Y-Score
-      </Link>
-
-      {/* ✅ bouton Publier mis en avant */}
-      <Link
-        href="/publish"
-        className={`navitem publish ${isActive("/publish") ? "active" : ""}`}
-      >
-        Publier
-      </Link>
-
-      <Link
-        href="/affiliation"
-        className={`navitem ${isActive("/affiliation") ? "active" : ""}`}
-      >
-        Affiliation
-      </Link>
-
-      <Link href="/profile" className={`navitem ${isActive("/profile") ? "active" : ""}`}>
-        Profil
-      </Link>
+    <nav className="nav">
+      {tabs.map((t) => {
+        const active = pathname === t.href;
+        return (
+          <Link
+            key={t.href}
+            href={t.href}
+            className={`tab ${active ? "active" : ""} ${t.cta ? "cta" : ""}`}
+          >
+            <div className="icon">{t.icon}</div>
+            <div className="label">{t.label}</div>
+          </Link>
+        );
+      })}
 
       <style jsx>{`
-        .bottomnav {
+        .nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          bottom: 0; left: 0; right: 0;
           height: 64px;
-          border-top: 1px solid #141b33;
-          background: rgba(7, 9, 15, 0.95);
-          backdrop-filter: blur(8px);
-          display: flex;
-          justify-content: space-around;
-          align-items: center;
-          z-index: 9999;
-          pointer-events: auto;
+          background: #07090f;
+          border-top: 1px solid #121a33;
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          z-index: 20;
         }
-
-        .navitem {
-          font-size: 12px;
-          color: #aeb6cc;
+        .tab {
+          display: grid;
+          place-items: center;
+          gap: 2px;
+          color: #8b93a7;
+          font-size: 11px;
           text-decoration: none;
-          padding: 6px 10px;
-          border-radius: 10px;
         }
+        .tab .icon { font-size: 18px; }
+        .tab.active { color: white; font-weight: 900; }
 
-        .navitem.active {
-          color: #fff;
-          font-weight: 800;
-          background: rgba(78, 163, 255, 0.12);
-          border: 1px solid rgba(78, 163, 255, 0.35);
+        .cta {
+          transform: translateY(-12px);
         }
-
-        /* ✅ Publier = CTA */
-        .navitem.publish {
-          background: rgba(0, 227, 137, 0.12);
-          border: 1px solid rgba(0, 227, 137, 0.35);
-          color: #eafff6;
-          font-weight: 900;
-          padding: 8px 12px;
+        .cta .icon {
+          width: 48px; height: 48px;
+          border-radius: 14px;
+          display: grid; place-items: center;
+          background: #112449;
+          border: 1px solid #27406f;
+          color: white;
+          font-size: 24px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.6);
         }
-        .navitem.publish.active {
-          background: rgba(0, 227, 137, 0.22);
-          border-color: rgba(0, 227, 137, 0.6);
-        }
+        .cta .label { margin-top: -2px; font-weight: 900; color: white; }
       `}</style>
     </nav>
   );
