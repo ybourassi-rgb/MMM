@@ -66,6 +66,11 @@ export default function Page() {
         const firstItems = d.items || d || [];
         setItems(firstItems);
         if (d.cursor) setCursor(d.cursor);
+
+        // ✅ Glow FAB si on reçoit des deals au chargement
+        if (firstItems.length && typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("lbon-souk:new-deal"));
+        }
       })
       .catch(() => setItems([]));
   }, []);
@@ -130,7 +135,17 @@ export default function Page() {
       const nextCursor = Array.isArray(data) ? null : data.cursor;
 
       if (nextItems?.length) {
-        setItems((prev) => [...prev, ...nextItems]);
+        setItems((prev) => {
+          const merged = [...prev, ...nextItems];
+
+          // ✅ Glow FAB quand des nouveaux deals arrivent
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("lbon-souk:new-deal"));
+          }
+
+          return merged;
+        });
+
         if (nextCursor) setCursor(nextCursor);
       }
     } catch (e) {
