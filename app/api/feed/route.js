@@ -381,8 +381,12 @@ export async function GET() {
       other: [],
     };
 
+    // ✅ ✅ ✅ PATCH ICI : on ajoute bucket à chaque item
     for (const it of items) {
       const k = bucketize(it);
+
+      it.bucket = k; // <— super important pour le filtre front
+
       (buckets[k] || buckets.other).push(it);
     }
 
