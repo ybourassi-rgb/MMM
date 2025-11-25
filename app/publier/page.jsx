@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
 export default function PublishPage() {
   const router = useRouter();
 
+  // ===== mode =====
+  const [mode, setMode] = useState("deal"); // "deal" | "auction"
+
+  // ===== commun =====
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [imageUrl, setImageUrl] = useState(""); // lien direct si dispo
@@ -26,6 +30,11 @@ export default function PublishPage() {
   const [lng, setLng] = useState(null);
 
   const [loading, setLoading] = useState(false);
+
+  // ===== enchère (nouveaux champs) =====
+  const [startingPrice, setStartingPrice] = useState(""); // mise à prix
+  const [bidStep, setBidStep] = useState("");             // pas d’enchère
+  const [endsAt, setEndsAt] = useState("");               // datetime-local
 
   // récupérer pseudo vendeur déjà utilisé
   useEffect(() => {
@@ -64,33 +73,74 @@ export default function PublishPage() {
     reader.readAsDataURL(file);
   };
 
+  const finalImage = useMemo(() => preview || imageUrl?.trim() || null, [preview, imageUrl]);
+
+  const canSubmit = useMemo(() => {
+    if (!sellerName || !title || !url) return false;
+    if (!finalImage) return false;
+
+    if (mode === "auction") {
+      if (!startingPrice) return false;
+      if (!endsAt) return false;
+    }
+    return true;
+  }, [sellerName, title, url, finalImage, mode, startingPrice, endsAt]);
+
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!sellerName || !title || !url)
-      return alert("Pseudo vendeur + titre + lien obligatoires");
 
-    // image soit URL soit upload
-    const finalImage = preview || imageUrl?.trim();
-    if (!finalImage) return alert("Image obligatoire (URL ou upload).");
+    if (!canSubmit) {
+      return alert("Champs obligatoires manquants.");
+    }
 
     setLoading(true);
     try {
-      const res = await fetch("/api/publish", {
+      const endpoint = mode === "deal" ? "/api/publish" : "/api/auctions";
+
+      const body =
+        mode === "deal"
+          ? {
+              sellerName,
+              title,
+              url,
+              image: finalImage,
+              category,
+              condition,
+              price,
+              city,
+              summary: description,  // ✅ on garde ta clé mais on aligne côté feed
+              description,
+              lat,
+              lng,
+              source: "community",
+            }
+          : {
+              sellerName,
+              title,
+              url,
+              images: finalImage ? [finalImage] : [],
+              image: finalImage,
+              category,
+              city,
+              summary: description,
+              description,
+              lat,
+              lng,
+
+              // ✅ champs enchère
+              startingPrice: Number(startingPrice),
+              bidStep: bidStep ? Number(bidStep) : null,
+              endAt: new Date(endsAt).toISOString(),
+
+              type: "auction",
+              auction: true,
+              source: "community-auction",
+            };
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sellerName,
-          title,
-          url,
-          image: finalImage,
-          category,
-          condition,
-          price,
-          city,
-          description,
-          lat,
-          lng,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -99,7 +149,7 @@ export default function PublishPage() {
       // ✅ mémorise vendeur
       localStorage.setItem("sellerName", sellerName);
 
-      alert("Annonce publiée ✅");
+      alert(mode === "deal" ? "Annonce publiée ✅" : "Enchère publiée ✅");
       router.push("/");
     } catch (e) {
       alert("Erreur: " + e.message);
@@ -112,11 +162,28 @@ export default function PublishPage() {
     <div className="wrap">
       <header className="top">
         <button onClick={() => router.back()} className="back">←</button>
-        <h1>Publier une annonce</h1>
+        <h1>{mode === "deal" ? "Publier une annonce" : "Publier une enchère"}</h1>
       </header>
 
-      <form className="form" onSubmit={onSubmit}>
+      {/* ✅ switch mode */}
+      <div className="modeTabs">
+        <button
+          type="button"
+          className={`tab ${mode === "deal" ? "active" : ""}`}
+          onClick={() => setMode("deal")}
+        >
+          💸 Prix fixe
+        </button>
+        <button
+          type="button"
+          className={`tab ${mode === "auction" ? "active" : ""}`}
+          onClick={() => setMode("auction")}
+        >
+          🔨 Enchère
+        </button>
+      </div>
 
+      <form className="form" onSubmit={onSubmit}>
         {/* ✅ vendeur */}
         <label>
           Pseudo vendeur *
@@ -133,11 +200,11 @@ export default function PublishPage() {
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: iPhone 15 Pro neuf moins cher"
+            placeholder="Ex: Carte Pokémon rare"
           />
         </label>
 
-        {/* ===== Lien deal ===== */}
+        {/* ===== Lien ===== */}
         <label>
           Lien *
           <input
@@ -147,27 +214,68 @@ export default function PublishPage() {
           />
         </label>
 
-        {/* ===== Prix ===== */}
-        <label>
-          Prix (€)
-          <input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Ex: 799"
-            inputMode="numeric"
-          />
-        </label>
+        {/* ===== PRIX FIXE seulement ===== */}
+        {mode === "deal" && (
+          <>
+            <label>
+              Prix (€)
+              <input
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="Ex: 799"
+                inputMode="numeric"
+              />
+            </label>
 
-        {/* ===== Etat ===== */}
-        <label>
-          État
-          <select value={condition} onChange={(e) => setCondition(e.target.value)}>
-            <option value="neuf">Neuf</option>
-            <option value="comme-neuf">Comme neuf</option>
-            <option value="bon-etat">Bon état</option>
-            <option value="occasion">Occasion</option>
-          </select>
-        </label>
+            <label>
+              État
+              <select value={condition} onChange={(e) => setCondition(e.target.value)}>
+                <option value="neuf">Neuf</option>
+                <option value="comme-neuf">Comme neuf</option>
+                <option value="bon-etat">Bon état</option>
+                <option value="occasion">Occasion</option>
+              </select>
+            </label>
+          </>
+        )}
+
+        {/* ===== ENCHÈRE seulement ===== */}
+        {mode === "auction" && (
+          <div className="auctionBox">
+            <label>
+              Mise à prix (€) *
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={startingPrice}
+                onChange={(e) => setStartingPrice(e.target.value)}
+                placeholder="Ex: 50"
+              />
+            </label>
+
+            <label>
+              Pas d’enchère (€)
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={bidStep}
+                onChange={(e) => setBidStep(e.target.value)}
+                placeholder="Ex: 5"
+              />
+            </label>
+
+            <label>
+              Fin de l’enchère *
+              <input
+                type="datetime-local"
+                value={endsAt}
+                onChange={(e) => setEndsAt(e.target.value)}
+              />
+            </label>
+          </div>
+        )}
 
         {/* ===== Catégorie ===== */}
         <label>
@@ -180,7 +288,7 @@ export default function PublishPage() {
             <option value="tech">High-tech</option>
             <option value="gaming">Gaming</option>
             <option value="maison">Maison / Jardin</option>
-            <option value="mode">Mode</option>
+            <option value="mode">Mode / Collection</option>
             <option value="sport">Sport</option>
             <option value="bebe">Bébé / Enfant</option>
             <option value="service">Services</option>
@@ -203,7 +311,7 @@ export default function PublishPage() {
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Détaille l’offre : promo, état, points importants…"
+            placeholder="Détaille l’offre / l’enchère…"
             rows={4}
           />
         </label>
@@ -232,8 +340,8 @@ export default function PublishPage() {
           </div>
         )}
 
-        <button disabled={loading} className="submit">
-          {loading ? "Publication..." : "Publier ✅"}
+        <button disabled={!canSubmit || loading} className="submit">
+          {loading ? "Publication..." : (mode === "deal" ? "Publier ✅" : "Publier l’enchère 🔨")}
         </button>
       </form>
 
@@ -264,6 +372,26 @@ export default function PublishPage() {
           font-weight: 900;
         }
 
+        .modeTabs{
+          display:flex;
+          gap:8px;
+          margin-bottom:10px;
+        }
+        .tab{
+          flex:1;
+          padding:10px 12px;
+          border-radius:12px;
+          background:#0f1422;
+          border:1px solid #1b2440;
+          color:#cfd5e8;
+          font-weight:900;
+        }
+        .tab.active{
+          color:white;
+          border-color: rgba(78,163,255,0.7);
+          box-shadow: 0 8px 25px rgba(78,163,255,0.18);
+        }
+
         .form {
           display: grid;
           gap: 12px;
@@ -291,6 +419,15 @@ export default function PublishPage() {
           padding: 8px;
           background: transparent;
           border: none;
+        }
+
+        .auctionBox{
+          border:1px dashed rgba(255,180,84,0.35);
+          background: rgba(255,180,84,0.06);
+          padding:10px;
+          border-radius:12px;
+          display:grid;
+          gap:12px;
         }
 
         .previewBox {
