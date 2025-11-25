@@ -1,195 +1,129 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
-export default function BottomNav() {
-  const pathname = usePathname();
+export default function BottomNav({ newDealPing = 0 }) {
+  const [glow, setGlow] = useState(false);
 
-  const isActive = (href) =>
-    pathname === href || (href !== "/" && pathname.startsWith(href));
-
-  const Item = ({ href, label, icon }) => {
-    const active = isActive(href);
-    return (
-      <Link href={href} className={`nav-item ${active ? "active" : ""}`}>
-        <div className="nav-ico">{icon}</div>
-        <div className="nav-label">{label}</div>
-      </Link>
-    );
-  };
+  // ✅ quand newDealPing change => glow 1.6s
+  useEffect(() => {
+    if (!newDealPing) return;
+    setGlow(true);
+    const t = setTimeout(() => setGlow(false), 1600);
+    return () => clearTimeout(t);
+  }, [newDealPing]);
 
   return (
-    <>
-      <nav className="bottom-nav">
-        <div className="nav-bg" />
+    <nav className="bottom-nav">
+      <Link href="/" className="nav-item">🏠<span>Accueil</span></Link>
+      <Link href="/search" className="nav-item">🔎<span>Recherche</span></Link>
 
-        <div className="nav-row">
-          <Item href="/" label="Accueil" icon="🏠" />
-          <Item href="/search" label="Recherche" icon="🔎" />
-
-          {/* Bouton central (FAB) */}
-          <Link href="/publier" className={`nav-fab ${isActive("/publier") ? "active" : ""}`}>
-            <div className="fab-ring" />
-            <div className="fab-core">
-              <div className="fab-plus">＋</div>
-              <div className="fab-text">Publier</div>
-            </div>
-          </Link>
-
-          {/* Si tu veux l'appeler Gains mais route = /affiliation */}
-          <Item href="/affiliation" label="Gains" icon="💰" />
-          <Item href="/profile" label="Profil" icon="👤" />
+      {/* ✅ FAB Publierrrrrr */}
+      <Link
+        href="/publier"
+        className={`fab ${glow ? "fab-glow" : ""}`}
+        aria-label="Publier"
+      >
+        <div className="fab-inner">
+          <div className="fab-plus">＋</div>
+          <div className="fab-text">Publier</div>
         </div>
-      </nav>
+      </Link>
 
-      <style jsx global>{`
+      <Link href="/affiliation" className="nav-item">💰<span>Gains</span></Link>
+      <Link href="/profile" className="nav-item">👤<span>Profil</span></Link>
+
+      <style jsx>{`
         .bottom-nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          height: 92px;
-          z-index: 50;
-          display: flex;
-          justify-content: center;
-          pointer-events: none; /* on réactive sur les éléments internes */
-        }
-
-        .nav-bg {
-          position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(1200px 120px at 50% -40px, rgba(78,163,255,0.10), transparent 60%),
-            linear-gradient(180deg, rgba(7,9,15,0.0), rgba(7,9,15,0.85) 30%, rgba(7,9,15,0.98));
+          left: 10px; right: 10px; bottom: 10px;
+          height: 72px;
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          align-items: center;
+          background: rgba(8,12,22,0.9);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 18px;
           backdrop-filter: blur(10px);
-          border-top: 1px solid rgba(255,255,255,0.06);
+          box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+          z-index: 20;
         }
 
-        .nav-row {
-          pointer-events: auto;
-          width: min(560px, 100%);
+        .nav-item{
           height: 100%;
-          display: grid;
-          grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr;
-          align-items: center;
-          padding: 10px 10px max(10px, env(safe-area-inset-bottom));
-          gap: 6px;
-          position: relative;
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          gap:4px;
+          color:#cdd3e6;
+          font-size:18px;
+          text-decoration:none;
+          opacity:.9;
+          transition: opacity .12s ease, transform .12s ease;
         }
+        .nav-item span{ font-size:11px; font-weight:800; letter-spacing:.2px; }
+        .nav-item:active{ transform: scale(.96); opacity:1; }
 
-        .nav-item {
-          height: 64px;
-          border-radius: 16px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          text-decoration: none;
-          color: #aab3c8;
-          background: rgba(12,16,28,0.35);
-          border: 1px solid rgba(255,255,255,0.06);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
-          transition: all .18s ease;
-        }
-        .nav-item .nav-ico { font-size: 18px; }
-        .nav-item .nav-label {
-          font-size: 11.5px;
-          font-weight: 800;
-          letter-spacing: .2px;
-        }
-        .nav-item.active {
-          color: white;
-          background:
-            linear-gradient(180deg, rgba(20,32,58,0.9), rgba(10,16,30,0.9));
-          border-color: rgba(78,163,255,0.45);
-          box-shadow:
-            0 8px 25px rgba(78,163,255,0.18),
-            inset 0 1px 0 rgba(255,255,255,0.10);
-          transform: translateY(-1px);
-        }
-
-        /* ===== FAB central ===== */
-        .nav-fab {
-          position: relative;
+        /* ==========================
+           ✅ FAB "Publier" pulse HD
+        ========================== */
+        .fab{
+          justify-self:center;
+          width: 78px;
           height: 78px;
-          display: grid;
-          place-items: center;
-          text-decoration: none;
-          transform: translateY(-18px);
-          transition: transform .18s ease;
-        }
-
-        .fab-ring {
-          position: absolute;
-          width: 74px;
-          height: 74px;
-          border-radius: 22px;
-          background:
-            radial-gradient(60px 60px at 30% 20%, rgba(109,123,255,0.9), transparent 60%),
-            radial-gradient(60px 60px at 70% 80%, rgba(34,230,165,0.9), transparent 58%),
-            rgba(12,16,28,0.9);
-          filter: blur(10px);
-          opacity: .8;
-        }
-
-        .fab-core {
-          width: 70px;
-          height: 70px;
+          margin-top: -26px;
           border-radius: 20px;
           background:
-            linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)),
-            linear-gradient(180deg, #0e1322, #0a0f1c);
-          border: 1px solid rgba(78,163,255,0.55);
-          display: grid;
-          place-items: center;
+            radial-gradient(90px 60px at 20% 20%, rgba(109,123,255,.45), transparent 60%),
+            radial-gradient(90px 60px at 80% 80%, rgba(34,230,165,.35), transparent 58%),
+            linear-gradient(180deg, #0d1730, #0a1022);
+          border: 1px solid rgba(78,163,255,0.45);
           box-shadow:
-            0 14px 40px rgba(0,0,0,0.7),
-            0 0 0 1px rgba(78,163,255,0.25) inset;
+            0 12px 35px rgba(0,0,0,.7),
+            0 0 0 1px rgba(78,163,255,.25) inset;
+          display:flex; align-items:center; justify-content:center;
+          text-decoration:none;
+          color:white;
           position: relative;
-          overflow: hidden;
+          animation: fabPulse 2.6s ease-in-out infinite;
+          transition: transform .15s ease;
+          overflow:hidden;
+        }
+        .fab:active{ transform: translateY(1px) scale(.97); }
+
+        .fab-inner{
+          display:flex; flex-direction:column; align-items:center; gap:2px;
+          font-weight:900;
+        }
+        .fab-plus{
+          font-size:28px; line-height:1;
+          text-shadow: 0 6px 16px rgba(0,0,0,.6);
+        }
+        .fab-text{
+          font-size:12px; letter-spacing:.3px; opacity:.95;
         }
 
-        .fab-core::after {
-          content: "";
-          position: absolute;
-          inset: -40%;
+        /* Pulse discret */
+        @keyframes fabPulse{
+          0%,100% { transform: translateY(0) scale(1); box-shadow: 0 12px 35px rgba(0,0,0,.7); }
+          50%     { transform: translateY(-1px) scale(1.03); box-shadow: 0 18px 45px rgba(78,163,255,.25); }
+        }
+
+        /* ✅ Glow quand nouveau deal */
+        .fab-glow::after{
+          content:"";
+          position:absolute; inset:-40%;
           background:
-            radial-gradient(120px 80px at 20% 30%, rgba(109,123,255,0.45), transparent 60%),
-            radial-gradient(120px 80px at 80% 70%, rgba(34,230,165,0.38), transparent 60%);
-          opacity: .9;
-          pointer-events: none;
+            radial-gradient(120px 80px at 30% 20%, rgba(78,163,255,.9), transparent 60%),
+            radial-gradient(120px 80px at 70% 80%, rgba(34,230,165,.8), transparent 58%);
+          animation: fabGlow 1.6s ease-out;
+          pointer-events:none;
         }
-
-        .fab-plus {
-          font-size: 28px;
-          font-weight: 900;
-          color: white;
-          line-height: 1;
-          transform: translateY(2px);
-          text-shadow: 0 6px 18px rgba(0,0,0,0.7);
-          z-index: 2;
+        @keyframes fabGlow{
+          0%   { opacity:0; transform: scale(.7); }
+          30%  { opacity:1; transform: scale(1); }
+          100% { opacity:0; transform: scale(1.2); }
         }
-
-        .fab-text {
-          font-size: 11px;
-          font-weight: 900;
-          color: white;
-          opacity: .95;
-          margin-top: -2px;
-          z-index: 2;
-          letter-spacing: .3px;
-        }
-
-        .nav-fab.active .fab-core {
-          border-color: rgba(34,230,165,0.9);
-          box-shadow:
-            0 18px 50px rgba(34,230,165,0.25),
-            0 0 0 1px rgba(34,230,165,0.35) inset;
-        }
-        .nav-fab:active { transform: translateY(-16px) scale(0.97); }
       `}</style>
-    </>
+    </nav>
   );
 }
