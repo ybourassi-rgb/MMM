@@ -20,37 +20,73 @@ export default function Page() {
   const CATEGORIES = [
     { key: "all", label: "🔥 Tous" },
 
-    { key: "good", label: "💥 Bonnes affaires", match: ["deal", "promo", "réduction", "soldes", "bon plan"] },
-
-    { key: "tech", label: "📱 High-Tech", bucket: "tech",
-      match: ["tech","high-tech","smartphone","iphone","samsung","xiaomi","android","apple","pc","ordinateur","laptop","ssd","ryzen","intel","ram","gpu","carte graphique"],
+    {
+      key: "good",
+      label: "💥 Bonnes affaires",
+      match: ["deal", "promo", "réduction", "soldes", "bon plan"],
     },
 
-    { key: "gaming", label: "🎮 Gaming", bucket: "tech",
+    {
+      key: "tech",
+      label: "📱 High-Tech",
+      bucket: "tech",
+      match: [
+        "tech","high-tech","smartphone","iphone","samsung","xiaomi",
+        "android","apple",
+        "pc","ordinateur","laptop","ssd","ryzen","intel","ram","gpu",
+        "carte graphique",
+      ],
+    },
+
+    {
+      key: "gaming",
+      label: "🎮 Gaming",
+      bucket: "tech",
       match: ["ps5","xbox","switch","gaming","steam","console","jeu"],
     },
 
-    { key: "home", label: "🏠 Maison", bucket: "home",
-      match: ["maison","jardin","meuble","canapé","lit","déco","electroménager","aspirateur"],
+    {
+      key: "home",
+      label: "🏠 Maison",
+      bucket: "home",
+      match: [
+        "maison","jardin","meuble","canapé","lit","déco",
+        "electroménager","aspirateur",
+      ],
     },
 
-    { key: "diy", label: "🛠️ Bricolage", bucket: "home",
+    {
+      key: "diy",
+      label: "🛠️ Bricolage",
+      bucket: "home",
       match: ["bricolage","outils","perceuse","bosch","makita","jardinage"],
     },
 
-    { key: "auto", label: "🚗 Auto/Moto", bucket: "auto",
+    {
+      key: "auto",
+      label: "🚗 Auto/Moto",
+      bucket: "auto",
       match: ["auto","voiture","moto","pneu","carburant","garage"],
     },
 
-    { key: "fashion", label: "👕 Mode/Beauté", bucket: "lifestyle",
+    {
+      key: "fashion",
+      label: "👕 Mode/Beauté",
+      bucket: "lifestyle",
       match: ["mode","vetement","chaussure","nike","adidas","parfum","beaute","cosmétique"],
     },
 
-    { key: "baby", label: "🍼 Bébé/Enfant", bucket: "family",
+    {
+      key: "baby",
+      label: "🍼 Bébé/Enfant",
+      bucket: "family",
       match: ["bébé","enfant","poussette","jouet","couches"],
     },
 
-    { key: "travel", label: "✈️ Voyage", bucket: "travel",
+    {
+      key: "travel",
+      label: "✈️ Voyage",
+      bucket: "travel",
       match: ["voyage","travel","vol","flight","hotel","airbnb","booking","séjour"],
     },
 
