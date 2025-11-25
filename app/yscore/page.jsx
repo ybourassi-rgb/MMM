@@ -1,27 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function YScorePage() {
-  const sp = useSearchParams();
+// si tu as déjà ce composant :
+import YScorePanel from "@/components/yscore_panel";
+
+function YScoreInner() {
   const router = useRouter();
-  const url = sp.get("url");
+  const sp = useSearchParams();
 
+  const url = sp.get("url") || "";
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const cleanUrl = useMemo(() => url.trim(), [url]);
 
   useEffect(() => {
-    if (!url) {
-      setLoading(false);
-      return;
-    }
+    if (!cleanUrl) return;
 
-    fetch(`/api/yscore?url=${encodeURIComponent(url)}`, { cache: "no-store" })
+    setLoading(true);
+    setErr(null);
+
+    fetch(`/api/yscore?url=${encodeURIComponent(cleanUrl)}`, {
+      cache: "no-store",
+    })
       .then((r) => r.json())
-      .then((d) => setData(d))
+      .then((d) => {
+        if (!d?.ok) throw new Error(d?.error || "Analyse impossible");
+        setData(d);
+      })
+      .catch((e) => setErr(e.message))
       .finally(() => setLoading(false));
-  }, [url]);
+  }, [cleanUrl]);
 
   return (
     <div className="wrap">
@@ -30,34 +42,25 @@ export default function YScorePage() {
         <h1>Analyse Y-Score</h1>
       </header>
 
-      {!url && <div className="muted">Aucun lien à analyser.</div>}
+      {!cleanUrl && (
+        <div className="empty">
+          Aucun lien à analyser.
+          <div className="hint">Reviens sur un deal et clique “Analyse”.</div>
+        </div>
+      )}
 
-      {loading && url && <div className="muted">Analyse en cours…</div>}
+      {loading && <div className="loading">Analyse en cours…</div>}
+      {err && <div className="error">❌ {err}</div>}
 
-      {!loading && data && (
-        <div className="card">
-          <div className="bigScore">
-            {data.globalScore ?? data.score ?? "—"}
-          </div>
-          <div className="sub">Score global</div>
-
-          <div className="grid">
-            <div className="k">
-              <div className="t">Opportunité</div>
-              <div className="v good">{data.opportunityScore ?? "—"}</div>
-            </div>
-            <div className="k">
-              <div className="t">Risque</div>
-              <div className="v warn">{data.riskScore ?? "—"}</div>
-            </div>
-            <div className="k">
-              <div className="t">Horizon</div>
-              <div className="v">{data.horizon ?? "court terme"}</div>
-            </div>
-          </div>
-
-          {data.summary && (
-            <p className="summary">{data.summary}</p>
+      {!loading && !err && data && (
+        <div className="panel">
+          {/* si ton composant existe */}
+          {YScorePanel ? (
+            <YScorePanel data={data} url={cleanUrl} />
+          ) : (
+            <pre style={{ whiteSpace: "pre-wrap" }}>
+              {JSON.stringify(data, null, 2)}
+            </pre>
           )}
         </div>
       )}
@@ -66,14 +69,18 @@ export default function YScorePage() {
         .wrap {
           min-height: 100svh;
           background: #07090f;
-          color: #fff;
+          color: white;
           padding: 14px 14px 90px;
         }
         .top {
+          position: sticky;
+          top: 0;
+          z-index: 5;
+          background: #07090f;
           display: flex;
           align-items: center;
           gap: 10px;
-          margin-bottom: 14px;
+          padding-bottom: 10px;
         }
         .back {
           background: #0e1322;
@@ -83,62 +90,36 @@ export default function YScorePage() {
           padding: 6px 10px;
           font-size: 16px;
         }
-        h1 { margin: 0; font-size: 18px; font-weight: 900; }
-
-        .muted {
+        h1 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 900;
+        }
+        .loading, .empty, .error {
+          margin-top: 30px;
           text-align: center;
           color: #aeb6cc;
-          margin-top: 30px;
+          font-weight: 700;
         }
-
-        .card {
+        .error { color: #ff6b6b; }
+        .hint { margin-top: 6px; font-size: 12px; opacity: .8; }
+        .panel {
+          margin-top: 12px;
           background: #0f1422;
           border: 1px solid #1b2440;
-          border-radius: 16px;
-          padding: 16px;
-          display: grid;
-          gap: 10px;
-        }
-
-        .bigScore {
-          font-size: 44px;
-          font-weight: 900;
-          text-align: center;
-          background: linear-gradient(90deg,#4ea3ff,#22e6a5);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .sub {
-          text-align: center;
-          font-size: 12px;
-          opacity: .8;
-          margin-top: -6px;
-        }
-
-        .grid {
-          display: grid;
-          grid-template-columns: repeat(3,1fr);
-          gap: 8px;
-          margin-top: 6px;
-        }
-        .k {
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 12px;
-          padding: 10px;
-          text-align: center;
-        }
-        .t { font-size: 11px; color:#aeb6cc; font-weight:700; }
-        .v { font-size: 18px; font-weight:900; margin-top:4px; }
-        .v.good { color:#00e389; }
-        .v.warn { color:#ffbb55; }
-
-        .summary {
-          font-size: 13px;
-          line-height: 1.5;
-          color: rgba(255,255,255,0.85);
+          border-radius: 14px;
+          padding: 12px;
         }
       `}</style>
     </div>
+  );
+}
+
+export default function YScorePage() {
+  // ✅ Suspense obligatoire avec useSearchParams en build Vercel
+  return (
+    <Suspense fallback={<div style={{padding:20, color:"#aeb6cc"}}>Chargement…</div>}>
+      <YScoreInner />
+    </Suspense>
   );
 }
