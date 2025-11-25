@@ -165,7 +165,7 @@ function makeAffiliateUrl(originalUrl) {
 }
 
 // ====================================
-// 6) Normalize item (✅ halal supprimé)
+// 6) Normalize item
 // ====================================
 function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
@@ -190,6 +190,9 @@ function normalizeItem(raw, i = 0, source = "rss") {
     source,
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
+
+    // ✅ NEW : bucket (rempli plus bas)
+    bucket: "other",
   };
 
   item.affiliateUrl = makeAffiliateUrl(item.url);
@@ -197,7 +200,7 @@ function normalizeItem(raw, i = 0, source = "rss") {
 }
 
 // ====================================
-// 7) Bucketize (plus riche maintenant)
+// 7) Bucketize
 // ====================================
 function bucketize(item) {
   const s = (item.source || "").toLowerCase();
@@ -215,24 +218,28 @@ function bucketize(item) {
   if (
     s.includes("auto") || c.includes("auto") || c.includes("voiture") ||
     t.includes("auto") || t.includes("voiture") ||
-    t.includes("moto") || t.includes("scooter")
+    t.includes("moto") || t.includes("scooter") ||
+    t.includes("carburant") || t.includes("pneu")
   ) return "auto";
 
   if (
     s.includes("immo") || c.includes("immo") || c.includes("immobilier") ||
-    t.includes("appartement") || t.includes("maison") || t.includes("location")
+    t.includes("appartement") || t.includes("maison") ||
+    t.includes("location") || t.includes("immobilier")
   ) return "immo";
 
   if (
     s.includes("tech") || s.includes("gaming") ||
     c.includes("tech") || c.includes("informatique") ||
     t.includes("pc") || t.includes("ssd") || t.includes("ryzen") ||
-    t.includes("ps5") || t.includes("xbox") || t.includes("switch")
+    t.includes("ps5") || t.includes("xbox") || t.includes("switch") ||
+    t.includes("iphone") || t.includes("samsung") || t.includes("xiaomi")
   ) return "tech";
 
   if (
     s.includes("maison") || c.includes("maison") || c.includes("jardin") ||
-    t.includes("bricolage") || t.includes("déco") || t.includes("meuble")
+    t.includes("bricolage") || t.includes("déco") || t.includes("meuble") ||
+    t.includes("canapé") || t.includes("lit") || t.includes("aspirateur")
   ) return "home";
 
   if (
@@ -242,12 +249,12 @@ function bucketize(item) {
 
   if (
     c.includes("mode") || c.includes("beauté") || c.includes("sport") ||
-    t.includes("chaussure") || t.includes("parfum") || t.includes("nike")
+    t.includes("chaussure") || t.includes("parfum") ||
+    t.includes("nike") || t.includes("adidas")
   ) return "lifestyle";
 
-  if (
-    c.includes("alimentaire") || t.includes("snack") || t.includes("restaurant")
-  ) return "food";
+  if (c.includes("alimentaire") || t.includes("snack") || t.includes("restaurant"))
+    return "food";
 
   if (
     s.includes("community") ||
@@ -263,24 +270,14 @@ function bucketize(item) {
 // ====================================
 function interleaveBuckets(buckets) {
   const order = [
-    "travel",
-    "general",
-    "auto",
-    "general",
-    "tech",
-    "home",
-    "family",
-    "lifestyle",
-    "general",
-    "other"
+    "travel","general","auto","general","tech","home","family","lifestyle","general","other"
   ];
   const out = [];
-
   let guard = 0;
+
   while (guard < 8000) {
     guard++;
     let pushed = false;
-
     for (const key of order) {
       const arr = buckets[key];
       if (arr && arr.length) {
@@ -290,7 +287,6 @@ function interleaveBuckets(buckets) {
     }
     if (!pushed) break;
   }
-
   return out;
 }
 
@@ -359,6 +355,7 @@ export async function GET() {
           affiliateUrl: makeAffiliateUrl(it.url),
           source: it.source || "community",
           id: it.id || `${Date.now()}-community-${i}`,
+          bucket: "general",
         }))
         .filter((it) => isValidImage(it.image))
         .filter(isAlcoholFree);
@@ -381,12 +378,9 @@ export async function GET() {
       other: [],
     };
 
-    // ✅ ✅ ✅ PATCH ICI : on ajoute bucket à chaque item
     for (const it of items) {
       const k = bucketize(it);
-
-      it.bucket = k; // <— super important pour le filtre front
-
+      it.bucket = k; // ✅ on l’attache à l’item
       (buckets[k] || buckets.other).push(it);
     }
 
