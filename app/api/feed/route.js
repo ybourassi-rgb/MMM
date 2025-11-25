@@ -12,24 +12,17 @@ const parser = new Parser({
   },
 });
 
-// ====================================
-// 0) Helpers base URL (server-side)
-// ====================================
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "";
 }
 
-// ====================================
-// 1) Pepper thumbnails -> full quality
-// ====================================
 function upgradePepperImage(url) {
   if (!url) return url;
   try {
     const u = new URL(url);
     const host = u.hostname;
-
     const isPepper =
       host.includes("static-pepper.") ||
       host.includes("static-hotukdeals.") ||
@@ -43,24 +36,16 @@ function upgradePepperImage(url) {
       u.pathname = u.pathname.replace(/\/re\/\d+x\d+\//i, "/");
       return u.toString();
     }
-
     return url;
   } catch {
     return url;
   }
 }
 
-// ====================================
-// 2) Extract image from RSS item
-// ====================================
 function pickImage(it) {
   const mc = it.mediaContent;
-
   if (mc?.$?.url) return upgradePepperImage(mc.$.url);
-  if (Array.isArray(mc) && mc[0]?.$?.url) {
-    return upgradePepperImage(mc[0].$?.url);
-  }
-
+  if (Array.isArray(mc) && mc[0]?.$?.url) return upgradePepperImage(mc[0].$?.url);
   if (it.enclosure?.url) return upgradePepperImage(it.enclosure.url);
 
   const html = it.contentEncoded || it.content || "";
@@ -70,13 +55,9 @@ function pickImage(it) {
   return null;
 }
 
-// ====================================
-// 3) Filter NO/LOW images
-// ====================================
 function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
-
   if (lower.endsWith(".svg")) return false;
   if (lower.includes("default-voucher")) return false;
   if (lower.includes("placeholder")) return false;
@@ -84,15 +65,7 @@ function isValidImage(img) {
   if (lower.match(/\/re\/\d+x\d+\//i)) return false;
   if (lower.match(/\/qt\/\d+\//i)) return false;
 
-  const smallSizes = [
-    "80x80",
-    "100x100",
-    "120x120",
-    "150x150",
-    "160x160",
-    "180x180",
-    "200x150",
-  ];
+  const smallSizes = ["80x80","100x100","120x120","150x150","160x160","180x180","200x150"];
   if (smallSizes.some((s) => lower.includes(s))) return false;
 
   if (lower.includes("thumbnail")) return false;
@@ -103,9 +76,6 @@ function isValidImage(img) {
   return true;
 }
 
-// ====================================
-// 4) Filter anti-alcool
-// ====================================
 function isAlcoholFree(item) {
   const t = `${item.title || ""} ${item.summary || ""} ${item.category || ""}`.toLowerCase();
   const bad = [
@@ -117,17 +87,12 @@ function isAlcoholFree(item) {
   return !bad.some((k) => t.includes(k));
 }
 
-// ====================================
-// 5) Make affiliate URL (Amazon + AliExpress)
-// ====================================
 function makeAffiliateUrl(originalUrl) {
   if (!originalUrl) return null;
-
   try {
     const u = new URL(originalUrl);
     const host = u.hostname.toLowerCase();
 
-    // Amazon
     if (host.includes("amazon.")) {
       const tag = process.env.AMAZON_ASSOCIATE_TAG;
       if (tag) {
@@ -137,9 +102,8 @@ function makeAffiliateUrl(originalUrl) {
       return originalUrl;
     }
 
-    // AliExpress
     if (host.includes("aliexpress.")) {
-      const deep = process.env.ALIEXPRESS_AFFILIATE_LINK; // peut contenir {url}
+      const deep = process.env.ALIEXPRESS_AFFILIATE_LINK;
       const pid = process.env.ALIEXPRESS_PID;
 
       if (deep) {
@@ -164,9 +128,6 @@ function makeAffiliateUrl(originalUrl) {
   }
 }
 
-// ====================================
-// 6) Normalize item
-// ====================================
 function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
   const image = pickImage(raw);
@@ -191,7 +152,6 @@ function normalizeItem(raw, i = 0, source = "rss") {
     publishedAt: raw.publishedAt || raw.isoDate || null,
     summary: raw.summary || raw.contentSnippet || null,
 
-    // ✅ NEW : bucket (rempli plus bas)
     bucket: "other",
   };
 
@@ -199,9 +159,6 @@ function normalizeItem(raw, i = 0, source = "rss") {
   return item;
 }
 
-// ====================================
-// 7) Bucketize
-// ====================================
 function bucketize(item) {
   const s = (item.source || "").toLowerCase();
   const c = (item.category || "").toLowerCase();
@@ -265,13 +222,8 @@ function bucketize(item) {
   return "other";
 }
 
-// ====================================
-// 8) Interleave TikTok style
-// ====================================
 function interleaveBuckets(buckets) {
-  const order = [
-    "travel","general","auto","general","tech","home","family","lifestyle","general","other"
-  ];
+  const order = ["travel","general","auto","general","tech","home","family","lifestyle","general","other"];
   const out = [];
   let guard = 0;
 
@@ -290,8 +242,11 @@ function interleaveBuckets(buckets) {
   return out;
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
+    const { searchParams } = new URL(req.url);
+    const bucketParam = (searchParams.get("bucket") || "all").toLowerCase();
+
     const SOURCES = [
       { url: "https://www.dealabs.com/rss/hot", source: "dealabs-hot" },
       { url: "https://www.dealabs.com/rss/new", source: "dealabs-new" },
@@ -365,6 +320,7 @@ export async function GET() {
 
     items = [...community, ...items];
 
+    // buckets
     const buckets = {
       travel: [],
       general: [],
@@ -380,17 +336,23 @@ export async function GET() {
 
     for (const it of items) {
       const k = bucketize(it);
-      it.bucket = k; // ✅ on l’attache à l’item
+      it.bucket = k;
       (buckets[k] || buckets.other).push(it);
     }
 
+    // ✅ si on demande un bucket précis → retourne juste ça
+    if (bucketParam !== "all") {
+      const only = (buckets[bucketParam] || []).sort(() => Math.random() - 0.5);
+      return NextResponse.json({ ok: true, items: only, cursor: null, bucket: bucketParam });
+    }
+
+    // sinon feed global mixé
     for (const k of Object.keys(buckets)) {
       buckets[k].sort(() => Math.random() - 0.5);
     }
 
     const mixed = interleaveBuckets(buckets);
-
-    return NextResponse.json({ ok: true, items: mixed, cursor: null });
+    return NextResponse.json({ ok: true, items: mixed, cursor: null, bucket: "all" });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Feed error", items: [] },
