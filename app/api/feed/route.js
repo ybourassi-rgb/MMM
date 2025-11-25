@@ -2,6 +2,9 @@
 import { NextResponse } from "next/server";
 import Parser from "rss-parser";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const parser = new Parser({
   customFields: {
     item: [
@@ -12,12 +15,18 @@ const parser = new Parser({
   },
 });
 
+// ====================================
+// Helpers base URL (server-side)
+// ====================================
 function getBaseUrl() {
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "";
 }
 
+// ====================================
+// Pepper thumbnails -> full quality
+// ====================================
 function upgradePepperImage(url) {
   if (!url) return url;
   try {
@@ -42,6 +51,9 @@ function upgradePepperImage(url) {
   }
 }
 
+// ====================================
+// Extract image from RSS item
+// ====================================
 function pickImage(it) {
   const mc = it.mediaContent;
   if (mc?.$?.url) return upgradePepperImage(mc.$.url);
@@ -55,6 +67,9 @@ function pickImage(it) {
   return null;
 }
 
+// ====================================
+// Filter NO/LOW images
+// ====================================
 function isValidImage(img) {
   if (!img) return false;
   const lower = img.toLowerCase();
@@ -76,6 +91,9 @@ function isValidImage(img) {
   return true;
 }
 
+// ====================================
+// Filter anti-alcool
+// ====================================
 function isAlcoholFree(item) {
   const t = `${item.title || ""} ${item.summary || ""} ${item.category || ""}`.toLowerCase();
   const bad = [
@@ -87,6 +105,9 @@ function isAlcoholFree(item) {
   return !bad.some((k) => t.includes(k));
 }
 
+// ====================================
+// Make affiliate URL (Amazon + AliExpress)
+// ====================================
 function makeAffiliateUrl(originalUrl) {
   if (!originalUrl) return null;
   try {
@@ -128,6 +149,9 @@ function makeAffiliateUrl(originalUrl) {
   }
 }
 
+// ====================================
+// Normalize item
+// ====================================
 function normalizeItem(raw, i = 0, source = "rss") {
   const url = raw.link || raw.url || raw.guid || "";
   const image = pickImage(raw);
@@ -159,6 +183,9 @@ function normalizeItem(raw, i = 0, source = "rss") {
   return item;
 }
 
+// ====================================
+// Bucketize
+// ====================================
 function bucketize(item) {
   const s = (item.source || "").toLowerCase();
   const c = (item.category || "").toLowerCase();
@@ -222,6 +249,9 @@ function bucketize(item) {
   return "other";
 }
 
+// ====================================
+// Interleave TikTok style
+// ====================================
 function interleaveBuckets(buckets) {
   const order = ["travel","general","auto","general","tech","home","family","lifestyle","general","other"];
   const out = [];
@@ -230,6 +260,7 @@ function interleaveBuckets(buckets) {
   while (guard < 8000) {
     guard++;
     let pushed = false;
+
     for (const key of order) {
       const arr = buckets[key];
       if (arr && arr.length) {
@@ -288,6 +319,9 @@ export async function GET(req) {
       })
       .filter(Boolean);
 
+    // =========================
+    // RSS items
+    // =========================
     let items = feeds
       .flatMap(({ feed, meta }) =>
         (feed.items || []).map((it, i) => normalizeItem(it, i, meta.source))
@@ -296,7 +330,9 @@ export async function GET(req) {
       .filter((it) => isValidImage(it.image))
       .filter(isAlcoholFree);
 
-    // ✅ community deals (prix fixes)
+    // =========================
+    // Community deals (prix fixes)
+    // =========================
     let community = [];
     try {
       const base = getBaseUrl();
@@ -319,7 +355,9 @@ export async function GET(req) {
       community = [];
     }
 
-    // ✅ auctions live
+    // =========================
+    // Auctions live
+    // =========================
     let auctions = [];
     try {
       const base = getBaseUrl();
@@ -328,25 +366,37 @@ export async function GET(req) {
         { cache: "no-store" }
       );
       const data = await res.json();
-      auctions = (data.items || []).map((a) => {
-        const img = a.images?.[0] || a.image || null;
-        const draft = {
-          ...a,
-          image: img,
-          source: a.source || "community-auction",
-          bucket: a.bucket || "other",
-        };
-        draft.bucket = a.bucket || bucketize(draft);
-        return draft;
-      });
+
+      auctions = (data.items || [])
+        .map((a) => {
+          const img = a.images?.[0] || a.image || null;
+          const draft = {
+            ...a,
+            image: img,
+            affiliateUrl: makeAffiliateUrl(a.url),
+            source: a.source || "community-auction",
+            bucket: a.bucket || "other",
+            summary: a.summary || a.description || null,
+            title: a.title || "Enchère",
+          };
+
+          draft.bucket = a.bucket || bucketize(draft);
+          return draft;
+        })
+        .filter((it) => isValidImage(it.image))
+        .filter(isAlcoholFree);
     } catch {
       auctions = [];
     }
 
+    // =========================
     // merge community + auctions + rss
+    // =========================
     items = [...community, ...auctions, ...items];
 
+    // =========================
     // buckets
+    // =========================
     const buckets = {
       travel: [],
       general: [],
@@ -373,7 +423,7 @@ export async function GET(req) {
         ok: true,
         items: only,
         cursor: null,
-        bucket: bucketParam
+        bucket: bucketParam,
       });
     }
 
@@ -387,7 +437,7 @@ export async function GET(req) {
       ok: true,
       items: mixed,
       cursor: null,
-      bucket: "all"
+      bucket: "all",
     });
   } catch (e) {
     return NextResponse.json(
