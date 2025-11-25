@@ -296,6 +296,7 @@ export async function GET(req) {
       .filter((it) => isValidImage(it.image))
       .filter(isAlcoholFree);
 
+    // ✅ community deals (prix fixes)
     let community = [];
     try {
       const base = getBaseUrl();
@@ -318,7 +319,32 @@ export async function GET(req) {
       community = [];
     }
 
-    items = [...community, ...items];
+    // ✅ auctions live
+    let auctions = [];
+    try {
+      const base = getBaseUrl();
+      const res = await fetch(
+        base ? `${base}/api/auctions` : "/api/auctions",
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+      auctions = (data.items || []).map((a) => {
+        const img = a.images?.[0] || a.image || null;
+        const draft = {
+          ...a,
+          image: img,
+          source: a.source || "community-auction",
+          bucket: a.bucket || "other",
+        };
+        draft.bucket = a.bucket || bucketize(draft);
+        return draft;
+      });
+    } catch {
+      auctions = [];
+    }
+
+    // merge community + auctions + rss
+    items = [...community, ...auctions, ...items];
 
     // buckets
     const buckets = {
@@ -335,7 +361,7 @@ export async function GET(req) {
     };
 
     for (const it of items) {
-      const k = bucketize(it);
+      const k = it.bucket && it.bucket !== "other" ? it.bucket : bucketize(it);
       it.bucket = k;
       (buckets[k] || buckets.other).push(it);
     }
@@ -343,7 +369,12 @@ export async function GET(req) {
     // ✅ si on demande un bucket précis → retourne juste ça
     if (bucketParam !== "all") {
       const only = (buckets[bucketParam] || []).sort(() => Math.random() - 0.5);
-      return NextResponse.json({ ok: true, items: only, cursor: null, bucket: bucketParam });
+      return NextResponse.json({
+        ok: true,
+        items: only,
+        cursor: null,
+        bucket: bucketParam
+      });
     }
 
     // sinon feed global mixé
@@ -352,7 +383,12 @@ export async function GET(req) {
     }
 
     const mixed = interleaveBuckets(buckets);
-    return NextResponse.json({ ok: true, items: mixed, cursor: null, bucket: "all" });
+    return NextResponse.json({
+      ok: true,
+      items: mixed,
+      cursor: null,
+      bucket: "all"
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e?.message || "Feed error", items: [] },
