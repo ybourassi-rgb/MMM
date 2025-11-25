@@ -1,23 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const router = useRouter();
 
-  const items = useMemo(
+  const tabs = useMemo(
     () => [
-      { key: "home", label: "Accueil", href: "/", icon: "🏠" },
-      { key: "search", label: "Recherche", href: "/search", icon: "🔎" },
-
-      // bouton central "Publier" (CTA)
-      { key: "publish", label: "Publier", href: "/publish", icon: "➕", center: true },
-
-      { key: "affiliation", label: "Affiliation", href: "/affiliation", icon: "💰" },
-      { key: "profile", label: "Profil", href: "/profile", icon: "👤" },
+      { href: "/", label: "Feed", icon: "🏠" },
+      { href: "/search", label: "Recherche", icon: "🔎" },
+      // tu as /publier et /publish. On garde /publier comme dans ta capture.
+      { href: "/publier", label: "Publier", icon: "➕" },
+      // ta page existe en /affiliation, mais tu veux l'appeler Gains
+      { href: "/affiliation", label: "Gains", icon: "💰" },
+      { href: "/profile", label: "Profil", icon: "👤" },
     ],
     []
   );
@@ -28,38 +26,22 @@ export default function BottomNav() {
   };
 
   return (
-    <nav className="bn-wrap" role="navigation" aria-label="Bottom Navigation">
-      <div className="bn-blur" />
-
-      <div className="bn-bar">
-        {items.map((it) => {
-          const active = isActive(it.href);
-
-          if (it.center) {
-            return (
-              <button
-                key={it.key}
-                className={`bn-center ${active ? "active" : ""}`}
-                onClick={() => router.push(it.href)}
-                aria-label={it.label}
-              >
-                <div className="bn-center-ring" />
-                <div className="bn-center-icon">{it.icon}</div>
-                <div className="bn-center-label">{it.label}</div>
-              </button>
-            );
-          }
-
+    <nav className="bn-wrap">
+      <div className="bn-glass">
+        {tabs.map((t) => {
+          const active = isActive(t.href);
           return (
             <Link
-              key={it.key}
-              href={it.href}
+              key={t.href}
+              href={t.href}
               className={`bn-item ${active ? "active" : ""}`}
-              aria-label={it.label}
+              prefetch={false}
             >
-              <div className="bn-icon">{it.icon}</div>
-              <div className="bn-label">{it.label}</div>
-              <div className="bn-active-glow" />
+              <span className="bn-icon" aria-hidden>
+                {t.icon}
+              </span>
+              <span className="bn-label">{t.label}</span>
+              <span className="bn-activeGlow" />
             </Link>
           );
         })}
@@ -70,156 +52,98 @@ export default function BottomNav() {
           position: fixed;
           left: 0;
           right: 0;
-          bottom: 0;
+          bottom: 10px;
           z-index: 50;
-          padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-          pointer-events: none;
+          display: flex;
+          justify-content: center;
+          pointer-events: none; /* le glass ne bloque pas le scroll */
         }
 
-        .bn-blur {
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          height: 110px;
-          background: radial-gradient(
-              900px 140px at 50% 100%,
-              rgba(78, 163, 255, 0.12),
-              transparent 60%
-            ),
-            linear-gradient(180deg, transparent, rgba(7, 9, 15, 0.9) 45%, rgba(7, 9, 15, 1));
-          pointer-events: none;
-        }
-
-        .bn-bar {
+        .bn-glass {
           pointer-events: auto;
-          position: relative;
-          height: 64px;
+          width: min(520px, calc(100% - 20px));
           display: grid;
           grid-template-columns: repeat(5, 1fr);
-          align-items: center;
+          gap: 6px;
+          padding: 8px;
           border-radius: 18px;
-          background: rgba(12, 16, 28, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+
+          background:
+            radial-gradient(900px 120px at 50% -50px, rgba(78,163,255,0.14), transparent 60%),
+            linear-gradient(180deg, rgba(10,14,25,0.92), rgba(7,9,15,0.92));
+
+          border: 1px solid rgba(255,255,255,0.08);
           box-shadow:
-            0 12px 40px rgba(0, 0, 0, 0.6),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            0 18px 60px rgba(0,0,0,0.7),
+            inset 0 1px 0 rgba(255,255,255,0.06);
+
           backdrop-filter: blur(10px);
-          overflow: visible;
         }
 
         .bn-item {
           position: relative;
-          height: 100%;
-          display: grid;
-          place-items: center;
-          gap: 2px;
-          color: #c6cce0;
-          text-decoration: none;
+          height: 54px;
+          border-radius: 14px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          text-decoration: none; /* ✅ plus de style lien */
+          color: #aeb6cc;
           font-weight: 700;
-          transition: 0.18s ease;
+          letter-spacing: 0.2px;
+          transition: all 0.18s ease;
+          background: transparent;
+          border: 1px solid transparent;
+          overflow: hidden;
         }
 
         .bn-icon {
-          font-size: 20px;
-          transform: translateY(1px);
+          font-size: 18px;
+          line-height: 1;
+          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));
         }
 
         .bn-label {
           font-size: 11px;
-          opacity: 0.9;
-          letter-spacing: 0.2px;
+          opacity: 0.95;
         }
 
         .bn-item:hover {
-          color: #fff;
-          transform: translateY(-1px);
+          color: #e9ecf5;
+          background: rgba(255,255,255,0.03);
+        }
+
+        .bn-activeGlow {
+          position: absolute;
+          inset: -60%;
+          background:
+            radial-gradient(120px 80px at 20% 30%, rgba(109,123,255,0.45), transparent 60%),
+            radial-gradient(120px 80px at 80% 70%, rgba(34,230,165,0.35), transparent 58%);
+          opacity: 0;
+          transition: opacity 0.2s ease;
+          pointer-events: none;
         }
 
         .bn-item.active {
           color: #fff;
-        }
-
-        .bn-active-glow {
-          position: absolute;
-          inset: -8px 10px -6px 10px;
-          border-radius: 14px;
           background:
-            radial-gradient(120px 60px at 50% 80%, rgba(78,163,255,0.35), transparent 60%),
-            radial-gradient(90px 50px at 50% 120%, rgba(34,230,165,0.25), transparent 60%);
-          opacity: 0;
-          transition: opacity .2s ease;
-          pointer-events: none;
+            linear-gradient(180deg, rgba(20,32,58,0.9), rgba(10,16,30,0.9));
+          border-color: rgba(78,163,255,0.5);
+          transform: translateY(-1px);
+          box-shadow:
+            0 10px 26px rgba(78,163,255,0.18),
+            inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
-        .bn-item.active .bn-active-glow {
+        .bn-item.active .bn-activeGlow {
           opacity: 1;
         }
 
-        /* ===== bouton central Publier ===== */
-        .bn-center {
-          position: relative;
-          height: 74px;
-          width: 74px;
-          margin: 0 auto;
-          transform: translateY(-16px);
-          border-radius: 22px;
-          border: none;
-          background:
-            linear-gradient(160deg, rgba(78,163,255,0.95), rgba(34,230,165,0.9));
-          box-shadow:
-            0 12px 40px rgba(78,163,255,0.35),
-            0 10px 30px rgba(0,0,0,0.6),
-            inset 0 1px 0 rgba(255,255,255,0.35);
-          display: grid;
-          place-items: center;
-          gap: 2px;
-          color: #0b1020;
-          font-weight: 900;
-          cursor: pointer;
-          transition: transform .15s ease, filter .2s ease;
-          overflow: hidden;
-        }
-
-        .bn-center:hover {
-          transform: translateY(-18px) scale(1.02);
-          filter: saturate(1.1);
-        }
-        .bn-center:active {
-          transform: translateY(-14px) scale(0.98);
-        }
-
-        .bn-center-ring {
-          position: absolute;
-          inset: -40%;
-          background:
-            radial-gradient(120px 70px at 25% 30%, rgba(255,255,255,0.7), transparent 60%),
-            radial-gradient(150px 90px at 70% 70%, rgba(255,255,255,0.35), transparent 60%);
-          opacity: 0.7;
-          pointer-events: none;
-          mix-blend-mode: overlay;
-        }
-
-        .bn-center-icon {
-          font-size: 24px;
-          line-height: 1;
-        }
-
-        .bn-center-label {
-          font-size: 11px;
-          letter-spacing: 0.2px;
-          transform: translateY(-2px);
-        }
-
-        .bn-center.active {
-          box-shadow:
-            0 12px 50px rgba(78,163,255,0.55),
-            0 0 0 2px rgba(255,255,255,0.35) inset;
-        }
-
-        @media (max-width: 380px) {
-          .bn-bar { height: 60px; }
-          .bn-center { height: 70px; width: 70px; }
+        /* safe area iPhone */
+        @supports (padding: max(0px)) {
+          .bn-wrap { bottom: max(10px, env(safe-area-inset-bottom)); }
         }
       `}</style>
     </nav>
