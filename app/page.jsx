@@ -57,6 +57,22 @@ export default function Page() {
   }, []);
 
   // =========================
+  // ✅ Filtre local instantané
+  // =========================
+  const filteredItems = useMemo(() => {
+    if (selected === "all") return items;
+
+    const cat = CATEGORIES.find((c) => c.key === selected);
+    const words = cat?.match || [];
+    if (!words.length) return items;
+
+    return items.filter((it) => {
+      const text = `${it.category || ""} ${it.title || ""} ${it.summary || ""}`.toLowerCase();
+      return words.some((w) => text.includes(w.toLowerCase()));
+    });
+  }, [items, selected]);
+
+  // =========================
   // 2) Detect active slide
   // =========================
   useEffect(() => {
@@ -78,14 +94,14 @@ export default function Page() {
 
     slides.forEach((s) => io.observe(s));
     return () => io.disconnect();
-  }, [items]);
+  }, [filteredItems]); // ✅ important : observer suit la liste filtrée
 
   // =========================
   // 3) Fetch more when near end
   // =========================
   const fetchMore = useCallback(async () => {
     if (loading) return;
-    if (activeIndex < items.length - 3) return;
+    if (activeIndex < filteredItems.length - 3) return;
 
     setLoading(true);
     try {
@@ -108,27 +124,11 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  }, [activeIndex, items.length, loading, cursor]);
+  }, [activeIndex, filteredItems.length, loading, cursor]);
 
   useEffect(() => {
     fetchMore();
   }, [fetchMore]);
-
-  // =========================
-  // ✅ Filtre local instantané
-  // =========================
-  const filteredItems = useMemo(() => {
-    if (selected === "all") return items;
-
-    const cat = CATEGORIES.find((c) => c.key === selected);
-    const words = cat?.match || [];
-    if (!words.length) return items;
-
-    return items.filter((it) => {
-      const text = `${it.category || ""} ${it.title || ""} ${it.summary || ""}`.toLowerCase();
-      return words.some((w) => text.includes(w.toLowerCase()));
-    });
-  }, [items, selected]);
 
   return (
     <div className="app">
@@ -151,7 +151,6 @@ export default function Page() {
             className={`chip ${selected === c.key ? "active" : ""}`}
             onClick={() => {
               setSelected(c.key);
-              // quand tu changes de filtre on remonte en haut
               feedRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               setActiveIndex(0);
             }}
