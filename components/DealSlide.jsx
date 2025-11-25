@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 export default function DealSlide({ item, active }) {
   const {
@@ -20,7 +20,25 @@ export default function DealSlide({ item, active }) {
     affiliateUrl,
     summary,
     source,
+
+    // ✅ enchères (nouveaux champs possibles)
+    type,
+    auction,          // bool optionnel
+    currentBid,
+    startingBid,
+    bidCount,
+    endsAt,           // timestamp ou ISO
+    publishedAt,
+    bucket,
   } = item || {};
+
+  const isAuction =
+    auction === true ||
+    type === "auction" ||
+    type === "enchere" ||
+    endsAt != null ||
+    currentBid != null ||
+    startingBid != null;
 
   const finalUrl = useMemo(
     () => affiliateUrl || url || link || null,
@@ -31,6 +49,35 @@ export default function DealSlide({ item, active }) {
   const finalImage = imgOk && image ? image : "/placeholders/IMG_2362.png";
 
   const [fav, setFav] = useState(false);
+
+  // ✅ countdown enchère
+  const [timeLeft, setTimeLeft] = useState("");
+  useEffect(() => {
+    if (!isAuction || !endsAt) return;
+
+    const end = new Date(endsAt).getTime();
+    if (Number.isNaN(end)) return;
+
+    const tick = () => {
+      const now = Date.now();
+      const d = Math.max(0, end - now);
+      const h = Math.floor(d / 3600000);
+      const m = Math.floor((d % 3600000) / 60000);
+      const s = Math.floor((d % 60000) / 1000);
+
+      if (d <= 0) {
+        setTimeLeft("Terminé");
+      } else if (h > 0) {
+        setTimeLeft(`${h}h ${m}m`);
+      } else {
+        setTimeLeft(`${m}m ${s}s`);
+      }
+    };
+
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [isAuction, endsAt]);
 
   const openLink = (l) => {
     if (!l) return;
@@ -51,9 +98,11 @@ export default function DealSlide({ item, active }) {
           title,
           score,
           category,
+          bucket,
           url: finalUrl,
           image,
           source,
+          isAuction,
         }),
       });
     } catch {}
@@ -78,13 +127,14 @@ export default function DealSlide({ item, active }) {
           url: finalUrl || url,
           image,
           category,
+          bucket,
           source,
+          isAuction,
         }),
       });
     } catch {}
   };
 
-  // ✅ Analyse redirige vers Y-Score page
   const onAnalyze = () => {
     if (!finalUrl) return;
     const q = encodeURIComponent(finalUrl);
@@ -103,6 +153,18 @@ export default function DealSlide({ item, active }) {
     } catch {}
   };
 
+  const displayPrice =
+    isAuction
+      ? (currentBid != null
+          ? `Enchère: ${currentBid}`
+          : startingBid != null
+            ? `Départ: ${startingBid}`
+            : null
+        )
+      : price
+        ? `Prix: ${price}`
+        : null;
+
   return (
     <div className="deal-slide">
       <div className="deal-media">
@@ -120,9 +182,15 @@ export default function DealSlide({ item, active }) {
         <div className="deal-gradient" />
 
         <div className="deal-top">
-          {score != null && <div className="deal-chip score">Y-Score {score}</div>}
+          {isAuction && <div className="deal-chip auction">⏳ Enchère</div>}
+          {score != null && !isAuction && (
+            <div className="deal-chip score">Y-Score {score}</div>
+          )}
           {category && <div className="deal-chip">{category}</div>}
           {city && <div className="deal-chip">📍 {city}</div>}
+          {isAuction && timeLeft && (
+            <div className="deal-chip time">Fin: {timeLeft}</div>
+          )}
         </div>
       </div>
 
@@ -133,37 +201,57 @@ export default function DealSlide({ item, active }) {
         <button className="action-btn" onClick={onShare}>
           📤<span>Partager</span>
         </button>
+
+        {/* Analyse ok pour les deux types */}
         <button className="action-btn" onClick={onAnalyze} disabled={!finalUrl}>
           🧠<span>Analyse</span>
         </button>
+
+        {/* ✅ bouton adapté enchère */}
         <button className="action-btn" onClick={onSee} disabled={!finalUrl}>
-          🔗<span>Voir</span>
+          {isAuction ? "🔨" : "🔗"}
+          <span>{isAuction ? "Miser" : "Voir"}</span>
         </button>
       </div>
 
       <div className="deal-content">
         <h2 className="deal-title">{title}</h2>
 
-        {price && <p className="deal-price">Prix: {price}</p>}
+        {!!displayPrice && <p className="deal-price">{displayPrice}</p>}
+        {isAuction && bidCount != null && (
+          <p className="deal-sub">Offres: {bidCount}</p>
+        )}
+
         {summary && <p className="deal-summary">{summary}</p>}
 
         <div className="deal-metrics">
-          {margin && (
+          {!isAuction && margin && (
             <div className="metric">
               <div className="metric-title">Marge</div>
               <div className="metric-value green">{margin}</div>
             </div>
           )}
-          {risk && (
+
+          {!isAuction && risk && (
             <div className="metric">
               <div className="metric-title">Risque</div>
               <div className="metric-value orange">{risk}</div>
             </div>
           )}
-          {horizon && (
+
+          {!isAuction && horizon && (
             <div className="metric">
               <div className="metric-title">Horizon</div>
               <div className="metric-value">{horizon}</div>
+            </div>
+          )}
+
+          {isAuction && endsAt && (
+            <div className="metric">
+              <div className="metric-title">Fin enchère</div>
+              <div className="metric-value">
+                {new Date(endsAt).toLocaleString()}
+              </div>
             </div>
           )}
         </div>
@@ -224,6 +312,14 @@ export default function DealSlide({ item, active }) {
           background: linear-gradient(90deg, rgba(78,163,255,0.25), rgba(34,230,165,0.2));
           border-color: rgba(78,163,255,0.5);
         }
+        .deal-chip.auction {
+          background: linear-gradient(90deg, rgba(255,180,84,0.25), rgba(255,107,107,0.18));
+          border-color: rgba(255,180,84,0.6);
+        }
+        .deal-chip.time {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.18);
+        }
 
         .deal-actions {
           position: absolute;
@@ -283,6 +379,12 @@ export default function DealSlide({ item, active }) {
           opacity: 0.95;
           font-weight: 800;
         }
+        .deal-sub {
+          font-size: 12px;
+          opacity: 0.75;
+          margin-top: 2px;
+          font-weight: 700;
+        }
 
         .deal-summary {
           margin-top: 8px;
@@ -320,6 +422,7 @@ export default function DealSlide({ item, active }) {
         .metric-value {
           font-weight: 900;
           margin-top: 4px;
+          font-size: 13px;
         }
 
         .metric-value.green { color: #00e389; }
