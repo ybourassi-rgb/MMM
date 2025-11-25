@@ -3,137 +3,105 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV = [
-  { href: "/", label: "Feed", icon: "🏠" },
-  { href: "/yscore", label: "Y-Score", icon: "📊" },
-  { href: "/publier", label: "Publier", icon: "＋", big: true },
-  { href: "/affiliation", label: "Gains", icon: "💰" },
-  { href: "/profile", label: "Profil", icon: "👤" },
-];
-
 export default function BottomNav() {
   const pathname = usePathname();
-  const isActive = (href) =>
-    href === "/" ? pathname === "/" : pathname?.startsWith(href);
+
+  const NAV = [
+    { href: "/", label: "Feed", icon: "🏠" },
+    // Y-Score désactivé tant que route pas créée
+    // { href: "/yscore", label: "Y-Score", icon: "📊" },
+
+    { href: "/publier", label: "Publier", icon: "➕" },
+    { href: "/affiliation", label: "Gains", icon: "💰" },
+    { href: "/profile", label: "Profil", icon: "👤" },
+  ];
 
   return (
-    <nav className="dock">
-      {NAV.map((item) => {
-        const active = isActive(item.href);
+    <nav className="bottom-nav">
+      {NAV.map((n) => {
+        const active =
+          n.href === "/"
+            ? pathname === "/"
+            : pathname.startsWith(n.href);
 
         return (
           <Link
-            key={item.href}
-            href={item.href}
-            className={`dockItem ${active ? "active" : ""} ${
-              item.big ? "big" : ""
-            }`}
-            aria-current={active ? "page" : undefined}
+            key={n.href}
+            href={n.href}
+            className={`nav-item ${active ? "active" : ""}`}
           >
-            <span className="icon">{item.icon}</span>
-            <span className="label">{item.label}</span>
-            {active && <span className="activeGlow" />}
+            <div className="nav-icon">{n.icon}</div>
+            <div className="nav-label">{n.label}</div>
+            <div className="nav-glow" />
           </Link>
         );
       })}
 
       <style jsx>{`
-        .dock {
+        .bottom-nav {
           position: fixed;
-          left: 50%;
-          bottom: 16px;
-          transform: translateX(-50%);
-          z-index: 50;
-
+          left: 10px;
+          right: 10px;
+          bottom: 10px;
+          height: 64px;
           display: grid;
-          grid-auto-flow: column;
-          gap: 6px;
-          padding: 8px;
-
-          background: rgba(10, 14, 26, 0.75);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          grid-template-columns: repeat(${NAV.length}, 1fr);
+          background:
+            linear-gradient(180deg, rgba(15,20,34,0.98), rgba(8,10,18,0.98));
+          border: 1px solid rgba(78,163,255,0.18);
           border-radius: 18px;
-
           backdrop-filter: blur(10px);
           box-shadow:
-            0 12px 40px rgba(0, 0, 0, 0.55),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            0 12px 40px rgba(0,0,0,0.6),
+            inset 0 1px 0 rgba(255,255,255,0.06);
+          z-index: 50;
+          overflow: hidden;
         }
 
-        .dockItem {
+        .nav-item {
           position: relative;
-          min-width: 64px;
-          padding: 8px 10px;
-          border-radius: 12px;
-
           display: grid;
           place-items: center;
-          gap: 3px;
-
-          color: rgba(220, 226, 241, 0.85);
+          gap: 4px;
+          color: #8f98b3;
           text-decoration: none;
-          font-size: 11px;
           font-weight: 700;
-
-          transition: transform .15s ease, background .2s ease, color .2s ease;
+          font-size: 12px;
+          transition: all 0.18s ease;
         }
 
-        .dockItem:hover {
-          transform: translateY(-2px);
-          background: rgba(255,255,255,0.04);
-          color: white;
-        }
-
-        .icon {
-          font-size: 18px;
-          line-height: 1;
-        }
-
-        .label {
-          letter-spacing: 0.2px;
-          white-space: nowrap;
-        }
-
-        /* Active tab */
-        .dockItem.active {
-          background: rgba(78,163,255,0.10);
-          color: #fff;
-          box-shadow:
-            0 6px 16px rgba(78,163,255,0.25),
-            inset 0 0 0 1px rgba(78,163,255,0.35);
-          transform: translateY(-1px);
-        }
-
-        .activeGlow {
-          position: absolute;
-          inset: -40%;
-          border-radius: 999px;
-          background:
-            radial-gradient(120px 70px at 20% 30%, rgba(109,123,255,0.35), transparent 60%),
-            radial-gradient(140px 80px at 80% 70%, rgba(34,230,165,0.30), transparent 62%);
-          filter: blur(18px);
-          opacity: 0.8;
-          pointer-events: none;
-          z-index: -1;
-        }
-
-        /* Middle “Publier” button */
-        .dockItem.big {
-          min-width: 72px;
-          padding: 10px 12px;
-          background:
-            linear-gradient(180deg, rgba(78,163,255,0.18), rgba(34,230,165,0.10)),
-            rgba(20, 32, 58, 0.9);
-          border: 1px solid rgba(78,163,255,0.35);
-          transform: translateY(-6px);
-          box-shadow:
-            0 10px 30px rgba(78,163,255,0.30),
-            inset 0 1px 0 rgba(255,255,255,0.12);
-        }
-
-        .dockItem.big .icon {
+        .nav-icon {
           font-size: 20px;
-          font-weight: 900;
+          transform: translateY(1px);
+          transition: transform .18s ease;
+        }
+
+        .nav-label {
+          font-size: 11px;
+          letter-spacing: .2px;
+          transition: color .18s ease;
+        }
+
+        .nav-glow {
+          position: absolute;
+          inset: -60%;
+          background:
+            radial-gradient(120px 60px at 50% 10%, rgba(78,163,255,0.25), transparent 60%),
+            radial-gradient(120px 60px at 50% 90%, rgba(34,230,165,0.18), transparent 65%);
+          opacity: 0;
+          transition: opacity .18s ease;
+          pointer-events: none;
+        }
+
+        .nav-item.active {
+          color: white;
+          text-shadow: 0 6px 22px rgba(78,163,255,0.55);
+        }
+        .nav-item.active .nav-icon {
+          transform: translateY(-2px) scale(1.08);
+        }
+        .nav-item.active .nav-glow {
+          opacity: 1;
         }
       `}</style>
     </nav>
