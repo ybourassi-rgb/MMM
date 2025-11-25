@@ -6,17 +6,30 @@ import { useEffect, useState } from "react";
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const [flash, setFlash] = useState(false);
+
+  const [pulseFab, setPulseFab] = useState(false);
+  const [newGlow, setNewGlow] = useState(false);
 
   const isActive = (href) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
 
-  // ✅ écoute l’event "nouveau deal" envoyé par Home (app/page.jsx)
+  // ✅ écoute l'event "new deal" envoyé par Home
   useEffect(() => {
     const onNewDeal = () => {
-      setFlash(true);
-      setTimeout(() => setFlash(false), 1400);
+      setNewGlow(true);
+      setPulseFab(true);
+
+      // stop pulse rapidement
+      const t1 = setTimeout(() => setPulseFab(false), 1400);
+      // garde glow un peu plus longtemps
+      const t2 = setTimeout(() => setNewGlow(false), 2800);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
     };
+
     window.addEventListener("lbon-souk:new-deal", onNewDeal);
     return () => window.removeEventListener("lbon-souk:new-deal", onNewDeal);
   }, []);
@@ -27,6 +40,7 @@ export default function BottomNav() {
       <Link href={href} className={`nav-item ${active ? "active" : ""}`}>
         <div className="nav-ico">{icon}</div>
         <div className="nav-label">{label}</div>
+        {href === "/" && newGlow && <span className="new-dot" />}
       </Link>
     );
   };
@@ -40,16 +54,19 @@ export default function BottomNav() {
           <Item href="/" label="Accueil" icon="🏠" />
           <Item href="/search" label="Recherche" icon="🔎" />
 
-          {/* ✅ FAB central avec pulse + flash */}
+          {/* FAB central */}
           <Link
             href="/publier"
-            className={`nav-fab ${isActive("/publier") ? "active" : ""} ${flash ? "flash" : ""}`}
+            className={`nav-fab ${isActive("/publier") ? "active" : ""} ${
+              pulseFab ? "pulse" : ""
+            }`}
           >
             <div className="fab-ring" />
             <div className="fab-core">
               <div className="fab-plus">＋</div>
               <div className="fab-text">Publier</div>
             </div>
+            {newGlow && <div className="fab-new-glow" />}
           </Link>
 
           <Item href="/affiliation" label="Gains" icon="💰" />
@@ -106,6 +123,7 @@ export default function BottomNav() {
           border: 1px solid rgba(255,255,255,0.06);
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
           transition: all .18s ease;
+          position: relative;
         }
         .nav-item .nav-ico { font-size: 18px; }
         .nav-item .nav-label {
@@ -124,7 +142,24 @@ export default function BottomNav() {
           transform: translateY(-1px);
         }
 
-        /* ===== FAB central ===== */
+        /* petit indicateur "new" sur Accueil */
+        .new-dot{
+          position:absolute;
+          top:8px;
+          right:12px;
+          width:8px;
+          height:8px;
+          border-radius:999px;
+          background:#22e6a5;
+          box-shadow:0 0 12px rgba(34,230,165,0.9);
+          animation: pop .4s ease;
+        }
+        @keyframes pop{
+          from{ transform:scale(0); opacity:0;}
+          to{ transform:scale(1); opacity:1;}
+        }
+
+        /* ===== FAB ===== */
         .nav-fab {
           position: relative;
           height: 78px;
@@ -133,19 +168,6 @@ export default function BottomNav() {
           text-decoration: none;
           transform: translateY(-18px);
           transition: transform .18s ease;
-          animation: fabPulse 2.8s ease-in-out infinite;
-        }
-
-        /* ✅ Pulse doux permanent */
-        @keyframes fabPulse {
-          0%, 100% {
-            filter: drop-shadow(0 0 0 rgba(78,163,255,0));
-            transform: translateY(-18px) scale(1);
-          }
-          50% {
-            filter: drop-shadow(0 8px 22px rgba(78,163,255,0.25));
-            transform: translateY(-18px) scale(1.03);
-          }
         }
 
         .fab-ring {
@@ -159,7 +181,6 @@ export default function BottomNav() {
             rgba(12,16,28,0.9);
           filter: blur(10px);
           opacity: .8;
-          transition: opacity .25s ease, transform .25s ease, filter .25s ease;
         }
 
         .fab-core {
@@ -177,17 +198,6 @@ export default function BottomNav() {
             0 0 0 1px rgba(78,163,255,0.25) inset;
           position: relative;
           overflow: hidden;
-        }
-
-        .fab-core::after {
-          content: "";
-          position: absolute;
-          inset: -40%;
-          background:
-            radial-gradient(120px 80px at 20% 30%, rgba(109,123,255,0.45), transparent 60%),
-            radial-gradient(120px 80px at 80% 70%, rgba(34,230,165,0.38), transparent 60%);
-          opacity: .9;
-          pointer-events: none;
         }
 
         .fab-plus {
@@ -216,24 +226,37 @@ export default function BottomNav() {
             0 18px 50px rgba(34,230,165,0.25),
             0 0 0 1px rgba(34,230,165,0.35) inset;
         }
+        .nav-fab:active { transform: translateY(-16px) scale(0.97); }
 
-        /* ✅ Flash quand nouveau deal arrive */
-        .nav-fab.flash .fab-ring {
-          opacity: 1;
-          transform: scale(1.15);
+        /* ✅ pulse léger */
+        .nav-fab.pulse .fab-core{
+          animation: fabPulse 1.4s ease-in-out;
+        }
+        @keyframes fabPulse{
+          0%{ transform:scale(1); }
+          30%{ transform:scale(1.06); }
+          60%{ transform:scale(1); }
+          100%{ transform:scale(1); }
+        }
+
+        /* ✅ glow nouveau deal derriere FAB */
+        .fab-new-glow{
+          position:absolute;
+          width:86px;
+          height:86px;
+          border-radius:26px;
+          background:
+            radial-gradient(50px 50px at 30% 20%, rgba(109,123,255,0.9), transparent 60%),
+            radial-gradient(50px 50px at 70% 80%, rgba(34,230,165,0.9), transparent 58%);
           filter: blur(14px);
+          opacity:.9;
+          animation: glowFade 2.8s ease forwards;
+          pointer-events:none;
         }
-        .nav-fab.flash .fab-core {
-          border-color: rgba(255,255,255,0.9);
-          box-shadow:
-            0 0 0 2px rgba(78,163,255,0.65) inset,
-            0 0 38px rgba(78,163,255,0.55),
-            0 18px 50px rgba(34,230,165,0.32);
-        }
-
-        .nav-fab:active {
-          transform: translateY(-16px) scale(0.97);
-          animation-play-state: paused;
+        @keyframes glowFade{
+          0%{ opacity:0; transform:scale(.8); }
+          20%{ opacity:1; transform:scale(1); }
+          100%{ opacity:0; transform:scale(1.1); }
         }
       `}</style>
     </>
