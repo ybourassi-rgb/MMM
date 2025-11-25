@@ -2,150 +2,194 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
 
 export default function BottomNav() {
   const pathname = usePathname();
 
-  const tabs = useMemo(
-    () => [
-      { href: "/", label: "Feed", icon: "🏠" },
-      { href: "/search", label: "Recherche", icon: "🔎" },
-      // tu as /publier et /publish. On garde /publier comme dans ta capture.
-      { href: "/publier", label: "Publier", icon: "➕" },
-      // ta page existe en /affiliation, mais tu veux l'appeler Gains
-      { href: "/affiliation", label: "Gains", icon: "💰" },
-      { href: "/profile", label: "Profil", icon: "👤" },
-    ],
-    []
-  );
+  const isActive = (href) =>
+    pathname === href || (href !== "/" && pathname.startsWith(href));
 
-  const isActive = (href) => {
-    if (href === "/") return pathname === "/";
-    return pathname?.startsWith(href);
+  const Item = ({ href, label, icon }) => {
+    const active = isActive(href);
+    return (
+      <Link href={href} className={`nav-item ${active ? "active" : ""}`}>
+        <div className="nav-ico">{icon}</div>
+        <div className="nav-label">{label}</div>
+      </Link>
+    );
   };
 
   return (
-    <nav className="bn-wrap">
-      <div className="bn-glass">
-        {tabs.map((t) => {
-          const active = isActive(t.href);
-          return (
-            <Link
-              key={t.href}
-              href={t.href}
-              className={`bn-item ${active ? "active" : ""}`}
-              prefetch={false}
-            >
-              <span className="bn-icon" aria-hidden>
-                {t.icon}
-              </span>
-              <span className="bn-label">{t.label}</span>
-              <span className="bn-activeGlow" />
-            </Link>
-          );
-        })}
-      </div>
+    <>
+      <nav className="bottom-nav">
+        <div className="nav-bg" />
 
-      <style jsx>{`
-        .bn-wrap {
+        <div className="nav-row">
+          <Item href="/" label="Accueil" icon="🏠" />
+          <Item href="/search" label="Recherche" icon="🔎" />
+
+          {/* Bouton central (FAB) */}
+          <Link href="/publier" className={`nav-fab ${isActive("/publier") ? "active" : ""}`}>
+            <div className="fab-ring" />
+            <div className="fab-core">
+              <div className="fab-plus">＋</div>
+              <div className="fab-text">Publier</div>
+            </div>
+          </Link>
+
+          {/* Si tu veux l'appeler Gains mais route = /affiliation */}
+          <Item href="/affiliation" label="Gains" icon="💰" />
+          <Item href="/profile" label="Profil" icon="👤" />
+        </div>
+      </nav>
+
+      <style jsx global>{`
+        .bottom-nav {
           position: fixed;
           left: 0;
           right: 0;
-          bottom: 10px;
+          bottom: 0;
+          height: 92px;
           z-index: 50;
           display: flex;
           justify-content: center;
-          pointer-events: none; /* le glass ne bloque pas le scroll */
+          pointer-events: none; /* on réactive sur les éléments internes */
         }
 
-        .bn-glass {
-          pointer-events: auto;
-          width: min(520px, calc(100% - 20px));
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 6px;
-          padding: 8px;
-          border-radius: 18px;
-
+        .nav-bg {
+          position: absolute;
+          inset: 0;
           background:
-            radial-gradient(900px 120px at 50% -50px, rgba(78,163,255,0.14), transparent 60%),
-            linear-gradient(180deg, rgba(10,14,25,0.92), rgba(7,9,15,0.92));
-
-          border: 1px solid rgba(255,255,255,0.08);
-          box-shadow:
-            0 18px 60px rgba(0,0,0,0.7),
-            inset 0 1px 0 rgba(255,255,255,0.06);
-
+            radial-gradient(1200px 120px at 50% -40px, rgba(78,163,255,0.10), transparent 60%),
+            linear-gradient(180deg, rgba(7,9,15,0.0), rgba(7,9,15,0.85) 30%, rgba(7,9,15,0.98));
           backdrop-filter: blur(10px);
+          border-top: 1px solid rgba(255,255,255,0.06);
         }
 
-        .bn-item {
+        .nav-row {
+          pointer-events: auto;
+          width: min(560px, 100%);
+          height: 100%;
+          display: grid;
+          grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr;
+          align-items: center;
+          padding: 10px 10px max(10px, env(safe-area-inset-bottom));
+          gap: 6px;
           position: relative;
-          height: 54px;
-          border-radius: 14px;
+        }
+
+        .nav-item {
+          height: 64px;
+          border-radius: 16px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           gap: 4px;
-          text-decoration: none; /* ✅ plus de style lien */
-          color: #aeb6cc;
-          font-weight: 700;
-          letter-spacing: 0.2px;
-          transition: all 0.18s ease;
-          background: transparent;
-          border: 1px solid transparent;
+          text-decoration: none;
+          color: #aab3c8;
+          background: rgba(12,16,28,0.35);
+          border: 1px solid rgba(255,255,255,0.06);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+          transition: all .18s ease;
+        }
+        .nav-item .nav-ico { font-size: 18px; }
+        .nav-item .nav-label {
+          font-size: 11.5px;
+          font-weight: 800;
+          letter-spacing: .2px;
+        }
+        .nav-item.active {
+          color: white;
+          background:
+            linear-gradient(180deg, rgba(20,32,58,0.9), rgba(10,16,30,0.9));
+          border-color: rgba(78,163,255,0.45);
+          box-shadow:
+            0 8px 25px rgba(78,163,255,0.18),
+            inset 0 1px 0 rgba(255,255,255,0.10);
+          transform: translateY(-1px);
+        }
+
+        /* ===== FAB central ===== */
+        .nav-fab {
+          position: relative;
+          height: 78px;
+          display: grid;
+          place-items: center;
+          text-decoration: none;
+          transform: translateY(-18px);
+          transition: transform .18s ease;
+        }
+
+        .fab-ring {
+          position: absolute;
+          width: 74px;
+          height: 74px;
+          border-radius: 22px;
+          background:
+            radial-gradient(60px 60px at 30% 20%, rgba(109,123,255,0.9), transparent 60%),
+            radial-gradient(60px 60px at 70% 80%, rgba(34,230,165,0.9), transparent 58%),
+            rgba(12,16,28,0.9);
+          filter: blur(10px);
+          opacity: .8;
+        }
+
+        .fab-core {
+          width: 70px;
+          height: 70px;
+          border-radius: 20px;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)),
+            linear-gradient(180deg, #0e1322, #0a0f1c);
+          border: 1px solid rgba(78,163,255,0.55);
+          display: grid;
+          place-items: center;
+          box-shadow:
+            0 14px 40px rgba(0,0,0,0.7),
+            0 0 0 1px rgba(78,163,255,0.25) inset;
+          position: relative;
           overflow: hidden;
         }
 
-        .bn-icon {
-          font-size: 18px;
-          line-height: 1;
-          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));
-        }
-
-        .bn-label {
-          font-size: 11px;
-          opacity: 0.95;
-        }
-
-        .bn-item:hover {
-          color: #e9ecf5;
-          background: rgba(255,255,255,0.03);
-        }
-
-        .bn-activeGlow {
+        .fab-core::after {
+          content: "";
           position: absolute;
-          inset: -60%;
+          inset: -40%;
           background:
             radial-gradient(120px 80px at 20% 30%, rgba(109,123,255,0.45), transparent 60%),
-            radial-gradient(120px 80px at 80% 70%, rgba(34,230,165,0.35), transparent 58%);
-          opacity: 0;
-          transition: opacity 0.2s ease;
+            radial-gradient(120px 80px at 80% 70%, rgba(34,230,165,0.38), transparent 60%);
+          opacity: .9;
           pointer-events: none;
         }
 
-        .bn-item.active {
-          color: #fff;
-          background:
-            linear-gradient(180deg, rgba(20,32,58,0.9), rgba(10,16,30,0.9));
-          border-color: rgba(78,163,255,0.5);
-          transform: translateY(-1px);
+        .fab-plus {
+          font-size: 28px;
+          font-weight: 900;
+          color: white;
+          line-height: 1;
+          transform: translateY(2px);
+          text-shadow: 0 6px 18px rgba(0,0,0,0.7);
+          z-index: 2;
+        }
+
+        .fab-text {
+          font-size: 11px;
+          font-weight: 900;
+          color: white;
+          opacity: .95;
+          margin-top: -2px;
+          z-index: 2;
+          letter-spacing: .3px;
+        }
+
+        .nav-fab.active .fab-core {
+          border-color: rgba(34,230,165,0.9);
           box-shadow:
-            0 10px 26px rgba(78,163,255,0.18),
-            inset 0 1px 0 rgba(255,255,255,0.1);
+            0 18px 50px rgba(34,230,165,0.25),
+            0 0 0 1px rgba(34,230,165,0.35) inset;
         }
-
-        .bn-item.active .bn-activeGlow {
-          opacity: 1;
-        }
-
-        /* safe area iPhone */
-        @supports (padding: max(0px)) {
-          .bn-wrap { bottom: max(10px, env(safe-area-inset-bottom)); }
-        }
+        .nav-fab:active { transform: translateY(-16px) scale(0.97); }
       `}</style>
-    </nav>
+    </>
   );
 }
