@@ -8,9 +8,11 @@ export default function PublierEncherePage() {
     title: "",
     url: "",
     images: "",
+
     startingPrice: "",
     bidStep: "",
     endAt: "",
+
     category: "autre",
     city: "",
     summary: "",
@@ -36,12 +38,24 @@ export default function PublierEncherePage() {
         .map((s) => s.trim())
         .filter(Boolean);
 
+      // ✅ IMPORTANT: au moins 1 image sinon feed la filtre
+      if (!imagesArr.length) {
+        throw new Error("Ajoute au moins 1 image (URL) sinon l’enchère n’apparaît pas.");
+      }
+
       const payload = {
         ...form,
         images: imagesArr,
+        image: imagesArr[0], // ✅ alias pour le feed
+
         startingPrice: form.startingPrice ? Number(form.startingPrice) : null,
         bidStep: form.bidStep ? Number(form.bidStep) : null,
+
+        // ✅ on force ISO pour éviter un parsing foireux
+        endAt: form.endAt ? new Date(form.endAt).toISOString() : null,
+
         type: "auction",
+        auction: true, // ✅ bonus (pas obligatoire mais clair)
         source: "community-auction",
       };
 
@@ -109,12 +123,13 @@ export default function PublierEncherePage() {
           </label>
 
           <label>
-            Images (1 par ligne)
+            Images (1 par ligne) *
             <textarea
               rows={3}
               value={form.images}
               onChange={(e) => set("images", e.target.value)}
               placeholder="https://image1.jpg\nhttps://image2.jpg"
+              required
             />
           </label>
 
