@@ -2,8 +2,11 @@
 
 import Image from "next/image";
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function DealSlide({ item, active }) {
+  const router = useRouter();
+
   const {
     id,
     title = "Opportunité",
@@ -31,16 +34,15 @@ export default function DealSlide({ item, active }) {
     endAt,            // alias possible
     currentPrice,     // alias possible
     startingPrice,    // alias possible
-    bidStep,          // pas d’enchère
+    bidStep,          // pas d’enchère (alias)
     publishedAt,
     bucket,
   } = item || {};
 
+  // ✅ aliases robustes
   const finalEndsAt = endsAt || endAt || null;
-  const finalCurrent =
-    currentBid ?? currentPrice ?? null;
-  const finalStart =
-    startingBid ?? startingPrice ?? null;
+  const finalCurrent = currentBid ?? currentPrice ?? null;
+  const finalStart = startingBid ?? startingPrice ?? null;
 
   const isAuction =
     auction === true ||
@@ -89,9 +91,10 @@ export default function DealSlide({ item, active }) {
     return () => clearInterval(iv);
   }, [isAuction, finalEndsAt]);
 
-  const openLink = (l) => {
+  // ✅ mobile safe open external (Safari friendly)
+  const openExternal = (l) => {
     if (!l) return;
-    window.open(l, "_blank", "noopener,noreferrer");
+    window.location.href = l;
   };
 
   const trackClick = async () => {
@@ -118,9 +121,17 @@ export default function DealSlide({ item, active }) {
     } catch {}
   };
 
+  // ✅ Voir / Miser
   const onSee = () => {
+    // si enchère -> page interne
+    if (isAuction && id) {
+      router.push(`/auction/${id}`);
+      return;
+    }
+
+    // sinon deal normal externe
     if (!finalUrl) return;
-    openLink(finalUrl);
+    openExternal(finalUrl);
     trackClick();
   };
 
@@ -161,43 +172,6 @@ export default function DealSlide({ item, active }) {
         alert("Lien copié ✅");
       }
     } catch {}
-  };
-
-  // ✅ Miser (vraie enchère)
-  const onBid = async () => {
-    const step = Number(bidStep || 1);
-    const curr = Number(finalCurrent ?? finalStart ?? 0);
-    const min = curr + step;
-
-    const val = prompt(`Ta mise (min ${min}):`, String(min));
-    if (!val) return;
-
-    const amount = Number(val);
-    if (!Number.isFinite(amount) || amount < min) {
-      alert("Mise trop basse ❌");
-      return;
-    }
-
-    try {
-      const r = await fetch("/api/auctions/bid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          amount,
-          bidder: "user", // plus tard profil
-        }),
-      });
-
-      const d = await r.json();
-      if (!r.ok || !d.ok) throw new Error(d.error || "bid_failed");
-
-      alert("Mise enregistrée ✅");
-      // refresh simple pour voir le nouveau prix
-      window.location.reload();
-    } catch (e) {
-      alert("Erreur enchère: " + e.message);
-    }
   };
 
   const displayPrice =
@@ -253,10 +227,9 @@ export default function DealSlide({ item, active }) {
           🧠<span>Analyse</span>
         </button>
 
-        {/* ✅ bouton adapté enchère */}
         <button
           className="action-btn"
-          onClick={isAuction ? onBid : onSee}
+          onClick={onSee}
           disabled={!finalUrl && !isAuction}
         >
           {isAuction ? "🔨" : "🔗"}
